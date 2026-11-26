@@ -34,3 +34,5 @@ public import CausalInference.Graphical.ADMG
 public import CausalInference.Graphical.Districts
 public import CausalInference.Graphical.LatentProjection
 public import CausalInference.Graphical.ADMGExamples
+public import CausalInference.Sensitivity.BiasFormulas
+public import CausalInference.Sensitivity.Rosenbaum

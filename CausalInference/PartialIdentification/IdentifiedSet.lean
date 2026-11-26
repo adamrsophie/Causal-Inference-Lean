@@ -7,6 +7,7 @@ module
 
 public import Mathlib.Data.Set.Image
 public import Mathlib.Data.Set.Subsingleton
+public import Mathlib.Data.Set.Lattice.Bounded
 
 /-!
 # Identified sets and point identification
@@ -36,6 +37,10 @@ satisfying the maintained assumptions.
   contained in the intersection of the identified sets.
 * `not_pointIdentified_iff`: non-identification is witnessed by two models in `S` with equal
   observations and different parameters.
+* `identifiedSet_comp_obs`, `identifiedSet_comp_param`, `PointIdentified.of_comp_obs`: the
+  effect of coarsening the observation or transforming the parameter.
+* `identifiedSet_comp_obs_eq`: if the identified set at every attainable fine observation
+  depends only on a coarse summary of it, the coarse observation has the same identified sets.
 
 ## References
 
@@ -133,5 +138,49 @@ theorem not_pointIdentified_iff :
 theorem not_pointIdentified_of_mem {o : O} {t t' : Θ} (ht : t ∈ identifiedSet S obs θ o)
     (ht' : t' ∈ identifiedSet S obs θ o) (hne : t ≠ t') : ¬ PointIdentified S obs θ :=
   fun h => hne (pointIdentified_iff_subsingleton.1 h o ht ht')
+
+/-! ### Changing the observation or the parameter -/
+
+/-- Coarsening the observation through a map `g : O → O'`: the identified set at a coarse value
+`p` is the union of the identified sets at all fine observations `o` with `g o = p`. -/
+theorem identifiedSet_comp_obs {O' : Type*} (g : O → O') (p : O') :
+    identifiedSet S (g ∘ obs) θ p = ⋃ o ∈ g ⁻¹' {p}, identifiedSet S obs θ o := by
+  ext t
+  simp only [mem_identifiedSet, Function.comp_apply, Set.mem_iUnion, Set.mem_preimage,
+    Set.mem_singleton_iff, exists_prop]
+  constructor
+  · rintro ⟨m, hm, hp, rfl⟩
+    exact ⟨obs m, hp, m, hm, rfl, rfl⟩
+  · rintro ⟨o, hp, m, hm, rfl, rfl⟩
+    exact ⟨m, hm, hp, rfl⟩
+
+/-- Transforming the parameter through a map `h : Θ → Θ'`: the identified set of `h ∘ θ` is the
+image under `h` of the identified set of `θ`. -/
+theorem identifiedSet_comp_param {Θ' : Type*} (h : Θ → Θ') (o : O) :
+    identifiedSet S obs (h ∘ θ) o = h '' identifiedSet S obs θ o := by
+  simp only [identifiedSet, Set.image_comp]
+
+/-- Point identification from a coarser observation `g ∘ obs` implies point identification from
+the finer observation `obs`. -/
+theorem PointIdentified.of_comp_obs {O' : Type*} (g : O → O')
+    (h : PointIdentified S (g ∘ obs) θ) : PointIdentified S obs θ :=
+  fun m hm m' hm' hobs => h m hm m' hm' (by simp [hobs])
+
+/-- Identified sets under a coarser observation. Suppose that at every attainable fine
+observation `obs m` (with `m ∈ S`) the identified set depends on `obs m` only through the coarse
+value `g (obs m)`, being equal to `T (g (obs m))`. Then the identified set from the coarse
+observation `g ∘ obs` at every attainable coarse value `g (obs m₀)` is `T (g (obs m₀))`. -/
+theorem identifiedSet_comp_obs_eq {O' : Type*} (g : O → O') (T : O' → Set Θ)
+    (h : ∀ m ∈ S, identifiedSet S obs θ (obs m) = T (g (obs m))) {m₀ : M} (hm₀ : m₀ ∈ S) :
+    identifiedSet S (g ∘ obs) θ (g (obs m₀)) = T (g (obs m₀)) := by
+  rw [identifiedSet_comp_obs]
+  apply subset_antisymm
+  · simp only [Set.iUnion_subset_iff, Set.mem_preimage, Set.mem_singleton_iff]
+    intro o ho t ht
+    obtain ⟨m, hm, rfl, rfl⟩ := mem_identifiedSet.1 ht
+    rw [← ho, ← h m hm]
+    exact mem_identifiedSet_self hm
+  · rw [← h m₀ hm₀]
+    exact Set.subset_biUnion_of_mem (u := fun o => identifiedSet S obs θ o) rfl
 
 end CausalInference
