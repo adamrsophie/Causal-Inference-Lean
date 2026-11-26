@@ -1,0 +1,217 @@
+/-
+Copyright (c) 2026 Adam R Sophie. All rights reserved.
+Released under the GNU General Public License v3.0 as described in the file LICENSE.
+Authors: Adam R Sophie
+-/
+module
+
+public import CausalInference.Designs.Randomized.FinitePopulation
+public import Mathlib.Data.Finset.Powerset
+public import Mathlib.Logic.Equiv.Fintype
+
+/-!
+# Complete randomization
+
+Exactly `n1` of the `N` units are treated, and the treated set is drawn uniformly among the
+`N choose n1` possibilities. We compute the first and second order inclusion probabilities by a
+symmetry argument and show that the difference in means is unbiased for the finite-population
+average treatment effect. Source: Neyman (1923, translated 1990); Imbens and Rubin (2015),
+*Causal Inference for Statistics, Social, and Biomedical Sciences*.
+
+## Main definitions
+
+All declarations live in the namespace `CausalInference.Randomized`.
+
+* `numTreated`: the number of treated units of an assignment.
+* `completeSupport`: the assignments treating exactly `n1` units.
+* `completeDesign`: the uniform design on `completeSupport n1`.
+* `PotentialOutcomes.diffInMeans`: the difference in means estimator.
+
+## Main results
+
+* `card_completeSupport`: there are `N choose n1` such assignments.
+* `completeDesign_inclusionProb`: each unit is treated with probability
+  `n1 / N`.
+* `completeDesign_pairInclusionProb`: two distinct units are both treated with
+  probability `n1 (n1 - 1) / (N (N - 1))`.
+* `complete_diffInMeans_unbiased`: the difference in means is unbiased.
+-/
+
+@[expose] public section
+
+namespace CausalInference.Randomized
+
+open Finset
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- The number of units treated by the assignment `a`. -/
+def numTreated (a : ι → Bool) : ℕ := #{i | a i = true}
+
+omit [DecidableEq ι] in
+/-- The number of treated units, as a real number, is the sum of the treatment indicators. -/
+theorem numTreated_eq_sum (a : ι → Bool) : (numTreated a : ℝ) = ∑ i, treatInd a i := by
+  rw [numTreated, natCast_card_filter]
+  rfl
+
+omit [DecidableEq ι] in
+/-- Permuting the units does not change the number of treated units. -/
+theorem numTreated_comp_perm (a : ι → Bool) (σ : Equiv.Perm ι) :
+    numTreated (a ∘ σ) = numTreated a := by
+  have h : (numTreated (a ∘ σ) : ℝ) = numTreated a := by
+    simp only [numTreated_eq_sum]
+    exact Equiv.sum_comp σ (fun i => treatInd a i)
+  exact_mod_cast h
+
+/-- The support of complete randomization: the assignments treating exactly `n1` units. -/
+def completeSupport (n1 : ℕ) : Finset (ι → Bool) := {a | numTreated a = n1}
+
+theorem mem_completeSupport {n1 : ℕ} {a : ι → Bool} :
+    a ∈ completeSupport n1 ↔ numTreated a = n1 := by
+  simp [completeSupport]
+
+/-- The assignments treating exactly `n1` units correspond to the `n1`-element subsets of the
+population, so there are `N choose n1` of them. -/
+theorem card_completeSupport (n1 : ℕ) :
+    #(completeSupport (ι := ι) n1) = (Fintype.card ι).choose n1 := by
+  rw [← card_univ, ← card_powersetCard]
+  refine card_nbij' (fun a => ({i | a i = true} : Finset ι)) (fun s i => decide (i ∈ s)) ?_ ?_ ?_ ?_
+  · intro a ha
+    simpa [mem_completeSupport, numTreated] using ha
+  · intro s hs
+    simp only [mem_coe, mem_powersetCard] at hs
+    simp [mem_completeSupport, numTreated, hs.2]
+  · intro a _
+    funext i
+    simp
+  · intro s _
+    ext i
+    simp
+
+theorem completeSupport_nonempty {n1 : ℕ} (h : n1 ≤ Fintype.card ι) :
+    (completeSupport (ι := ι) n1).Nonempty := by
+  rw [← card_pos, card_completeSupport]
+  exact Nat.choose_pos h
+
+/-- Complete randomization: the uniform design on the assignments treating exactly `n1` of the
+`N` units, for `n1 ≤ N`. -/
+noncomputable def completeDesign (n1 : ℕ) (h : n1 ≤ Fintype.card ι) : Design ι :=
+  Design.uniform (completeSupport n1) (completeSupport_nonempty h)
+
+/-- Complete randomization is invariant under relabeling the units: the expectation of
+`a ↦ f (a ∘ σ)` equals that of `f` for every permutation `σ`. -/
+theorem completeDesign_expect_comp_perm (n1 : ℕ) (h : n1 ≤ Fintype.card ι)
+    (σ : Equiv.Perm ι) (f : (ι → Bool) → ℝ) :
+    (completeDesign n1 h).expect (fun a => f (a ∘ σ)) = (completeDesign n1 h).expect f := by
+  simp only [completeDesign, Design.uniform_expect]
+  congr 1
+  refine sum_nbij' (fun a => a ∘ σ) (fun a => a ∘ σ.symm) ?_ ?_ ?_ ?_ (fun _ _ => rfl)
+  · intro a ha
+    simpa [mem_completeSupport, numTreated_comp_perm] using ha
+  · intro a ha
+    simpa [mem_completeSupport, numTreated_comp_perm] using ha
+  · intro a _
+    funext i
+    simp
+  · intro a _
+    funext i
+    simp
+
+/-- Under complete randomization every unit is treated with probability `n1 / N`. -/
+theorem completeDesign_inclusionProb (n1 : ℕ) (h : n1 ≤ Fintype.card ι)
+    (hN : 0 < Fintype.card ι) (i : ι) :
+    (completeDesign n1 h).inclusionProb i = n1 / Fintype.card ι := by
+  set d := completeDesign n1 h
+  have hsym : ∀ j, d.inclusionProb j = d.inclusionProb i := by
+    intro j
+    have := completeDesign_expect_comp_perm n1 h (Equiv.swap i j) (fun a => treatInd a i)
+    simp only [Function.comp_def] at this
+    unfold Design.inclusionProb
+    rw [← this]
+    refine d.expect_congr fun a _ => ?_
+    simp [treatInd]
+  have htot : ∑ j, d.inclusionProb j = n1 := by
+    unfold Design.inclusionProb
+    rw [← d.expect_sum]
+    rw [d.expect_congr (g := fun _ => (n1 : ℝ)) fun a ha => by
+      rw [← numTreated_eq_sum, mem_completeSupport.mp ha]]
+    exact d.expect_const _
+  rw [sum_congr rfl fun j _ => hsym j, sum_const, card_univ, nsmul_eq_mul] at htot
+  have : (Fintype.card ι : ℝ) ≠ 0 := by exact_mod_cast hN.ne'
+  field_simp
+  linarith
+
+/-- Under complete randomization two distinct units are both treated with probability
+`n1 (n1 - 1) / (N (N - 1))`. -/
+theorem completeDesign_pairInclusionProb (n1 : ℕ) (h : n1 ≤ Fintype.card ι)
+    (hN : 1 < Fintype.card ι) {i j : ι} (hij : i ≠ j) :
+    (completeDesign n1 h).pairInclusionProb i j =
+      n1 * (n1 - 1) / (Fintype.card ι * (Fintype.card ι - 1)) := by
+  set d := completeDesign n1 h
+  have hsym : ∀ l ∈ univ.erase i, d.pairInclusionProb i l = d.pairInclusionProb i j := by
+    intro l hl
+    have hli : l ≠ i := ne_of_mem_erase hl
+    have := completeDesign_expect_comp_perm n1 h (Equiv.swap j l)
+      (fun a => treatInd a i * treatInd a j)
+    unfold Design.pairInclusionProb
+    rw [← this]
+    refine d.expect_congr fun a _ => ?_
+    simp [treatInd, Equiv.swap_apply_of_ne_of_ne hij hli.symm]
+  have htot : ∑ l ∈ univ.erase i, d.pairInclusionProb i l = (n1 - 1) * d.inclusionProb i := by
+    unfold Design.pairInclusionProb Design.inclusionProb
+    rw [← d.expect_sum, ← d.expect_mul_left]
+    refine d.expect_congr fun a ha => ?_
+    rw [← mul_sum, sum_erase_eq_sub (mem_univ i), ← numTreated_eq_sum,
+      mem_completeSupport.mp ha]
+    unfold treatInd
+    split_ifs <;> ring
+  have hN0 : 0 < Fintype.card ι := by omega
+  rw [sum_congr rfl hsym, sum_const, card_erase_of_mem (mem_univ i), card_univ, nsmul_eq_mul,
+    completeDesign_inclusionProb n1 h hN0, Nat.cast_sub hN.le, Nat.cast_one] at htot
+  have h1 : (Fintype.card ι : ℝ) - 1 ≠ 0 := by
+    have : (1 : ℝ) < Fintype.card ι := by exact_mod_cast hN
+    linarith
+  have h2 : (Fintype.card ι : ℝ) ≠ 0 := by exact_mod_cast hN0.ne'
+  field_simp at htot ⊢
+  exact htot
+
+/-- The difference in means `(1/n1) Σ_i A_i Y_i - (1/n0) Σ_i (1 - A_i) Y_i`: the average observed
+outcome among treated units minus that among control units, when `n1` units are treated and
+`n0` are controls. -/
+noncomputable def PotentialOutcomes.diffInMeans (po : PotentialOutcomes ι) (n1 n0 : ℕ)
+    (a : ι → Bool) : ℝ :=
+  (n1 : ℝ)⁻¹ * ∑ i, treatInd a i * po.observed a i -
+    (n0 : ℝ)⁻¹ * ∑ i, (1 - treatInd a i) * po.observed a i
+
+omit [DecidableEq ι] in
+/-- With `n1 + n0 = N` and both positive, the difference in means coincides, for every
+assignment, with the Horvitz-Thompson estimator using the treatment probability `n1 / N`. -/
+theorem PotentialOutcomes.diffInMeans_eq_htEstimator (po : PotentialOutcomes ι) {n1 n0 : ℕ}
+    (hn : n1 + n0 = Fintype.card ι) (hn1 : 0 < n1) (hn0 : 0 < n0) (a : ι → Bool) :
+    po.diffInMeans n1 n0 a = po.htEstimator (n1 / Fintype.card ι) a := by
+  have hN : (Fintype.card ι : ℝ) = n1 + n0 := by rw [← hn]; push_cast; ring
+  have h1 : (n1 : ℝ) ≠ 0 := by exact_mod_cast hn1.ne'
+  have h0 : (n0 : ℝ) ≠ 0 := by exact_mod_cast hn0.ne'
+  have hN0 : (n1 : ℝ) + n0 ≠ 0 := by positivity
+  unfold diffInMeans htEstimator
+  rw [hN, mul_sum, mul_sum, mul_sum, ← sum_sub_distrib]
+  refine sum_congr rfl fun i _ => ?_
+  have : 1 - (n1 : ℝ) / (n1 + n0) = n0 / (n1 + n0) := by field_simp; ring
+  rw [this]
+  field_simp
+
+/-- **Unbiasedness of the difference in means under complete randomization.** If exactly `n1`
+of the `N = n1 + n0` units are treated, uniformly at random, with `n1, n0 > 0`, then the
+difference in means is unbiased for the finite-population average treatment effect. -/
+theorem complete_diffInMeans_unbiased (po : PotentialOutcomes ι) {n1 n0 : ℕ}
+    (hn : n1 + n0 = Fintype.card ι) (hn1 : 0 < n1) (hn0 : 0 < n0) :
+    (completeDesign n1 (by omega)).expect (po.diffInMeans n1 n0) = po.ate := by
+  have hN : 0 < Fintype.card ι := by omega
+  have hNr : (0 : ℝ) < Fintype.card ι := by exact_mod_cast hN
+  rw [show po.diffInMeans n1 n0 = _ from funext (po.diffInMeans_eq_htEstimator hn hn1 hn0)]
+  refine po.htEstimator_unbiased _ _ (by positivity) ?_
+    (completeDesign_inclusionProb n1 (by omega) hN)
+  rw [div_lt_one hNr]
+  exact_mod_cast (by omega : n1 < Fintype.card ι)
+
+end CausalInference.Randomized

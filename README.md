@@ -7,6 +7,18 @@ causal inference.
 
 The project is at an early stage. Modules are added only when they contain checked declarations.
 
+## Contents
+
+| Directory | Content |
+|---|---|
+| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery |
+| `CausalInference/PartialIdentification` | Identified sets, point identification, Manski bounds with sharpness |
+| `CausalInference/Designs/Randomized` | Finite-population designs: Bernoulli and complete randomization, Neyman's variance, Fisher's randomization test |
+| `CausalInference/Designs/RegressionDiscontinuity` | Sharp and fuzzy designs: identification at the cutoff |
+| `CausalInference/Designs/SyntheticControl` | Synthetic control weights, fit, and the noiseless linear factor model |
+| `CausalInference/Interference` | Partial interference, direct and indirect effects, two-stage randomization |
+| `CausalInference/Mediation` | Controlled and natural effects, decompositions, the mediation formula, a cross-world counterexample |
+
 ## Principles
 
 - Identification, estimation, and inference are kept separate.
@@ -22,6 +34,7 @@ Lean `v4.36.0` and Mathlib `v4.36.0` (see `lean-toolchain` and `lakefile.toml`).
 ```sh
 lake exe cache get     # prebuilt Mathlib
 lake build
+scripts/check.sh       # placeholder scan, build, axiom check
 ```
 
 ## License
