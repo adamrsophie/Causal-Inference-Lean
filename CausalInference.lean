@@ -23,3 +23,14 @@ public import CausalInference.Mediation.Decomposition
 public import CausalInference.Mediation.Identification
 public import CausalInference.Designs.SyntheticControl.Basic
 public import CausalInference.Designs.SyntheticControl.FactorModel
+public import CausalInference.Designs.DifferenceInDifferences.EventStudy
+public import CausalInference.Designs.DifferenceInDifferences.Staggered
+public import CausalInference.Designs.DifferenceInDifferences.TwoPeriod
+public import CausalInference.InstrumentalVariables.Basic
+public import CausalInference.InstrumentalVariables.PrincipalStrata
+public import CausalInference.InstrumentalVariables.LATE
+public import CausalInference.InstrumentalVariables.Counterexamples
+public import CausalInference.Graphical.ADMG
+public import CausalInference.Graphical.Districts
+public import CausalInference.Graphical.LatentProjection
+public import CausalInference.Graphical.ADMGExamples

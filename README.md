@@ -11,11 +11,13 @@ The project is at an early stage. Modules are added only when they contain check
 
 | Directory | Content |
 |---|---|
-| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery |
+| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery; acyclic directed mixed graphs, districts, latent projection |
 | `CausalInference/PartialIdentification` | Identified sets, point identification, Manski bounds with sharpness |
 | `CausalInference/Designs/Randomized` | Finite-population designs: Bernoulli and complete randomization, Neyman's variance, Fisher's randomization test |
+| `CausalInference/Designs/DifferenceInDifferences` | Two-period identification and bias, staggered adoption with group-time effects, a two-way fixed effects counterexample |
 | `CausalInference/Designs/RegressionDiscontinuity` | Sharp and fuzzy designs: identification at the cutoff |
 | `CausalInference/Designs/SyntheticControl` | Synthetic control weights, fit, and the noiseless linear factor model |
+| `CausalInference/InstrumentalVariables` | Principal strata, the local average treatment effect theorem, counterexamples without monotonicity |
 | `CausalInference/Interference` | Partial interference, direct and indirect effects, two-stage randomization |
 | `CausalInference/Mediation` | Controlled and natural effects, decompositions, the mediation formula, a cross-world counterexample |
 
