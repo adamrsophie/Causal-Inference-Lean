@@ -5,7 +5,7 @@ Authors: Adam R Sophie
 -/
 module
 
-public import Mathlib.MeasureTheory.Integral.Bochner.Basic
+public import Mathlib.MeasureTheory.Integral.Bochner.Set
 public import Mathlib.Probability.ConditionalProbability
 public import Mathlib.Probability.Independence.Basic
 
@@ -29,12 +29,22 @@ instrumental variables*).
 * The assumptions, each a separate `Prop`: `IVModel.Exclusion`, `IVModel.InstrumentIndependence`,
   `IVModel.Relevance`, `IVModel.Monotonicity`.
 
+`IVModel.InstrumentIndependence` (the instrument is independent of the whole vector of potential
+treatments and outcomes) and the unit-level `IVModel.Exclusion` are stronger than the graphical or
+counterfactual definition of an instrument in Pearl (2009, *Causality*) and than the
+population-level conditions of Hernan and Robins (*Causal Inference: What If*). There is no
+covariate (conditional) version of these assumptions in this directory.
+
 ## Main results
 
+* `IVModel.measurable_Dobs`, `IVModel.measurable_Yobs`, `IVModel.measurable_observed`: the
+  observed data form a measurable map, so the observed-data law is a pushforward measure.
 * `IVModel.condMean_potentials`: under instrument independence, conditioning on `Z = z` does
-  not change the mean of any function of the potential variables.
-* `IVModel.condMean_DobsReal`, `IVModel.condMean_Yobs`: `E[Dobs | Z = z] = E[D z]` and
-  `E[Yobs | Z = z] = E[Y z (D z)]` under instrument independence.
+  not change the mean of any integrable function of the potential variables.
+* `IVModel.condMean_DobsReal`, `IVModel.condMean_Yobs`: `E[Dobs | Z = z] = E[D z]` and, for
+  integrable `Y z (D z)`, `E[Yobs | Z = z] = E[Y z (D z)]` under instrument independence.
+* `IVModel.condMean_obs`: the same for any function `h Dobs Yobs` with `h (D z) (Y z (D z))`
+  integrable.
 -/
 
 @[expose] public section
@@ -131,11 +141,35 @@ the instrument value `z`. -/
 def Exclusion (μ : Measure Ω) : Prop := ∀ d, M.Y true d =ᵐ[μ] M.Y false d
 
 /-- Instrument independence: the instrument `Z` is independent of the vector of all potential
-treatments and potential outcomes. -/
+treatments and potential outcomes (joint independence).
+
+This is stronger than the definition of an instrument in Pearl (2009, *Causality*), which asks
+only for the graphical or counterfactual independence of `Z` from the outcome's other causes, and
+stronger than the marginal exchangeability `Y^{z,d}` independent of `Z` for each `(z, d)` used by
+Hernan and Robins (*Causal Inference: What If*). It is unconditional: no covariate version is
+formalized. -/
 def InstrumentIndependence (μ : Measure Ω) : Prop := IndepFun M.Z M.potentials μ
 
-/-- Relevance: the first stage `E[Dobs | Z = true] - E[Dobs | Z = false]` is nonzero. -/
-def Relevance (μ : Measure Ω) : Prop := M.firstStage μ ≠ 0
+/-- Relevance: both instrument arms have positive mass, `P(Z = true) ≠ 0` and
+`P(Z = false) ≠ 0`, and the first stage `E[Dobs | Z = true] - E[Dobs | Z = false]` is nonzero.
+
+The positivity conjuncts matter: without them a constant instrument `Z = true` with `D ≡ true`
+would have first stage `1 - 0 = 1`, because the conditional mean given the null event `{Z = false}`
+is `0` by Lean's conventions. -/
+def Relevance (μ : Measure Ω) : Prop :=
+  μ (M.instrumentEq true) ≠ 0 ∧ μ (M.instrumentEq false) ≠ 0 ∧ M.firstStage μ ≠ 0
+
+/-- Under relevance, `P(Z = true) ≠ 0`. -/
+theorem Relevance.measure_true_ne_zero {M : IVModel Ω} {μ : Measure Ω} (h : M.Relevance μ) :
+    μ (M.instrumentEq true) ≠ 0 := h.1
+
+/-- Under relevance, `P(Z = false) ≠ 0`. -/
+theorem Relevance.measure_false_ne_zero {M : IVModel Ω} {μ : Measure Ω} (h : M.Relevance μ) :
+    μ (M.instrumentEq false) ≠ 0 := h.2.1
+
+/-- Under relevance, the first stage is nonzero. -/
+theorem Relevance.firstStage_ne_zero {M : IVModel Ω} {μ : Measure Ω} (h : M.Relevance μ) :
+    M.firstStage μ ≠ 0 := h.2.2
 
 /-- Monotonicity: almost surely, a unit that takes the treatment when the instrument is `false`
 also takes it when the instrument is `true` (`D false ≤ D true` with `false < true`). -/
@@ -167,9 +201,15 @@ theorem map_potentials_cond [IsFiniteMeasure μ] (hI : M.InstrumentIndependence 
     ← mul_assoc, ENNReal.inv_mul_cancel hz (measure_ne_top _ _), one_mul]
 
 /-- Under instrument independence and `P(Z = z) ≠ 0`, the conditional mean given `Z = z` of a
-measurable function of the potential variables equals its unconditional mean. -/
+measurable function of the potential variables, integrable under `μ`, equals its unconditional
+mean.
+
+The integrability hypothesis `_hint` is not used by the proof: the conditional and unconditional
+laws of the potential variables coincide, so the two Bochner integrals agree even when both are
+Lean's totalized value `0`. It is required so that the statement is about two finite means. -/
 theorem condMean_potentials [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z : Bool}
-    (hz : μ (M.instrumentEq z) ≠ 0) {φ : Potentials → ℝ} (hφ : Measurable φ) :
+    (hz : μ (M.instrumentEq z) ≠ 0) {φ : Potentials → ℝ} (hφ : Measurable φ)
+    (_hint : Integrable (fun ω ↦ φ (M.potentials ω)) μ) :
     M.condMean μ (fun ω ↦ φ (M.potentials ω)) z = ∫ ω, φ (M.potentials ω) ∂μ := by
   rw [condMean, ← integral_map M.measurable_potentials.aemeasurable hφ.aestronglyMeasurable,
     M.map_potentials_cond hI hz,
@@ -211,7 +251,48 @@ theorem integrable_Y_D {z : Bool} (hY : ∀ d, Integrable (M.Y z d) μ) (z' : Bo
     (M.measurable_Y_D z z').aestronglyMeasurable (Filter.Eventually.of_forall fun ω ↦ ?_)
   cases M.D z' ω <;> simp
 
-/-- Under instrument independence and `P(Z = z) ≠ 0`: `E[Dobs | Z = z] = E[D z]`. -/
+/-- The observed outcome is measurable. -/
+theorem measurable_Yobs : Measurable M.Yobs := by
+  have h : M.Yobs = fun ω ↦ if M.Z ω = true then M.Y true (M.D true ω) ω
+      else M.Y false (M.D false ω) ω := by
+    funext ω; simp only [Yobs, Dobs]; cases M.Z ω <;> rfl
+  rw [h]
+  exact Measurable.ite (M.measurable_Z (measurableSet_singleton true)) (M.measurable_Y_D _ _)
+    (M.measurable_Y_D _ _)
+
+/-- The observed treatment is measurable. -/
+theorem measurable_Dobs : Measurable M.Dobs := by
+  have h : M.Dobs = fun ω ↦ if M.Z ω = true then M.D true ω else M.D false ω := by
+    funext ω; simp only [Dobs]; cases M.Z ω <;> rfl
+  rw [h]
+  exact Measurable.ite (M.measurable_Z (measurableSet_singleton true)) (M.measurable_D _)
+    (M.measurable_D _)
+
+/-- The observed data `(Z, Dobs, Yobs)` form a measurable map, so the observed-data law
+`μ.map M.observed` is a genuine pushforward measure. -/
+theorem measurable_observed : Measurable M.observed :=
+  M.measurable_Z.prodMk (M.measurable_Dobs.prodMk M.measurable_Yobs)
+
+/-- The event `{D z = true}` is measurable. -/
+theorem measurableSet_D_eq_true (z : Bool) : MeasurableSet {ω | M.D z ω = true} :=
+  M.measurable_D z (measurableSet_singleton true)
+
+/-- A potential treatment coded as a real number is integrable under a finite measure. -/
+theorem integrable_DReal [IsFiniteMeasure μ] (z : Bool) : Integrable (M.DReal z) μ := by
+  refine Integrable.of_bound
+    (measurable_boolToReal.comp (M.measurable_D z)).aestronglyMeasurable 1
+    (Filter.Eventually.of_forall fun ω ↦ ?_)
+  simp only [DReal, boolToReal]
+  split_ifs <;> simp
+
+/-- `∫ D z = P(D z = 1)` for the real coding of the potential treatment. -/
+theorem integral_DReal (z : Bool) : ∫ ω, M.DReal z ω ∂μ = μ.real {ω | M.D z ω = true} := by
+  rw [← integral_indicator_one (M.measurableSet_D_eq_true z)]
+  refine integral_congr_ae (Filter.Eventually.of_forall fun ω ↦ ?_)
+  by_cases h : M.D z ω = true <;> simp [DReal, Set.indicator, h]
+
+/-- Under instrument independence and `P(Z = z) ≠ 0`: `E[Dobs | Z = z] = E[D z]`. The treatment
+is bounded, so both means are finite. -/
 theorem condMean_DobsReal [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z : Bool}
     (hz : μ (M.instrumentEq z) ≠ 0) :
     M.condMean μ M.DobsReal z = ∫ ω, M.DReal z ω ∂μ := by
@@ -219,15 +300,38 @@ theorem condMean_DobsReal [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ
     simp only [instrumentEq, Set.mem_preimage, Set.mem_singleton_iff] at hω
     simp [DobsReal, DReal, Dobs, hω]]
   exact M.condMean_potentials hI hz (measurable_boolToReal.comp (measurable_fst_eval z))
+    (M.integrable_DReal z)
 
-/-- Under instrument independence and `P(Z = z) ≠ 0`: `E[Yobs | Z = z] = E[Y z (D z)]`. -/
+/-- Under instrument independence, `P(Z = z) ≠ 0` and integrability of `Y z (D z)`:
+`E[Yobs | Z = z] = E[Y z (D z)]`. -/
 theorem condMean_Yobs [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z : Bool}
-    (hz : μ (M.instrumentEq z) ≠ 0) :
+    (hz : μ (M.instrumentEq z) ≠ 0) (hY : Integrable (M.YD z) μ) :
     M.condMean μ M.Yobs z = ∫ ω, M.YD z ω ∂μ := by
   rw [M.condMean_congr (g := M.YD z) fun ω hω ↦ by
     simp only [instrumentEq, Set.mem_preimage, Set.mem_singleton_iff] at hω
     simp [Yobs, YD, Dobs, hω]]
-  exact M.condMean_potentials hI hz (measurable_snd_eval_fst z z)
+  exact M.condMean_potentials hI hz (measurable_snd_eval_fst z z) hY
+
+/-- Under instrument independence and `P(Z = z) ≠ 0`, the conditional mean given `Z = z` of any
+function `h Dobs Yobs` of the observed treatment and outcome (with `h d` measurable for both
+treatment values) equals the unconditional mean of `h (D z) (Y z (D z))`, provided the latter is
+integrable. -/
+theorem condMean_obs [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z : Bool}
+    (hz : μ (M.instrumentEq z) ≠ 0) (h : Bool → ℝ → ℝ) (hh : ∀ d, Measurable (h d))
+    (hint : Integrable (fun ω ↦ h (M.D z ω) (M.Y z (M.D z ω) ω)) μ) :
+    M.condMean μ (fun ω ↦ h (M.Dobs ω) (M.Yobs ω)) z =
+      ∫ ω, h (M.D z ω) (M.Y z (M.D z ω) ω) ∂μ := by
+  rw [M.condMean_congr (g := fun ω ↦ h (M.D z ω) (M.Y z (M.D z ω) ω)) fun ω hω ↦ by
+    simp only [instrumentEq, Set.mem_preimage, Set.mem_singleton_iff] at hω
+    simp [Yobs, Dobs, hω]]
+  have hφ : Measurable fun w : Potentials ↦ h (w.1 z) (w.2 z (w.1 z)) := by
+    have e : (fun w : Potentials ↦ h (w.1 z) (w.2 z (w.1 z))) = fun w ↦
+        if w.1 z = true then h true (w.2 z true) else h false (w.2 z false) := by
+      funext w; cases w.1 z <;> rfl
+    rw [e]
+    exact Measurable.ite ((measurable_fst_eval z) (measurableSet_singleton true))
+      ((hh true).comp (measurable_snd_eval z true)) ((hh false).comp (measurable_snd_eval z false))
+  exact M.condMean_potentials hI hz hφ hint
 
 end IVModel
 

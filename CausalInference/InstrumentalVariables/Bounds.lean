@@ -23,7 +23,8 @@ assumptions.
   observation map `ω ↦ (Z ω, D ω, Y ω)` alone.
 * `IVBounds.lowerBound`, `IVBounds.upperBound`: the IV bounds
   `E[Y 1{D=1} | Z=1] - E[Y 1{D=0} | Z=0] + lo P(D=0 | Z=1) - hi P(D=1 | Z=0)` and the same with
-  `lo` and `hi` exchanged.
+  `lo` and `hi` exchanged; `IVBounds.lowerBoundSwap`, `IVBounds.upperBoundSwap`: the same with the
+  instrument arms swapped.
 * `IVBounds.models`: exclusion, instrument independence, monotonicity, positive instrument
   probabilities, outcomes in `[lo, hi]`.
 * `IVModel.refill`: the model with the never-takers' treated outcome and the always-takers'
@@ -34,8 +35,12 @@ assumptions.
 ## Main results
 
 * `IVModel.ate_mem_Icc_bounds`: under exclusion and independence the average treatment effect lies
-  in `[lowerBound, upperBound]`; `IVModel.upperBound_sub_lowerBound`: under monotonicity as well
-  the width is `(hi - lo) (1 - P(compliers))`.
+  in `[lowerBound, upperBound]`; `IVModel.ate_mem_Icc_boundsSwap`: the same for the bounds with the
+  instrument arms swapped; `IVModel.ate_mem_Icc_bounds_inter`: hence in the intersection of the
+  two intervals.
+* `IVBounds.upperBound_sub_lowerBound`: from the definitions alone, the width is
+  `(hi - lo) (P(D=0 | Z=1) + P(D=1 | Z=0))`; `IVModel.upperBound_sub_lowerBound`: under
+  independence and monotonicity it is `(hi - lo) (1 - P(compliers))`.
 * `IVModel.ate_eq_sum_strata`, `IVModel.ate_eq_strata_cond`: under monotonicity,
   `ATE = P(C) CACE + P(AT) E[Y 1 - Y 0 | AT] + P(NT) E[Y 1 - Y 0 | NT]`;
   `IVModel.obsMean_yTreated_false`, `IVModel.obsMean_yUntreated_true`,
@@ -88,53 +93,10 @@ namespace IVModel
 
 variable {Ω : Type*} [MeasurableSpace Ω] (M : IVModel Ω) {μ : Measure Ω}
 
-/-- The observed outcome is measurable. -/
-theorem measurable_Yobs : Measurable M.Yobs := by
-  have h : M.Yobs = fun ω ↦ if M.Z ω = true then M.Y true (M.D true ω) ω
-      else M.Y false (M.D false ω) ω := by
-    funext ω; simp only [Yobs, Dobs]; cases M.Z ω <;> rfl
-  rw [h]
-  exact Measurable.ite (M.measurable_Z (measurableSet_singleton true)) (M.measurable_Y_D _ _)
-    (M.measurable_Y_D _ _)
-
-/-- The observed treatment is measurable. -/
-theorem measurable_Dobs : Measurable M.Dobs := by
-  have h : M.Dobs = fun ω ↦ if M.Z ω = true then M.D true ω else M.D false ω := by
-    funext ω; simp only [Dobs]; cases M.Z ω <;> rfl
-  rw [h]
-  exact Measurable.ite (M.measurable_Z (measurableSet_singleton true)) (M.measurable_D _)
-    (M.measurable_D _)
-
-/-- The observed data `(Z, Dobs, Yobs)` form a measurable map. -/
-theorem measurable_observed : Measurable M.observed :=
-  M.measurable_Z.prodMk (M.measurable_Dobs.prodMk M.measurable_Yobs)
-
-/-- Under instrument independence and `P(Z = z) ≠ 0`, the conditional mean given `Z = z` of any
-function `h Dobs Yobs` of the observed treatment and outcome (with `h d` measurable for both
-treatment values) equals the unconditional mean of `h (D z) (Y z (D z))`. -/
-theorem condMean_obs [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z : Bool}
-    (hz : μ (M.instrumentEq z) ≠ 0) (h : Bool → ℝ → ℝ) (hh : ∀ d, Measurable (h d)) :
-    M.condMean μ (fun ω ↦ h (M.Dobs ω) (M.Yobs ω)) z =
-      ∫ ω, h (M.D z ω) (M.Y z (M.D z ω) ω) ∂μ := by
-  rw [M.condMean_congr (g := fun ω ↦ h (M.D z ω) (M.Y z (M.D z ω) ω)) fun ω hω ↦ by
-    simp only [instrumentEq, Set.mem_preimage, Set.mem_singleton_iff] at hω
-    simp [Yobs, Dobs, hω]]
-  have hφ : Measurable fun w : Potentials ↦ h (w.1 z) (w.2 z (w.1 z)) := by
-    have e : (fun w : Potentials ↦ h (w.1 z) (w.2 z (w.1 z))) = fun w ↦
-        if w.1 z = true then h true (w.2 z true) else h false (w.2 z false) := by
-      funext w; cases w.1 z <;> rfl
-    rw [e]
-    exact Measurable.ite ((measurable_fst_eval z) (measurableSet_singleton true))
-      ((hh true).comp (measurable_snd_eval z true)) ((hh false).comp (measurable_snd_eval z false))
-  exact M.condMean_potentials hI hz hφ
-
 /-- With bounded potential outcomes every potential outcome is integrable. -/
 theorem integrable_Y_of_bounded [IsFiniteMeasure μ] {lo hi : ℝ}
     (hb : ∀ z d ω, M.Y z d ω ∈ Icc lo hi) (z d : Bool) : Integrable (M.Y z d) μ :=
   Manski.integrable_of_mem_Icc (M.measurable_Y z d) (hb z d)
-
-theorem measurableSet_D_eq_true (z : Bool) : MeasurableSet {ω | M.D z ω = true} :=
-  M.measurable_D z (measurableSet_singleton true)
 
 end IVModel
 
@@ -187,6 +149,28 @@ noncomputable def upperBound (μ : Measure Ω) (lo hi : ℝ) (o : Ω → Bool ×
   obsMean μ o yTreated true - obsMean μ o yUntreated false + hi * obsMean μ o untreatedInd true -
     lo * obsMean μ o treatedInd false
 
+/-- The IV lower bound with the instrument arms swapped, a function of the observation `o`
+alone: `E[Y 1{D=1} | Z=0] - E[Y 1{D=0} | Z=1] + lo P(D=0 | Z=0) - hi P(D=1 | Z=1)`. For a binary
+outcome (`lo = 0`, `hi = 1`) it is `P(Y=1, D=1 | Z=0) + P(Y=0, D=0 | Z=1) - 1`. -/
+noncomputable def lowerBoundSwap (μ : Measure Ω) (lo hi : ℝ) (o : Ω → Bool × Bool × ℝ) : ℝ :=
+  obsMean μ o yTreated false - obsMean μ o yUntreated true + lo * obsMean μ o untreatedInd false -
+    hi * obsMean μ o treatedInd true
+
+/-- The IV upper bound with the instrument arms swapped:
+`E[Y 1{D=1} | Z=0] - E[Y 1{D=0} | Z=1] + hi P(D=0 | Z=0) - lo P(D=1 | Z=1)`. For a binary outcome
+it is `1 - P(Y=0, D=1 | Z=0) - P(Y=1, D=0 | Z=1)`. -/
+noncomputable def upperBoundSwap (μ : Measure Ω) (lo hi : ℝ) (o : Ω → Bool × Bool × ℝ) : ℝ :=
+  obsMean μ o yTreated false - obsMean μ o yUntreated true + hi * obsMean μ o untreatedInd false -
+    lo * obsMean μ o treatedInd true
+
+/-- **Width of the IV bounds, without assumptions.** For any measure and any observation map,
+`upperBound - lowerBound = (hi - lo) (P(D=0 | Z=1) + P(D=1 | Z=0))`: the width is `hi - lo` times
+the sum of the two noncompliance rates. This follows from the definitions alone. -/
+theorem upperBound_sub_lowerBound (μ : Measure Ω) (lo hi : ℝ) (o : Ω → Bool × Bool × ℝ) :
+    upperBound μ lo hi o - lowerBound μ lo hi o =
+      (hi - lo) * (obsMean μ o untreatedInd true + obsMean μ o treatedInd false) := by
+  rw [upperBound, lowerBound]; ring
+
 end IVBounds
 
 namespace IVModel
@@ -203,9 +187,14 @@ theorem condMean_eq_obsMean (h : Bool → ℝ → ℝ) (z : Bool) :
 /-- Identification of `E[Y z 1 · 1{D z' = 1}]`: under exclusion and instrument independence,
 `E[Y 1{D=1} | Z=z'] = ∫_{D z' = 1} Y z 1`, for any instrument value `z` used to index `Y`. -/
 theorem obsMean_yTreated [IsFiniteMeasure μ] (hE : M.Exclusion μ)
-    (hI : M.InstrumentIndependence μ) {z' : Bool} (hz : μ (M.instrumentEq z') ≠ 0) (z : Bool) :
+    (hI : M.InstrumentIndependence μ) {z' : Bool} (hz : μ (M.instrumentEq z') ≠ 0) {z : Bool}
+    (hY : Integrable (M.Y z true) μ) :
     obsMean μ M.observed yTreated z' = ∫ ω in {ω | M.D z' ω = true}, M.Y z true ω ∂μ := by
-  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_yTreated,
+  have hint : Integrable (fun ω ↦ yTreated (M.D z' ω) (M.Y z' (M.D z' ω) ω)) μ := by
+    refine ((hY.congr (hE.ae_eq z z' true)).indicator (M.measurableSet_D_eq_true z')).congr
+      (ae_of_all _ fun ω ↦ ?_)
+    by_cases h : M.D z' ω = true <;> simp [Set.indicator, yTreated, h]
+  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_yTreated hint,
     ← integral_indicator (M.measurableSet_D_eq_true z')]
   refine integral_congr_ae ?_
   filter_upwards [hE.ae_eq z' z true] with ω hω
@@ -214,9 +203,14 @@ theorem obsMean_yTreated [IsFiniteMeasure μ] (hE : M.Exclusion μ)
 /-- Identification of `E[Y z 0 · 1{D z' = 0}]`: under exclusion and instrument independence,
 `E[Y 1{D=0} | Z=z'] = ∫_{D z' = 0} Y z 0`. -/
 theorem obsMean_yUntreated [IsFiniteMeasure μ] (hE : M.Exclusion μ)
-    (hI : M.InstrumentIndependence μ) {z' : Bool} (hz : μ (M.instrumentEq z') ≠ 0) (z : Bool) :
+    (hI : M.InstrumentIndependence μ) {z' : Bool} (hz : μ (M.instrumentEq z') ≠ 0) {z : Bool}
+    (hY : Integrable (M.Y z false) μ) :
     obsMean μ M.observed yUntreated z' = ∫ ω in {ω | M.D z' ω = true}ᶜ, M.Y z false ω ∂μ := by
-  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_yUntreated,
+  have hint : Integrable (fun ω ↦ yUntreated (M.D z' ω) (M.Y z' (M.D z' ω) ω)) μ := by
+    refine ((hY.congr (hE.ae_eq z z' false)).indicator
+      (M.measurableSet_D_eq_true z').compl).congr (ae_of_all _ fun ω ↦ ?_)
+    by_cases h : M.D z' ω = true <;> simp [Set.indicator, yUntreated, h]
+  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_yUntreated hint,
     ← integral_indicator (M.measurableSet_D_eq_true z').compl]
   refine integral_congr_ae ?_
   filter_upwards [hE.ae_eq z' z false] with ω hω
@@ -226,7 +220,10 @@ theorem obsMean_yUntreated [IsFiniteMeasure μ] (hE : M.Exclusion μ)
 theorem obsMean_treatedInd [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z' : Bool}
     (hz : μ (M.instrumentEq z') ≠ 0) :
     obsMean μ M.observed treatedInd z' = μ.real {ω | M.D z' ω = true} := by
-  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_treatedInd,
+  have hint : Integrable (fun ω ↦ treatedInd (M.D z' ω) (M.Y z' (M.D z' ω) ω)) μ :=
+    (M.integrable_DReal z').congr (ae_of_all _ fun ω ↦ by
+      by_cases h : M.D z' ω = true <;> simp [DReal, treatedInd, h])
+  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_treatedInd hint,
     ← integral_indicator_one (M.measurableSet_D_eq_true z')]
   refine integral_congr_ae (Filter.Eventually.of_forall fun ω ↦ ?_)
   by_cases h : M.D z' ω = true <;> simp [Set.indicator, treatedInd, h]
@@ -235,12 +232,41 @@ theorem obsMean_treatedInd [IsFiniteMeasure μ] (hI : M.InstrumentIndependence �
 theorem obsMean_untreatedInd [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {z' : Bool}
     (hz : μ (M.instrumentEq z') ≠ 0) :
     obsMean μ M.observed untreatedInd z' = μ.real {ω | M.D z' ω = true}ᶜ := by
-  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_untreatedInd,
+  have hint : Integrable (fun ω ↦ untreatedInd (M.D z' ω) (M.Y z' (M.D z' ω) ω)) μ :=
+    ((integrable_const (1 : ℝ)).sub (M.integrable_DReal z')).congr (ae_of_all _ fun ω ↦ by
+      by_cases h : M.D z' ω = true <;> simp [DReal, untreatedInd, h])
+  rw [← condMean_eq_obsMean, M.condMean_obs hI hz _ measurable_untreatedInd hint,
     ← integral_indicator_one (M.measurableSet_D_eq_true z').compl]
   refine integral_congr_ae (Filter.Eventually.of_forall fun ω ↦ ?_)
   by_cases h : M.D z' ω = true <;> simp [Set.indicator, untreatedInd, h]
 
 /-! ### The bounds -/
+
+/-- The IV bound inclusion for an arbitrary choice of arms: under the exclusion restriction,
+instrument independence, `P(Z = z₁) ≠ 0`, `P(Z = z₀) ≠ 0` and potential outcomes in `[lo, hi]`,
+`E[Y z 1 - Y z 0]` lies between
+`E[Y 1{D=1} | Z=z₁] - E[Y 1{D=0} | Z=z₀] + lo P(D=0 | Z=z₁) - hi P(D=1 | Z=z₀)` and the same with
+`lo` and `hi` exchanged. The arm `z₁` is used for the treated mean `E[Y 1]` and the arm `z₀` for
+the untreated mean `E[Y 0]`. -/
+theorem ate_mem_Icc_arms [IsFiniteMeasure μ] {lo hi : ℝ} (hE : M.Exclusion μ)
+    (hI : M.InstrumentIndependence μ) {z₁ z₀ : Bool} (h₁ : μ (M.instrumentEq z₁) ≠ 0)
+    (h₀ : μ (M.instrumentEq z₀) ≠ 0) (hb : ∀ z d ω, M.Y z d ω ∈ Icc lo hi) (z : Bool) :
+    M.ate μ z ∈ Icc
+      (obsMean μ M.observed yTreated z₁ - obsMean μ M.observed yUntreated z₀ +
+        lo * obsMean μ M.observed untreatedInd z₁ - hi * obsMean μ M.observed treatedInd z₀)
+      (obsMean μ M.observed yTreated z₁ - obsMean μ M.observed yUntreated z₀ +
+        hi * obsMean μ M.observed untreatedInd z₁ - lo * obsMean μ M.observed treatedInd z₀) := by
+  have e1 := Manski.integral_mem_Icc_of_eqOn (μ := μ) (M.measurableSet_D_eq_true z₁)
+    (M.measurable_Y z true) (hb z true) (y := M.Y z true) (fun _ _ ↦ rfl)
+  have e0 := Manski.integral_mem_Icc_of_eqOn (μ := μ) (M.measurableSet_D_eq_true z₀).compl
+    (M.measurable_Y z false) (hb z false) (y := M.Y z false) (fun _ _ ↦ rfl)
+  rw [compl_compl] at e0
+  simp only [ate, effect]
+  rw [integral_sub (M.integrable_Y_of_bounded hb z true) (M.integrable_Y_of_bounded hb z false),
+    M.obsMean_yTreated hE hI h₁ (M.integrable_Y_of_bounded hb z true),
+    M.obsMean_yUntreated hE hI h₀ (M.integrable_Y_of_bounded hb z false),
+    M.obsMean_untreatedInd hI h₁, M.obsMean_treatedInd hI h₀]
+  constructor <;> linarith [e1.1, e1.2, e0.1, e0.2]
 
 /-- **IV bounds on the average treatment effect** (Robins 1989; Manski 1990). Assume the exclusion
 restriction, instrument independence, `P(Z = z) ≠ 0` for both instrument values, and potential
@@ -253,31 +279,46 @@ The argument splits `E[Y 1]` over `{D 1 = 1}`, where it is identified from the a
 its complement, where it is bounded by `lo` and `hi`, and splits `E[Y 0]` likewise using the arm
 `Z = 0`. Monotonicity is not needed for the inclusion, and without it the interval is valid but
 not claimed to be sharp; monotonicity enters the stratum interpretation
-(`meanY1_eq`, `meanY0_eq`), the width (`upperBound_sub_lowerBound`) and sharpness within monotone
-models (`identifiedSet_ate`). -/
+(`meanY1_eq`, `meanY0_eq`), the complier form of the width (`upperBound_sub_lowerBound`) and
+sharpness within monotone models (`identifiedSet_ate`).
+
+The hypotheses are stronger than the population-level conditions under which Hernan and Robins
+(*Causal Inference: What If*) state the natural bounds: the exclusion restriction is imposed unit
+by unit (almost surely), not only on the means `E[Y^{z,d}]`, and instrument independence is joint
+independence of `Z` and all potential variables, not marginal exchangeability for each `(z, d)`.
+-/
 theorem ate_mem_Icc_bounds [IsFiniteMeasure μ] {lo hi : ℝ} (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (h₁ : μ (M.instrumentEq true) ≠ 0)
     (h₀ : μ (M.instrumentEq false) ≠ 0) (hb : ∀ z d ω, M.Y z d ω ∈ Icc lo hi) (z : Bool) :
-    M.ate μ z ∈ Icc (lowerBound μ lo hi M.observed) (upperBound μ lo hi M.observed) := by
-  have e1 := Manski.integral_mem_Icc_of_eqOn (μ := μ) (M.measurableSet_D_eq_true true)
-    (M.measurable_Y z true) (hb z true) (y := M.Y z true) (fun _ _ ↦ rfl)
-  have e0 := Manski.integral_mem_Icc_of_eqOn (μ := μ) (M.measurableSet_D_eq_true false).compl
-    (M.measurable_Y z false) (hb z false) (y := M.Y z false) (fun _ _ ↦ rfl)
-  rw [compl_compl] at e0
-  simp only [ate, effect]
-  rw [integral_sub (M.integrable_Y_of_bounded hb z true) (M.integrable_Y_of_bounded hb z false),
-    lowerBound, upperBound, M.obsMean_yTreated hE hI h₁ z, M.obsMean_yUntreated hE hI h₀ z,
-    M.obsMean_untreatedInd hI h₁, M.obsMean_treatedInd hI h₀]
-  constructor <;> linarith [e1.1, e1.2, e0.1, e0.2]
+    M.ate μ z ∈ Icc (lowerBound μ lo hi M.observed) (upperBound μ lo hi M.observed) :=
+  M.ate_mem_Icc_arms hE hI h₁ h₀ hb z
 
-/-- `∫ D z = P(D z = 1)` for the real coding of the potential treatment. -/
-theorem integral_DReal (z : Bool) : ∫ ω, M.DReal z ω ∂μ = μ.real {ω | M.D z ω = true} := by
-  rw [← integral_indicator_one (M.measurableSet_D_eq_true z)]
-  refine integral_congr_ae (Filter.Eventually.of_forall fun ω ↦ ?_)
-  by_cases h : M.D z ω = true <;> simp [DReal, Set.indicator, h]
+/-- **IV bounds with the instrument arms swapped.** Under the same assumptions as
+`ate_mem_Icc_bounds`, `E[Y z 1 - Y z 0]` lies between `lowerBoundSwap` and `upperBoundSwap`,
+which use the arm `Z = 0` for the treated mean and the arm `Z = 1` for the untreated mean. -/
+theorem ate_mem_Icc_boundsSwap [IsFiniteMeasure μ] {lo hi : ℝ} (hE : M.Exclusion μ)
+    (hI : M.InstrumentIndependence μ) (h₁ : μ (M.instrumentEq true) ≠ 0)
+    (h₀ : μ (M.instrumentEq false) ≠ 0) (hb : ∀ z d ω, M.Y z d ω ∈ Icc lo hi) (z : Bool) :
+    M.ate μ z ∈ Icc (lowerBoundSwap μ lo hi M.observed) (upperBoundSwap μ lo hi M.observed) :=
+  M.ate_mem_Icc_arms hE hI h₀ h₁ hb z
 
-/-- **Width of the IV bounds.** Under instrument independence, monotonicity and
-`P(Z = z) ≠ 0` for both `z`, the IV bounds have width `(hi - lo) (1 - P(compliers))`. -/
+/-- **Intersection of the two arm orderings.** Under the assumptions of `ate_mem_Icc_bounds`,
+the average treatment effect lies in the intersection of the two intervals,
+`[max lowerBound lowerBoundSwap, min upperBound upperBoundSwap]`. No sharpness claim is made
+for this intersection. -/
+theorem ate_mem_Icc_bounds_inter [IsFiniteMeasure μ] {lo hi : ℝ} (hE : M.Exclusion μ)
+    (hI : M.InstrumentIndependence μ) (h₁ : μ (M.instrumentEq true) ≠ 0)
+    (h₀ : μ (M.instrumentEq false) ≠ 0) (hb : ∀ z d ω, M.Y z d ω ∈ Icc lo hi) (z : Bool) :
+    M.ate μ z ∈ Icc (max (lowerBound μ lo hi M.observed) (lowerBoundSwap μ lo hi M.observed))
+      (min (upperBound μ lo hi M.observed) (upperBoundSwap μ lo hi M.observed)) := by
+  have h := M.ate_mem_Icc_bounds hE hI h₁ h₀ hb z
+  have h' := M.ate_mem_Icc_boundsSwap hE hI h₁ h₀ hb z
+  exact ⟨max_le h.1 h'.1, le_min h.2 h'.2⟩
+
+/-- **Width of the IV bounds under monotonicity.** Under instrument independence, monotonicity
+and `P(Z = z) ≠ 0` for both `z`, the IV bounds have width `(hi - lo) (1 - P(compliers))`. It is
+the assumption-free width `IVBounds.upperBound_sub_lowerBound` rewritten with the identified
+never-taker and always-taker shares. -/
 theorem upperBound_sub_lowerBound [IsProbabilityMeasure μ] {lo hi : ℝ}
     (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
     (h₁ : μ (M.instrumentEq true) ≠ 0) (h₀ : μ (M.instrumentEq false) ≠ 0) :
@@ -286,29 +327,11 @@ theorem upperBound_sub_lowerBound [IsProbabilityMeasure μ] {lo hi : ℝ}
   have hFS := M.firstStage_eq_measure_compliers hI hM h₁ h₀
   rw [firstStage, M.condMean_DobsReal hI h₁, M.condMean_DobsReal hI h₀, M.integral_DReal,
     M.integral_DReal] at hFS
-  rw [upperBound, lowerBound, M.obsMean_untreatedInd hI h₁, M.obsMean_treatedInd hI h₀,
-    probReal_compl_eq_one_sub (M.measurableSet_D_eq_true true), ← hFS]
+  rw [IVBounds.upperBound_sub_lowerBound, M.obsMean_untreatedInd hI h₁,
+    M.obsMean_treatedInd hI h₀, probReal_compl_eq_one_sub (M.measurableSet_D_eq_true true), ← hFS]
   ring
 
 /-! ### Principal strata -/
-
-/-- Under monotonicity, `{D 0 = 1}` equals the always-takers up to a null set (the
-defiers). -/
-theorem ae_eq_alwaysTakers (hM : M.Monotonicity μ) :
-    ({ω | M.D false ω = true} : Set Ω) =ᵐ[μ] M.alwaysTakers := by
-  filter_upwards [hM] with ω h
-  rw [mem_alwaysTakers]
-  revert h
-  cases M.D false ω <;> cases M.D true ω <;> simp
-
-/-- Under monotonicity, `{D 1 = 0}` equals the never-takers up to a null set (the defiers). -/
-theorem ae_eq_neverTakers (hM : M.Monotonicity μ) :
-    ({ω | M.D true ω = true}ᶜ : Set Ω) =ᵐ[μ] M.neverTakers := by
-  filter_upwards [hM] with ω h
-  change (¬ M.D true ω = true ↔ ω ∈ M.neverTakers)
-  rw [mem_neverTakers]
-  revert h
-  cases M.D false ω <;> cases M.D true ω <;> simp
 
 /-- Stratum decomposition of the average treatment effect: under monotonicity and integrable
 potential outcomes, `E[Y z 1 - Y z 0]` is the sum of the integrals of the unit-level effect over
@@ -369,17 +392,17 @@ theorem obsMean_untreatedInd_true [IsFiniteMeasure μ] (hI : M.InstrumentIndepen
 `E[Y 1 | AT]`. -/
 theorem obsMean_yTreated_false [IsFiniteMeasure μ] (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
-    (h₀ : μ (M.instrumentEq false) ≠ 0) (z : Bool) :
+    (h₀ : μ (M.instrumentEq false) ≠ 0) {z : Bool} (hY : Integrable (M.Y z true) μ) :
     obsMean μ M.observed yTreated false = ∫ ω in M.alwaysTakers, M.Y z true ω ∂μ := by
-  rw [M.obsMean_yTreated hE hI h₀ z, setIntegral_congr_set (M.ae_eq_alwaysTakers hM)]
+  rw [M.obsMean_yTreated hE hI h₀ hY, setIntegral_congr_set (M.ae_eq_alwaysTakers hM)]
 
 /-- The untreated outcome of the never-takers is identified:
 `E[Y 1{D=0} | Z=1] = ∫_NT Y z 0`. -/
 theorem obsMean_yUntreated_true [IsFiniteMeasure μ] (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
-    (h₁ : μ (M.instrumentEq true) ≠ 0) (z : Bool) :
+    (h₁ : μ (M.instrumentEq true) ≠ 0) {z : Bool} (hY : Integrable (M.Y z false) μ) :
     obsMean μ M.observed yUntreated true = ∫ ω in M.neverTakers, M.Y z false ω ∂μ := by
-  rw [M.obsMean_yUntreated hE hI h₁ z, setIntegral_congr_set (M.ae_eq_neverTakers hM)]
+  rw [M.obsMean_yUntreated hE hI h₁ hY, setIntegral_congr_set (M.ae_eq_neverTakers hM)]
 
 /-- `E[Y z 1] = E[Y 1{D=1} | Z=1] + ∫_NT Y z 1`: the only unidentified part of the treated mean
 is the treated outcome of the never-takers. -/
@@ -388,7 +411,7 @@ theorem meanY1_eq [IsFiniteMeasure μ] (hE : M.Exclusion μ) (hI : M.InstrumentI
     (hY : Integrable (M.Y z true) μ) :
     ∫ ω, M.Y z true ω ∂μ =
       obsMean μ M.observed yTreated true + ∫ ω in M.neverTakers, M.Y z true ω ∂μ := by
-  rw [← integral_add_compl (M.measurableSet_D_eq_true true) hY, M.obsMean_yTreated hE hI h₁ z,
+  rw [← integral_add_compl (M.measurableSet_D_eq_true true) hY, M.obsMean_yTreated hE hI h₁ hY,
     setIntegral_congr_set (M.ae_eq_neverTakers hM)]
 
 /-- `E[Y z 0] = E[Y 1{D=0} | Z=0] + ∫_AT Y z 0`: the only unidentified part of the untreated mean
@@ -398,7 +421,7 @@ theorem meanY0_eq [IsFiniteMeasure μ] (hE : M.Exclusion μ) (hI : M.InstrumentI
     (hY : Integrable (M.Y z false) μ) :
     ∫ ω, M.Y z false ω ∂μ =
       obsMean μ M.observed yUntreated false + ∫ ω in M.alwaysTakers, M.Y z false ω ∂μ := by
-  rw [← integral_add_compl (M.measurableSet_D_eq_true false) hY, M.obsMean_yUntreated hE hI h₀ z,
+  rw [← integral_add_compl (M.measurableSet_D_eq_true false) hY, M.obsMean_yUntreated hE hI h₀ hY,
     setIntegral_congr_set (M.ae_eq_alwaysTakers hM), add_comm]
 
 

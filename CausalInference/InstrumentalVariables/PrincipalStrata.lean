@@ -24,7 +24,10 @@ never-takers `(false, false)`, compliers `(false, true)` and defiers `(true, fal
 
 * `IVModel.iUnion_stratum`, `IVModel.pairwise_disjoint_stratum`: the strata partition `Ω`.
 * `IVModel.measurableSet_stratum`: each stratum is measurable.
-* `IVModel.measure_defiers_eq_zero`: under (almost sure) monotonicity the defiers are a null set.
+* `IVModel.sum_measureReal_stratum`: for a probability measure the stratum shares sum to `1`.
+* `IVModel.measure_defiers_eq_zero`: under (almost sure) monotonicity the defiers are a null set;
+  `IVModel.ae_eq_alwaysTakers`, `IVModel.ae_eq_neverTakers`: then `{D false = 1}` is the
+  always-takers and `{D true = 0}` the never-takers, up to null sets.
 * `IVModel.DReal_sub_DReal`, `IVModel.sub_eq_indicator_sub_indicator`: the pointwise identities
   behind the first-stage and reduced-form decompositions.
 -/
@@ -48,6 +51,10 @@ inductive Stratum
   /-- Units treated exactly when the instrument is `false`. -/
   | defier
   deriving DecidableEq
+
+instance : Fintype Stratum where
+  elems := {.alwaysTaker, .neverTaker, .complier, .defier}
+  complete s := by cases s <;> simp
 
 /-- The stratum of a pair of potential treatments `(D false, D true)`. -/
 def stratumOfPair : Bool × Bool → Stratum
@@ -75,6 +82,10 @@ def compliers : Set Ω := M.stratum .complier
 
 /-- The defiers: units with `D false = true` and `D true = false`. -/
 def defiers : Set Ω := M.stratum .defier
+
+/-- Membership in a principal stratum is decidable. -/
+instance (s : Stratum) : DecidablePred (· ∈ M.stratum s) :=
+  fun ω ↦ inferInstanceAs (Decidable (M.stratumOf ω = s))
 
 variable {M}
 
@@ -113,6 +124,12 @@ theorem measurableSet_stratum (s : Stratum) : MeasurableSet (M.stratum s) :=
   ((M.measurable_D false).prodMk (M.measurable_D true))
     (Set.to_countable (stratumOfPair ⁻¹' {s})).measurableSet
 
+/-- For a probability measure, the probabilities of the four principal strata sum to `1`. -/
+theorem sum_measureReal_stratum {μ : Measure Ω} [IsProbabilityMeasure μ] :
+    ∑ s, μ.real (M.stratum s) = 1 := by
+  rw [← measureReal_iUnion_fintype M.pairwise_disjoint_stratum M.measurableSet_stratum,
+    M.iUnion_stratum, probReal_univ]
+
 theorem measurableSet_compliers : MeasurableSet M.compliers := M.measurableSet_stratum _
 
 theorem measurableSet_defiers : MeasurableSet M.defiers := M.measurableSet_stratum _
@@ -122,6 +139,25 @@ theorem measure_defiers_eq_zero {μ : Measure Ω} (h : M.Monotonicity μ) : μ M
   refine measure_mono_null (fun ω hω ↦ ?_) (ae_iff.1 h)
   obtain ⟨h₁, h₂⟩ := mem_defiers.1 hω
   simp [h₁, h₂]
+
+/-- Under monotonicity, `{D false = 1}` equals the always-takers up to a null set (the
+defiers). -/
+theorem ae_eq_alwaysTakers {μ : Measure Ω} (hM : M.Monotonicity μ) :
+    ({ω | M.D false ω = true} : Set Ω) =ᵐ[μ] M.alwaysTakers := by
+  filter_upwards [hM] with ω h
+  rw [mem_alwaysTakers]
+  revert h
+  cases M.D false ω <;> cases M.D true ω <;> simp
+
+/-- Under monotonicity, `{D true = 0}` equals the never-takers up to a null set (the
+defiers). -/
+theorem ae_eq_neverTakers {μ : Measure Ω} (hM : M.Monotonicity μ) :
+    ({ω | M.D true ω = true}ᶜ : Set Ω) =ᵐ[μ] M.neverTakers := by
+  filter_upwards [hM] with ω h
+  change (¬ M.D true ω = true ↔ ω ∈ M.neverTakers)
+  rw [mem_neverTakers]
+  revert h
+  cases M.D false ω <;> cases M.D true ω <;> simp
 
 /-- Pointwise first-stage identity: `D true - D false = 1_compliers - 1_defiers`, with the
 treatments coded as real numbers. -/

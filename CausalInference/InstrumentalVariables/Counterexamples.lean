@@ -17,14 +17,16 @@ Concrete finite models showing that the hypotheses of the LATE theorem
 assumptions identify only the complier effect, in line with Imbens and Angrist (1994,
 *Identification and estimation of local average treatment effects*).
 
-Each model lives on `Bool × Fin n` with the product of the uniform distributions; the instrument
+Each model lives on `Bool × Fin n`, for `n ≠ 0`, with the product of the uniform distributions;
+the instrument
 is the first coordinate and all potential variables are functions of the second, so instrument
 independence follows from independence of the coordinates of a product measure.
 
 ## Main results
 
 * `IVCounterexample.wald_ne_of_not_monotonicity`: a model satisfying exclusion, instrument
-  independence, relevance, `0 < P(Z = true) < 1` and integrability, but not monotonicity, whose
+  independence, relevance, `0 < P(Z = true) < 1` and integrability, but not monotonicity (in
+  either direction, so not by a relabeling of the instrument), whose
   Wald ratio (`-2`) differs from both the complier average causal effect (`1`) and the average
   treatment effect (`2`).
 * `IVCounterexample.ate_not_identified`, with `IVCounterexample.modelB_assumptions`: two models
@@ -49,7 +51,9 @@ unit type that carries all potential variables. -/
 abbrev Space (n : ℕ) : Type := Bool × Fin n
 
 /-- The product of the uniform distributions on `Bool` and on `Fin n`: the instrument is a fair
-coin, drawn independently of a unit type that is uniform on `Fin n`. -/
+coin, drawn independently of a unit type that is uniform on `Fin n`. This reading requires
+`n ≠ 0`: for `n = 0` the sample space is empty and `P 0` is the zero measure. Accordingly the
+probability-measure instance and every lemma below that uses it assume `[NeZero n]`. -/
 noncomputable def P (n : ℕ) : Measure (Space n) :=
   (uniformOn (Set.univ : Set Bool)).prod (uniformOn (Set.univ : Set (Fin n)))
 
@@ -75,11 +79,6 @@ theorem integral_of_snd [NeZero n] (f : Space n → ℝ) (hf : ∀ ω, f ω = f 
 theorem measure_fst_preimage [NeZero n] (z : Bool) : P n (Prod.fst ⁻¹' {z}) = 2⁻¹ := by
   rw [P, ← Set.prod_univ, Measure.prod_prod, uniformOn_univ, uniformOn_univ]
   simp [ENNReal.div_self (Nat.cast_ne_zero.2 (NeZero.ne n)) (ENNReal.natCast_ne_top n)]
-
-/-- The observed data of a model on `Bool × Fin n` form a measurable map, so its observed-data
-law is a genuine pushforward measure. -/
-theorem measurable_observed (M : IVModel (Space n)) : Measurable M.observed :=
-  measurable_of_countable _
 
 /-- In a product model the instrument `Prod.fst` is independent of every function of the unit
 coordinate. -/
@@ -126,12 +125,13 @@ theorem modelA_firstStage : modelA.firstStage (P 3) = 1 / 3 := by
   norm_num
 
 theorem modelA_relevance : modelA.Relevance (P 3) := by
-  rw [IVModel.Relevance, modelA_firstStage]; norm_num
+  refine ⟨modelA_instrument_ne_zero true, modelA_instrument_ne_zero false, ?_⟩
+  rw [modelA_firstStage]; norm_num
 
 theorem modelA_reducedForm : modelA.reducedForm (P 3) = -2 / 3 := by
   rw [IVModel.reducedForm,
-    modelA.condMean_Yobs modelA_independence (modelA_instrument_ne_zero true),
-    modelA.condMean_Yobs modelA_independence (modelA_instrument_ne_zero false),
+    modelA.condMean_Yobs modelA_independence (modelA_instrument_ne_zero true) .of_finite,
+    modelA.condMean_Yobs modelA_independence (modelA_instrument_ne_zero false) .of_finite,
     integral_of_snd _ fun _ ↦ rfl, integral_of_snd _ fun _ ↦ rfl]
   simp [Fin.sum_univ_three, modelA, IVModel.YD]
   norm_num
@@ -160,19 +160,32 @@ theorem modelA_not_monotonicity : ¬ modelA.Monotonicity (P 3) := by
   exact fun h ↦ measure_singleton_ne_zero ((true, 2) : Space 3)
     (measure_mono_null (by simp [modelA]) h)
 
+/-- Monotonicity fails in `modelA` in the reversed direction as well: the compliers (units `0`
+and `1`) violate `D true ≤ D false`. -/
+theorem modelA_not_reversed_monotonicity :
+    ¬ ∀ᵐ ω ∂P 3, modelA.D true ω ≤ modelA.D false ω := by
+  rw [ae_iff]
+  exact fun h ↦ measure_singleton_ne_zero ((true, 0) : Space 3)
+    (measure_mono_null (by simp [modelA]) h)
+
 /-- **Counterexample (a)**: without monotonicity the Wald ratio need not be the complier effect
 or the average treatment effect. In `modelA` the exclusion restriction, instrument independence,
-relevance, `0 < P(Z = true) < 1` and integrability hold and monotonicity fails; the Wald ratio is
-`-2`, while the complier average causal effect is `1` and the average treatment effect is `2`. -/
+relevance, `0 < P(Z = true) < 1` and integrability hold, and monotonicity fails in both
+directions (`D false ≤ D true` fails because of the defier, `D true ≤ D false` because of the
+compliers), so the failure is not an artifact of the labeling of the instrument; the Wald ratio
+is `-2`, while the complier average causal effect is `1` and the average treatment effect is
+`2`. -/
 theorem wald_ne_of_not_monotonicity :
     modelA.Exclusion (P 3) ∧ modelA.InstrumentIndependence (P 3) ∧ modelA.Relevance (P 3) ∧
       0 < P 3 (modelA.instrumentEq true) ∧ P 3 (modelA.instrumentEq true) < 1 ∧
       (∀ z d, Integrable (modelA.Y z d) (P 3)) ∧ ¬ modelA.Monotonicity (P 3) ∧
+      (¬ ∀ᵐ ω ∂P 3, modelA.D true ω ≤ modelA.D false ω) ∧
       ∀ z, modelA.wald (P 3) ≠ modelA.complierEffect (P 3) z ∧
         modelA.wald (P 3) ≠ modelA.ate (P 3) z := by
   refine ⟨modelA_exclusion, modelA_independence, modelA_relevance,
     (instrument_pos_lt_one modelA rfl).1, (instrument_pos_lt_one modelA rfl).2,
-    fun _ _ ↦ .of_finite, modelA_not_monotonicity, fun z ↦ ⟨?_, ?_⟩⟩
+    fun _ _ ↦ .of_finite, modelA_not_monotonicity, modelA_not_reversed_monotonicity,
+    fun z ↦ ⟨?_, ?_⟩⟩
   · rw [modelA_wald, modelA_complierEffect]; norm_num
   · rw [modelA_wald, modelA_ate]; norm_num
 
@@ -208,10 +221,9 @@ theorem modelB_assumptions (c : ℝ) : (modelB c).LATEAssumptions (P 2) where
   independence := modelB_independence c
   monotonicity := Filter.Eventually.of_forall fun ω ↦ by
     by_cases h : ω.2 = 0 <;> simp [modelB, h]
-  relevance := by rw [IVModel.Relevance, modelB_firstStage]; norm_num
-  integrable _ _ := .of_finite
-  instrument_pos := (instrument_pos_lt_one (modelB c) rfl).1
-  instrument_lt_one := (instrument_pos_lt_one (modelB c) rfl).2
+  relevance := ⟨modelB_instrument_ne_zero c true, modelB_instrument_ne_zero c false,
+    by rw [modelB_firstStage]; norm_num⟩
+  integrable _ := .of_finite
 
 /-- The observed data `(Z, Dobs, Yobs)` of `modelB c` do not depend on `c`. -/
 theorem modelB_observed (c c' : ℝ) : (modelB c).observed = (modelB c').observed := by
@@ -227,8 +239,8 @@ theorem modelB_ate (c : ℝ) (z : Bool) : (modelB c).ate (P 2) z = (1 + c) / 2 :
 /-- **Counterexample (b)**: the IV assumptions do not identify the average treatment effect.
 The models `modelB 0` and `modelB 1` share the sample space, the probability measure and the
 observed-data law (the law of `(Z, Dobs, Yobs)`), both satisfy exclusion, instrument
-independence, monotonicity, relevance, `0 < P(Z = true) < 1` and integrability, and their average
-treatment effects are `1 / 2` and `1`. -/
+independence, monotonicity, relevance (with `0 < P(Z = true) < 1`) and integrability, and their
+average treatment effects are `1 / 2` and `1`. -/
 theorem ate_not_identified :
     (modelB 0).LATEAssumptions (P 2) ∧ (modelB 1).LATEAssumptions (P 2) ∧
       (P 2).map (modelB 0).observed = (P 2).map (modelB 1).observed ∧

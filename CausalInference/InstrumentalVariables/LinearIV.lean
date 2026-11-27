@@ -198,17 +198,22 @@ namespace IVModel
 
 variable {Ω : Type*} [MeasurableSpace Ω] (M : IVModel Ω) {μ : Measure Ω}
 
-/-- With integrable potential outcomes the observed outcome is integrable. -/
-theorem integrable_Yobs (hY : ∀ z d, Integrable (M.Y z d) μ) : Integrable M.Yobs μ := by
-  refine (((hY true true).norm.add (hY true false).norm).add
-    ((hY false true).norm.add (hY false false).norm)).mono'
+/-- With integrable responses `Y z (D z)` for both instrument values the observed outcome is
+integrable. -/
+theorem integrable_Yobs (hY : ∀ z, Integrable (M.YD z) μ) : Integrable M.Yobs μ := by
+  refine ((hY true).norm.add (hY false).norm).mono'
     M.measurable_Yobs.aestronglyMeasurable (ae_of_all _ fun ω ↦ ?_)
-  have := norm_nonneg (M.Y true true ω)
-  have := norm_nonneg (M.Y true false ω)
-  have := norm_nonneg (M.Y false true ω)
-  have := norm_nonneg (M.Y false false ω)
+  have := norm_nonneg (M.YD true ω)
+  have := norm_nonneg (M.YD false ω)
   simp only [Yobs, Dobs, Pi.add_apply]
-  cases M.Z ω <;> cases M.D _ ω <;> linarith
+  cases h : M.Z ω
+  · simp only [YD] at *; linarith
+  · simp only [YD] at *; linarith
+
+/-- With integrable potential outcomes the observed outcome is integrable. -/
+theorem integrable_Yobs_of_integrable (hY : ∀ z d, Integrable (M.Y z d) μ) :
+    Integrable M.Yobs μ :=
+  M.integrable_Yobs fun z ↦ M.integrable_Y_D (hY z) z
 
 /-- The observed treatment, coded as a real number, is integrable for a finite measure. -/
 theorem integrable_DobsReal [IsFiniteMeasure μ] : Integrable M.DobsReal μ := by
@@ -218,32 +223,27 @@ theorem integrable_DobsReal [IsFiniteMeasure μ] : Integrable M.DobsReal μ := b
   simp only [DobsReal, boolToReal]
   split_ifs <;> simp
 
-/-- **The linear IV estimand of a binary IV model is the Wald ratio.** With integrable potential
-outcomes, `P(Z = z) ≠ 0` for both `z` and relevance, the covariance ratio
+/-- **The linear IV estimand of a binary IV model is the Wald ratio.** With integrable responses
+`Y z (D z)` and relevance (which includes `P(Z = z) ≠ 0` for both `z`), the covariance ratio
 `Cov(Z, Yobs) / Cov(Z, Dobs)` (with `Z` and `Dobs` coded as `0`/`1`) equals `M.wald μ`. -/
-theorem covRatio_eq_wald [IsProbabilityMeasure μ] (hY : ∀ z d, Integrable (M.Y z d) μ)
-    (h₁ : μ (M.instrumentEq true) ≠ 0) (h₀ : μ (M.instrumentEq false) ≠ 0)
+theorem covRatio_eq_wald [IsProbabilityMeasure μ] (hY : ∀ z, Integrable (M.YD z) μ)
     (hR : M.Relevance μ) :
     cov[fun ω ↦ boolToReal (M.Z ω), M.Yobs; μ] / cov[fun ω ↦ boolToReal (M.Z ω), M.DobsReal; μ] =
       M.wald μ :=
-  LinearIV.covRatio_eq_waldRatio M.measurable_Z (M.integrable_Yobs hY) M.integrable_DobsReal h₁ h₀
-    hR
+  LinearIV.covRatio_eq_waldRatio M.measurable_Z (M.integrable_Yobs hY) M.integrable_DobsReal
+    hR.1 hR.2.1 hR.2.2
 
 /-- **The linear IV estimand under the LATE assumptions is the complier effect.** Under
-exclusion, instrument independence, monotonicity, relevance, `0 < P(Z = 1) < 1` and integrable
-potential outcomes, the covariance ratio `Cov(Z, Yobs) / Cov(Z, Dobs)` equals the complier
-average causal effect `E[Y z 1 - Y z 0 | compliers]`, which in general differs from the average
-treatment effect (see `IVCounterexample.ate_not_identified`). -/
+exclusion, instrument independence, monotonicity, relevance (including positive mass of both
+instrument arms) and integrable responses `Y z (D z)`, the covariance ratio
+`Cov(Z, Yobs) / Cov(Z, Dobs)` equals the complier average causal effect
+`E[Y z 1 - Y z 0 | compliers]`, which in general differs from the average treatment effect (see
+`IVCounterexample.ate_not_identified`). -/
 theorem LATEAssumptions.covRatio_eq_complierEffect [IsProbabilityMeasure μ] {M : IVModel Ω}
     (h : M.LATEAssumptions μ) (z : Bool) :
     cov[fun ω ↦ boolToReal (M.Z ω), M.Yobs; μ] / cov[fun ω ↦ boolToReal (M.Z ω), M.DobsReal; μ] =
       M.complierEffect μ z := by
-  have h₀ : μ (M.instrumentEq false) ≠ 0 := by
-    have hc : M.instrumentEq false = (M.instrumentEq true)ᶜ := by
-      ext ω; simp [instrumentEq]
-    rw [hc, prob_compl_eq_one_sub (M.measurableSet_instrumentEq true)]
-    exact (tsub_pos_of_lt h.instrument_lt_one).ne'
-  rw [M.covRatio_eq_wald h.integrable h.instrument_pos.ne' h₀ h.relevance, h.wald_eq z]
+  rw [M.covRatio_eq_wald h.integrable h.relevance, h.wald_eq z]
 
 /-- **Homogeneous effects.** If, in addition to the LATE assumptions, the unit-level effect
 `Y z 1 - Y z 0` equals a constant `β` almost surely, then the linear IV estimand
@@ -253,13 +253,8 @@ theorem LATEAssumptions.covRatio_eq_of_homogeneous [IsProbabilityMeasure μ] {M 
     (h : M.LATEAssumptions μ) {z : Bool} {β : ℝ} (hβ : ∀ᵐ ω ∂μ, M.effect z ω = β) :
     cov[fun ω ↦ boolToReal (M.Z ω), M.Yobs; μ] / cov[fun ω ↦ boolToReal (M.Z ω), M.DobsReal; μ] =
       β := by
-  have h₀ : μ (M.instrumentEq false) ≠ 0 := by
-    have hc : M.instrumentEq false = (M.instrumentEq true)ᶜ := by
-      ext ω; simp [instrumentEq]
-    rw [hc, prob_compl_eq_one_sub (M.measurableSet_instrumentEq true)]
-    exact (tsub_pos_of_lt h.instrument_lt_one).ne'
-  have hCpos := (M.relevance_iff h.independence h.monotonicity h.instrument_pos.ne' h₀).1
-    h.relevance
+  have hCpos := (M.relevance_iff h.independence h.monotonicity h.relevance.1
+    h.relevance.2.1).1 h.relevance
   have hC : μ M.compliers ≠ 0 := fun h0 ↦ by
     rw [measureReal_def, h0, ENNReal.toReal_zero] at hCpos; exact lt_irrefl _ hCpos
   have := cond_isProbabilityMeasure (μ := μ) hC
