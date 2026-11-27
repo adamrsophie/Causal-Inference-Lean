@@ -19,6 +19,9 @@ public import CausalInference.Graphical.Criteria.BackDoor
 * `Digraph.FrontDoor G X Y Z`: the front-door criterion (Pearl's Definition 3.3.3) in joint
   surgery form: `Z` intercepts all directed paths from `X` to `Y`;
   `(G.deleteOutgoing X).DSep X Z ∅`; and `(G.deleteOutgoing Z).DSep Z Y X`.
+* `Digraph.FrontDoorPairwise G X Y Z`: Definition 3.3.3 extended to sets pairwise, in path
+  form: interception, no open back-door path from any `x ∈ X` to any `z ∈ Z` given the empty
+  set, and none from any `z ∈ Z` to any `y ∈ Y` given `X`.
 
 ## Main results
 
@@ -40,6 +43,10 @@ public import CausalInference.Graphical.Criteria.BackDoor
   condition (ii) alone rules out a directed path from `Z` back to `X`.
 * `Digraph.frontDoor_singleton_iff`: for single vertices, conditions (ii) and (iii) in path
   form.
+* `Digraph.FrontDoorPairwise.frontDoor`: for `X` disjoint from `Z` and `Z` disjoint from `Y`,
+  the pairwise path form implies the joint surgery form; `Digraph.frontDoorPairwise_singleton_iff`:
+  they agree for single vertices; `CausalInference.FrontDoorExamples.frontDoor_not_pairwise`:
+  the converse fails for several mediators.
 * Decidability, the canonical front-door graph (Pearl 2009, Figure 3.5, with the latent
   confounder as an explicit vertex) as a checked example, and non-examples.
 
@@ -324,6 +331,33 @@ theorem frontDoor_singleton_iff (hxz : x ≠ z) (hzy : z ≠ y) :
   · rintro ⟨h1, h2, h3⟩
     exact ⟨h1, hii.2 h2, (hiii (hii.2 h2)).2 h3⟩
 
+/-- Pearl's front-door criterion (Definition 3.3.3) extended to sets pairwise, in path form:
+(i) `Z` intercepts all directed paths from `X` to `Y`; (ii) for every `x ∈ X` and `z ∈ Z`, no
+simple path from `x` to `z` that starts with an arrow into `x` is active given the empty set;
+(iii) for every `z ∈ Z` and `y ∈ Y`, every simple path from `z` to `y` that starts with an arrow
+into `z` is blocked by `X`. -/
+def FrontDoorPairwise (G : Digraph V) (X Y Z : Set V) : Prop :=
+  G.Intercepts Z X Y ∧ (∀ x ∈ X, ∀ z ∈ Z, ¬ G.OpenBackDoorPath ∅ x z) ∧
+    ∀ z ∈ Z, ∀ y ∈ Y, ¬ G.OpenBackDoorPath X z y
+
+/-- The pairwise path form of the front-door criterion implies the joint surgery form when `X`
+is disjoint from `Z` and `Z` is disjoint from `Y`. Disjointness is needed, since a vertex
+outside the conditioning set is d-connected to itself while the path conditions hold vacuously
+for it. The converse fails for several mediators
+(`CausalInference.FrontDoorExamples.frontDoor_not_pairwise`). -/
+theorem FrontDoorPairwise.frontDoor (h : G.FrontDoorPairwise X Y Z) (hXZ : Disjoint X Z)
+    (hZY : Disjoint Z Y) : G.FrontDoor X Y Z := by
+  have h2 : G.BackDoor X Z ∅ :=
+    BackDoorPairwise.backDoor ⟨fun _ hz => (Set.notMem_empty _ hz).elim, h.2.1⟩ hXZ
+  exact ⟨h.1, h2.2, (BackDoorPairwise.backDoor
+    ⟨fun _ hx => notMem_descendantsOf_of_dSep h2.2 hx, h.2.2⟩ hZY).2⟩
+
+/-- For single vertices, the pairwise and the joint forms of the front-door criterion agree. -/
+theorem frontDoorPairwise_singleton_iff (hxz : x ≠ z) (hzy : z ≠ y) :
+    G.FrontDoorPairwise {x} {y} {z} ↔ G.FrontDoor {x} {y} {z} := by
+  rw [frontDoor_singleton_iff hxz hzy, FrontDoorPairwise]
+  simp only [Set.mem_singleton_iff, forall_eq]
+
 section Decidable
 
 variable (G : Digraph V) [Fintype V] [DecidableEq V] [DecidableRel G.Adj]
@@ -365,13 +399,31 @@ example : ¬ frontDoorDirect.Intercepts {1} {0} {2} := by decide +kernel
 example : ¬ frontDoorDirect.FrontDoor {0} {2} {1} := by decide +kernel
 
 /-- Non-example: Figure 3.5 with an edge `U → Z`, which opens the back-door path
-`X ← U → Z` (condition (ii) fails). -/
+`X ← U → Z` (condition (ii) fails) and also the back-door path `Z ← U → Y`, which `X` does not
+block (condition (iii) fails). `frontDoorTreatmentConfounded` violates condition (ii) alone. -/
 abbrev frontDoorConfounded : Digraph (Fin 4) :=
   ofEdges [(3, 0), (3, 2), (0, 1), (1, 2), (3, 1)]
 
 example : frontDoorConfounded.Intercepts {1} {0} {2} := by decide +kernel
 example : ¬ (frontDoorConfounded.deleteOutgoing {0}).DSep {0} {1} ∅ := by decide +kernel
+example : ¬ (frontDoorConfounded.deleteOutgoing {1}).DSep {1} {2} {0} := by decide +kernel
 example : ¬ frontDoorConfounded.FrontDoor {0} {2} {1} := by decide +kernel
+
+/-- Non-example violating condition (ii) alone: `U → X`, `U → Z`, `X → Z`, `Z → Y`, with
+`X = 0`, `Z = 1`, `Y = 2`, `U = 3`. The back-door path `X ← U → Z` is open, while `Z` intercepts
+the directed path `X → Z → Y` (condition (i)) and, once the edge out of `Z` is removed, `Y` is
+isolated (condition (iii)). -/
+abbrev frontDoorTreatmentConfounded : Digraph (Fin 4) :=
+  ofEdges [(3, 0), (3, 1), (0, 1), (1, 2)]
+
+/-- In `frontDoorTreatmentConfounded`, conditions (i) and (iii) hold, condition (ii) fails, and
+so the criterion fails. -/
+theorem frontDoorTreatmentConfounded_only_ii :
+    frontDoorTreatmentConfounded.Intercepts {1} {0} {2} ∧
+      ¬ (frontDoorTreatmentConfounded.deleteOutgoing {0}).DSep {0} {1} ∅ ∧
+      (frontDoorTreatmentConfounded.deleteOutgoing {1}).DSep {1} {2} {0} ∧
+      ¬ frontDoorTreatmentConfounded.FrontDoor {0} {2} {1} := by
+  decide +kernel
 
 /-- Non-example: Figure 3.5 with a second latent `U' → Z`, `U' → Y` (`U' = 4`); `X` does not
 block the back-door path `Z ← U' → Y` (condition (iii) fails). -/
@@ -397,5 +449,14 @@ theorem frontDoor_joint_not_pairwise :
       (ofEdges (n := 4) [(0, 2), (2, 1), (1, 3), (2, 3)]).OpenBackDoorPath {0} 1 3 := by
   refine ⟨by decide +kernel, 2, [2, 3], by decide, by simp, ?_, by decide⟩
   exact .fwd (by decide) (by simp) (.nil (by simp))
+
+/-- The joint and the pairwise forms of the front-door criterion differ for several mediators:
+in the graph of `frontDoor_joint_not_pairwise`, `{m₁, m₂}` satisfies `FrontDoor` but not
+`FrontDoorPairwise`. -/
+theorem frontDoor_not_pairwise :
+    (ofEdges (n := 4) [(0, 2), (2, 1), (1, 3), (2, 3)]).FrontDoor {0} {3} {1, 2} ∧
+      ¬ (ofEdges (n := 4) [(0, 2), (2, 1), (1, 3), (2, 3)]).FrontDoorPairwise {0} {3} {1, 2} :=
+  ⟨frontDoor_joint_not_pairwise.1,
+    fun h => h.2.2 1 (by simp) 3 rfl frontDoor_joint_not_pairwise.2⟩
 
 end CausalInference.FrontDoorExamples

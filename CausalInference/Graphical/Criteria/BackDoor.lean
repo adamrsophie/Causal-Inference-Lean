@@ -287,15 +287,52 @@ theorem ActiveTrail.of_insert (p : G.ActiveTrail (insert w Z) a u x l)
     · exact h _ List.mem_cons_self ⟨_, rfl, hus⟩
     · exact ⟨s, hs, hus⟩
 
+/-- `G.TrailColliders a u v l c`: `l` is the vertex list of a trail of `G` from `u` to `v`, and
+`c` lists its colliders, the vertices entered and left through arrowheads. The flag `a` records
+whether `u` is entered through an arrowhead; a trail from an endpoint starts with `a = false`.
+No vertex is constrained, so every walk in the skeleton of `G` is such a trail; with `l.Nodup` it
+is a simple path. -/
+inductive TrailColliders (G : Digraph V) : Bool → V → V → List V → List V → Prop
+  | nil {a : Bool} {v : V} : TrailColliders G a v v [v] []
+  | fwd {a : Bool} {u v w : V} {l c : List V} (h : G.Adj u v)
+      (p : TrailColliders G true v w l c) : TrailColliders G a u w (u :: l) c
+  | bwd {u v w : V} {l c : List V} (h : G.Adj v u)
+      (p : TrailColliders G false v w l c) : TrailColliders G false u w (u :: l) c
+  | collider {u v w : V} {l c : List V} (h : G.Adj v u)
+      (p : TrailColliders G false v w l c) : TrailColliders G true u w (u :: l) (u :: c)
+
+/-- A trail that is active given `insert w Z` stays active given `Z` when each of its colliders
+that is an ancestor of `w` is an ancestor of `Z`. -/
+theorem ActiveTrail.exists_trailColliders_of_insert (p : G.ActiveTrail (insert w Z) a u x l) :
+    ∃ c, G.TrailColliders a u x l c ∧
+      ((∀ t ∈ c, t ∈ G.ancestorsOf {w} → t ∈ G.ancestorsOf Z) → G.ActiveTrail Z a u x l) := by
+  induction p with
+  | nil hv => exact ⟨[], .nil, fun _ => .nil fun h' => hv (Set.mem_insert_of_mem _ h')⟩
+  | fwd hadj hu _ ih =>
+    obtain ⟨c, hc, hact⟩ := ih
+    exact ⟨c, .fwd hadj hc, fun h => .fwd hadj (fun h' => hu (Set.mem_insert_of_mem _ h')) (hact h)⟩
+  | bwd hadj hu _ ih =>
+    obtain ⟨c, hc, hact⟩ := ih
+    exact ⟨c, .bwd hadj hc, fun h => .bwd hadj (fun h' => hu (Set.mem_insert_of_mem _ h')) (hact h)⟩
+  | @collider u' _ _ _ hadj hu _ ih =>
+    obtain ⟨c, hc, hact⟩ := ih
+    refine ⟨u' :: c, .collider hadj hc, fun h => .collider hadj ?_
+      (hact fun t ht => h t (List.mem_cons_of_mem _ ht))⟩
+    obtain ⟨s, hs, hus⟩ := hu
+    rcases hs with rfl | hs
+    · exact h _ List.mem_cons_self ⟨_, rfl, hus⟩
+    · exact ⟨s, hs, hus⟩
+
 /-- Adding a covariate `w` that is not a descendant of `X` preserves the back-door criterion,
-provided that, in `H = G.deleteOutgoing X`, every vertex of a simple path from `X` to `Y` that
-is active given `Z ∪ {w}` and is an ancestor of `w` is already an ancestor of `Z`. Then such a
-path is active given `Z` as well, so there is none. The sufficient condition of the M-bias
-discussion asks this only of the colliders of the path; the hypothesis here asks it of every
-vertex of the path, so it is stronger. -/
+provided that, in `H = G.deleteOutgoing X`, no collider of a simple path from `X` to `Y` is an
+ancestor of `w` without being an ancestor of `Z`. The paths range over all simple paths of the
+skeleton of `H`, active or not, so the hypothesis is a property of the graph and the sets, and it
+does not mention the conclusion. A path active given `Z ∪ {w}` is then active given `Z`, so
+there is none. The condition is sufficient, not necessary. The M-bias example shows that some
+condition is needed: there the collider `L` is the added covariate itself. -/
 theorem BackDoor.insert_covariate (h : G.BackDoor X Y Z) (hwX : w ∉ G.descendantsOf X)
-    (hw : ∀ x ∈ X, ∀ y ∈ Y, ∀ l, (G.deleteOutgoing X).ActiveTrail (insert w Z) false x y l →
-      l.Nodup → ∀ t ∈ l, t ∈ (G.deleteOutgoing X).ancestorsOf {w} →
+    (hw : ∀ x ∈ X, ∀ y ∈ Y, ∀ l c, (G.deleteOutgoing X).TrailColliders false x y l c →
+      l.Nodup → ∀ t ∈ c, t ∈ (G.deleteOutgoing X).ancestorsOf {w} →
         t ∈ (G.deleteOutgoing X).ancestorsOf Z) :
     G.BackDoor X Y (insert w Z) := by
   refine ⟨fun z hz => ?_, fun hc => ?_⟩
@@ -303,14 +340,15 @@ theorem BackDoor.insert_covariate (h : G.BackDoor X Y Z) (hwX : w ∉ G.descenda
     · exact hwX
     · exact h.1 z hz
   · obtain ⟨x, hx, y, hy, l, hl, hnd⟩ := dConn_iff_dConnPath.1 hc
-    exact h.2 (dConn_iff_dConnTrail.2 ⟨x, hx, y, hy, l, hl.of_insert (hw x hx y hy l hl hnd)⟩)
+    obtain ⟨c, hcl, hact⟩ := hl.exists_trailColliders_of_insert
+    exact h.2 (dConn_iff_dConnTrail.2 ⟨x, hx, y, hy, l, hact (hw x hx y hy l c hcl hnd)⟩)
 
 /-- Adding a covariate `w` that is not a descendant of `X` and is an ancestor of `Z` in
 `G.deleteOutgoing X` preserves the back-door criterion. -/
 theorem BackDoor.insert_covariate_of_mem_ancestorsOf (h : G.BackDoor X Y Z)
     (hwX : w ∉ G.descendantsOf X) (hw : w ∈ (G.deleteOutgoing X).ancestorsOf Z) :
     G.BackDoor X Y (insert w Z) := by
-  refine h.insert_covariate hwX fun _ _ _ _ _ _ _ t _ ⟨s, hs, hts⟩ => ?_
+  refine h.insert_covariate hwX fun _ _ _ _ _ _ _ _ t _ ⟨s, hs, hts⟩ => ?_
   rw [Set.mem_singleton_iff] at hs
   subst hs
   obtain ⟨z, hz, hsz⟩ := hw
