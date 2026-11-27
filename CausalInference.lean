@@ -167,3 +167,4 @@ public import CausalInference.StructuralNested.IPE
 public import CausalInference.LinearSEM.InstrumentalVariable
 public import CausalInference.Survival.Recensoring
 public import CausalInference.Survival.RecensoringCounterexamples
+public import CausalInference.StructuralNested.IPEExtensions
