@@ -43,7 +43,11 @@ probability of not switching at the end of interval `j` among those unswitched t
 alive after `j`. In the notation of Eq A1 of TSD 16 it is the denominator factor
 `P[C(j) = 0 | C̄(j - 1) = 0, V, L̄(j), T > j]`, with `C(j) = 0` read as `C ≥ j + 1`. The
 weight at time `k` multiplies the factors `j < k`, so Eq A1's `Ŵ(t)` is the weight at
-`k = t + 1`, the one that applies to the risk set of interval `t + 1`. The treatment history
+`k = t + 1`, the one that applies to the risk set of interval `t + 1`. The document says the
+weights of Eq A1 apply "for time interval (t)"; that phrase is read here as interval `t + 1`.
+The factor at `t` conditions on `T > t` and concerns the switch at the end of interval `t`,
+after the deaths of interval `t`, so it cannot weight the deaths of interval `t` itself: the
+risk set of interval `t` is weighted by the factors before `t`. The treatment history
 `Ā(j - 1)` of Eq A1 is absent: before the switch it is the randomized treatment, as the
 document notes ("past treatment history is removed from the model"); the arm can be one of the
 baseline covariates `V`.
@@ -61,8 +65,9 @@ baseline covariates `V`.
 * `SwitchNUC`: sequential no unmeasured confounding of the switch (given the observed history,
   not switching is mean independent of the survival time without switching);
   `SwitchPositive`: positivity of not switching;
-  `NoInformativeSwitchGivenBaseline`: the time-varying covariates do not affect the hazard of
-  switching given the baseline covariates.
+  `NoInformativeSwitchGivenBaseline`: equality of the numerator and denominator factors of
+  Eq A1 (the recorded time-varying covariates do not change the probability of switching
+  given the baseline covariates); it is not noninformative switching, which is `SwitchNUC`.
 * `ConsistentUntilSwitch`: the observed death time agrees with `T` until the switch.
 * `truncate c w`: weights truncated at `c`; `finVar`: the variance under a finite distribution.
 
@@ -79,8 +84,8 @@ baseline covariates `V`.
   hazard.
 * `weightedHazard_stabilized_restrict`: stabilized weights identify the hazard within strata
   of the baseline covariates of their numerator (TSD 24, Sec 4.2.2).
-* `stabilizedWeight_eq_one`: without informative switching given the baseline covariates the
-  stabilized weight is `1` (TSD 16, Appendix A).
+* `stabilizedWeight_eq_one`: when the numerator and denominator factors agree
+  (`NoInformativeSwitchGivenBaseline`) the stabilized weight is `1` (TSD 16, Appendix A).
 * `weightedHazard_ipcWeight_eq_observedHazard`, `weightedProductLimit_ipcWeight_eq_productLimit`:
   with no covariates in the weight models IPCW is simple censoring, the product-limit functional
   of the artificially censored data (TSD 16, Sec 4).
@@ -91,8 +96,32 @@ baseline covariates `V`.
 * `observed_eq_of_consistentUntilSwitch`: censoring switchers gives the artificially censored
   data of `T`.
 
+* `obsWeightedHazard_ipcWeight`, `obsWeightedProductLimit_ipcWeight`: observed-data
+  identification. The weighted hazard and product limit computed from the observed record
+  `(min(Tobs, C), 1{Tobs ≤ C})`, the baseline covariates and the recorded history
+  (`obsWeightedHazard`, `obsIpcWeight`) identify the hazard and survival of `T` under
+  `ConsistentUntilSwitch`, `SwitchNUC` and `SwitchPositive`; `obsWeightedHazard_stoppedHist`:
+  the history may be stopped at the end of follow-up; `weightedHazard_ipcWeight_of_consistent`:
+  the same with the functionals of this file evaluated at `Tobs`.
+* `weightedHazard_ipcWeight_restrict_of`, `weightedProductLimit_ipcWeight_restrict_of`: hazard
+  and survival within the strata of a function `B` of `V` (an arm), keeping the other baseline
+  variables in the weight model.
+* `stabilizedWeightNum`: stabilized weights with a numerator history separate from the
+  denominator history; `weightedHazard_stabilizedNum_restrict`,
+  `weightedProductLimit_stabilizedNum_restrict`, `weightedProductLimit_stabilized_restrict`:
+  with a baseline numerator, the stabilized hazard and product limit within a numerator stratum
+  are the stratum hazard and survival `P(T > k | B = b)`.
+* `stabilizedWeight_eq_one_of_mem`, `weightedHazard_ipcWeight_eq_observedHazard_of_const`,
+  `weightedProductLimit_ipcWeight_eq_productLimit_of_const`: the forms without the global
+  positivity hypothesis, which follows locally on the risk set (`stayProb_pos_of_mem_riskSet`).
+* `firstForbidden`, `weightedHazard_policy_arm`: a policy with several switches. `C` is the
+  first switch that the policy forbids, earlier allowed treatment changes are kept in the
+  recorded history, and the arm-specific hazard and survival under the policy are identified
+  with further baseline adjustment variables in the weight model (TSD 24, Sec 5.4).
+
 Several types of switching are covered by taking `C` as the first switching time (one
-censoring process), and arm-specific weighting models by taking the arm in `V`.
+censoring process), and arm-specific weighting models by taking the arm in `V`; a policy that
+allows some treatment changes is covered by `firstForbidden`.
 
 ## Countermodels (namespace `Example`)
 
@@ -107,13 +136,19 @@ Four equally likely individuals; a prognostic covariate drives both death and sw
 * `truncation_biased`: truncating the weights at `1` loses mass and gives `1/3`.
 * `not_identified_without_positivity`: if a covariate level always switches, two survival times
   with the same observed data and different hazards both satisfy no unmeasured confounding.
+* `switchNUC_untestable`: two models with the same observed data, one observed death time
+  consistent with both, and positive stay probabilities `1/2`; no unmeasured confounding of
+  the switch holds in one only, and the hazards at time `1` are `1/2` and `3/4`.
 
 A two-period version (namespace `Example₂`), where the confounder is revealed at time `1` and
 the weight at time `2` has two factors:
 
 * `two_period_ipcw`: the naive hazard at time `2` is `1/3`, the IPCW hazard is `1/2`.
-* `numerator_with_time_varying_confounder`: a numerator conditional on the time-varying
-  confounder makes the stabilized weights `1`, and the weighted hazard is the naive `1/3`.
+* `numerator_time_varying`: with the denominator fixed, a numerator on the baseline covariates
+  gives the hazard `1/2`; a numerator with the time-varying confounder, from the period in which
+  it is measured, makes the weights `1` and gives the naive `1/3`.
+* `numerator_with_time_varying_confounder`: the confounder used as a baseline covariate in both
+  weight models also gives the naive `1/3`.
 
 The efficiency of stabilized weights (TSD 16, Appendix A, citing Robins and Finkelstein) and the
 effect of truncation on the standard errors of estimated effects are sampling statements and
@@ -126,7 +161,7 @@ are not formalized.
   (IPCW, Eq A1).
 * H. Bell Gorrod, N. R. Latimer and K. R. Abrams, *NICE DSU Technical Support Document 24:
   Adjusting survival time estimates in the presence of treatment switching: an update to
-  TSD 16* (2024): Sec 4.2.2 and Sec 4.2.2.1.
+  TSD 16* (2024): Sec 4.2.2, Sec 4.2.2.1 and Sec 5.4.
 -/
 
 @[expose] public section
@@ -466,6 +501,18 @@ theorem stayProbBaseline_pos (hm : ∀ ω, 0 ≤ m ω) {j : ℕ} {ω : Ω} (h0 :
     h0.trans_le (single_le_sum (fun x _ => hm x) hmem)
   exact div_pos h1 (h1.trans_le (wmass_mono hm inter_subset_left))
 
+/-- Local positivity: an individual of positive mass in the risk set at `k` stayed unswitched
+through every interval `j < k`, so it contributes positive mass to the stayed part of its own
+risk cell, and the denominator factor `stayProb j` at its history is positive. No positivity
+assumption is needed for this. -/
+theorem stayProb_pos_of_mem_riskSet (hm : ∀ ω, 0 ≤ m ω) {j k : ℕ} (hj : j < k) {ω : Ω}
+    (h0 : 0 < m ω) (hω : ω ∈ riskSet T C k) : 0 < stayProb m T C V L j ω := by
+  obtain ⟨hT, hC⟩ := (mem_filter.1 hω).2
+  have hmem : ω ∈ riskCell T C V L j ω ∩ uncensored C (j + 1) :=
+    mem_inter.2 ⟨mem_riskCell_self (by omega) (by omega), by simp [uncensored]; omega⟩
+  have h1 := wmass_pos_of_mem hm hmem h0
+  exact div_pos h1 (h1.trans_le (wmass_mono hm inter_subset_left))
+
 /-- The stabilized weight is the unstabilized weight times the product of the numerator
 factors, which depends on the baseline covariates only. -/
 theorem stabilizedWeight_eq_mul (k : ℕ) (ω : Ω) :
@@ -544,29 +591,212 @@ theorem weightedHazard_stabilized_restrict (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (
   congr 1
   exact prod_congr rfl fun j _ => stayProbBaseline_congr hV
 
-/-- No informative switching given the baseline covariates up to time `k`: for every `j < k`,
+/-- **IPCW within strata of a coarser baseline variable.** Let `B` be a function of the
+baseline covariates `V` (for instance the randomized arm, with `V` holding the arm and further
+adjustment variables). Under the hypotheses of `wsum_riskSet_ipcWeight` and
+`P(T ≥ k, B = b) > 0`, the unstabilized weighted hazard computed within the stratum `B = b`
+equals the hazard of `T` in that stratum, `P(T = k | T ≥ k, B = b)`. The adjustment variables
+of `V` beyond `B` stay in the weight model. `weightedHazard_ipcWeight_restrict` is the case
+`B = V`. -/
+theorem weightedHazard_ipcWeight_restrict_of {𝓑 : Type*} [DecidableEq 𝓑]
+    (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (B : Ω → 𝓑) (hB : ∀ ω ω', V ω' = V ω → B ω' = B ω) (b : 𝓑)
+    (hnuc : SwitchNUC m T C V L k) (hpos : SwitchPositive m T C V L k)
+    (hk : 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ B ω = b)) :
+    0 < wsum m (ev B b ∩ riskSet T C k) (ipcWeight m T C V L k) ∧
+      weightedHazard (restrict m (ev B b)) T C (ipcWeight m T C V L) k =
+        wmass m (univ.filter fun ω => T ω = k ∧ B ω = b) /
+          wmass m (univ.filter fun ω => k ≤ T ω ∧ B ω = b) := by
+  have hg : ∀ ω ω' : Ω, T ω' = T ω → V ω' = V ω →
+      (fun ω => if B ω = b then (1 : ℝ) else 0) ω' = (fun ω => if B ω = b then 1 else 0) ω :=
+    fun ω ω' _ hV => by simp only [hB ω ω' hV]
+  have hR := wsum_riskSet_ipcWeight hm k hnuc hpos _ hg
+  have hE := wsum_eventSet_ipcWeight hm k hnuc hpos _ hg
+  rw [wsum_filter_indicator (V := B)] at hR hE
+  rw [← wsum_ev_inter (V := B)] at hR hE
+  refine ⟨hR ▸ hk, ?_⟩
+  rw [weightedHazard, wsum_restrict, wsum_restrict]
+  exact congrArg₂ (· / ·) hE hR
+
+omit [DecidableEq Ω] in
+/-- The product of one minus the stratum hazards telescopes: if `P(T ≥ k, P) > 0` then
+`∏_{i ≤ k} (1 - m(T = i, P) / m(T ≥ i, P)) = m(T > k, P) / m(P)`, the survival `P(T > k | P)`
+within the event `P`. Every factor is one minus a genuine conditional probability. -/
+theorem prod_one_sub_stratumHazard (hm : ∀ ω, 0 ≤ m ω) (P : Ω → Prop) [DecidablePred P] :
+    ∀ k : ℕ, 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ P ω) →
+      ∏ i ∈ range (k + 1), (1 - wmass m (univ.filter fun ω => T ω = i ∧ P ω) /
+          wmass m (univ.filter fun ω => i ≤ T ω ∧ P ω)) =
+        wmass m (univ.filter fun ω => k < T ω ∧ P ω) / wmass m (univ.filter P) := by
+  have hsplit : ∀ i, wmass m (univ.filter fun ω => i ≤ T ω ∧ P ω) =
+      wmass m (univ.filter fun ω => T ω = i ∧ P ω) +
+        wmass m (univ.filter fun ω => i < T ω ∧ P ω) := fun i => by
+    simp only [wmass, sum_filter, ← sum_add_distrib]
+    refine sum_congr rfl fun ω _ => ?_
+    by_cases hP : P ω <;> simp only [hP, and_true, and_false] <;> split_ifs <;>
+      first | omega | contradiction | simp
+  have hstep : ∀ i, 0 < wmass m (univ.filter fun ω => i ≤ T ω ∧ P ω) →
+      1 - wmass m (univ.filter fun ω => T ω = i ∧ P ω) /
+          wmass m (univ.filter fun ω => i ≤ T ω ∧ P ω) =
+        wmass m (univ.filter fun ω => i < T ω ∧ P ω) /
+          wmass m (univ.filter fun ω => i ≤ T ω ∧ P ω) := fun i hi => by
+    rw [eq_div_iff hi.ne', sub_mul, div_mul_cancel₀ _ hi.ne', hsplit i]; ring
+  have hmono : ∀ i, wmass m (univ.filter fun ω => (i + 1) ≤ T ω ∧ P ω) ≤
+      wmass m (univ.filter fun ω => i ≤ T ω ∧ P ω) := fun i =>
+    wmass_mono hm fun ω hω => by
+      simp only [mem_filter, mem_univ, true_and] at hω ⊢; exact ⟨by omega, hω.2⟩
+  intro k
+  induction k with
+  | zero =>
+    intro h0
+    have h : (univ.filter fun ω => 0 ≤ T ω ∧ P ω) = univ.filter P := by ext; simp
+    rw [prod_range_one, hstep 0 h0, h]
+  | succ k ih =>
+    intro hk
+    have hk' := hk.trans_le (hmono k)
+    rw [prod_range_succ, ih hk', hstep (k + 1) hk]
+    have hpos : 0 < wmass m (univ.filter fun ω => k < T ω ∧ P ω) := hk
+    have h0 : 0 < wmass m (univ.filter P) :=
+      hk'.trans_le (wmass_mono hm fun ω hω => by simp_all)
+    have he : wmass m (univ.filter fun ω => k + 1 ≤ T ω ∧ P ω) =
+        wmass m (univ.filter fun ω => k < T ω ∧ P ω) := rfl
+    rw [he]
+    field_simp
+
+/-- **The weighted product limit within strata of a coarser baseline variable.** Under the
+hypotheses of `weightedHazard_ipcWeight_restrict_of`, the unstabilized weighted product limit
+computed within the stratum `B = b` is the stratum survival `P(T > k | B = b)`. With the arm as
+`B` this is the arm-specific survival curve without switching. -/
+theorem weightedProductLimit_ipcWeight_restrict_of {𝓑 : Type*} [DecidableEq 𝓑]
+    (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (B : Ω → 𝓑) (hB : ∀ ω ω', V ω' = V ω → B ω' = B ω) (b : 𝓑)
+    (hnuc : SwitchNUC m T C V L k) (hpos : SwitchPositive m T C V L k)
+    (hk : 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ B ω = b)) :
+    weightedProductLimit (restrict m (ev B b)) T C (ipcWeight m T C V L) k =
+      wmass m (univ.filter fun ω => k < T ω ∧ B ω = b) /
+        wmass m (univ.filter fun ω => B ω = b) := by
+  rw [weightedProductLimit, ← prod_one_sub_stratumHazard hm _ k hk]
+  refine prod_congr rfl fun i hi => ?_
+  have hik := Nat.lt_succ_iff.1 (mem_range.1 hi)
+  rw [(weightedHazard_ipcWeight_restrict_of hm i B hB b (switchNUC_mono hik hnuc)
+    (switchPositive_mono hik hpos) (hk.trans_le (wmass_mono hm fun ω hω => by
+      simp only [mem_filter, mem_univ, true_and] at hω ⊢; exact ⟨by omega, hω.2⟩))).2]
+
+/-- The stabilized weight with a numerator history `(Vn, N)` separate from the denominator
+history `(V, L)`: `∏_{j < k} stayProb(Vn, N) j / stayProb(V, L) j`. The numerator factor is
+`P(C ≥ j + 1 | C ≥ j, T > j, Vn, N̄_j)`. A variable can enter the numerator from the period in
+which it is measured on: take `N j` uninformative before that period. The stabilized weight of
+Eq A1 is the case of a numerator on the baseline covariates only
+(`stabilizedWeight_eq_stabilizedWeightNum`). -/
+noncomputable def stabilizedWeightNum {𝒱' 𝓝 : Type*} [DecidableEq 𝒱'] [DecidableEq 𝓝]
+    (m : Ω → ℝ) (T C : Ω → ℕ) (Vn : Ω → 𝒱') (N : ℕ → Ω → 𝓝) (V : Ω → 𝒱) (L : ℕ → Ω → 𝓛)
+    (k : ℕ) (ω : Ω) : ℝ :=
+  ∏ j ∈ range k, stayProb m T C Vn N j ω / stayProb m T C V L j ω
+
+/-- The numerator factor of Eq A1 is the denominator factor with no time-varying covariates. -/
+theorem stayProbBaseline_eq_stayProb (j : ℕ) (ω : Ω) :
+    stayProbBaseline m T C V j ω = stayProb m T C V (fun _ _ => ()) j ω := by
+  have h : riskCell T C V (fun _ _ => ()) j ω = baselineCell T C V j ω := by
+    ext x; simp [riskCell, covHist]
+  rw [stayProbBaseline, stayProb, h]
+
+/-- A numerator history equal to the denominator history undoes the weighting: every
+individual of positive mass in the risk set at `k` has weight `1`. -/
+theorem stabilizedWeightNum_self_eq_one (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) {ω : Ω} (h0 : 0 < m ω)
+    (hω : ω ∈ riskSet T C k) : stabilizedWeightNum m T C V L V L k ω = 1 :=
+  prod_eq_one fun _ hj =>
+    div_self (stayProb_pos_of_mem_riskSet hm (mem_range.1 hj) h0 hω).ne'
+
+theorem stabilizedWeight_eq_stabilizedWeightNum :
+    stabilizedWeight m T C V L = stabilizedWeightNum m T C V (fun _ _ => ()) V L := by
+  funext k ω
+  exact prod_congr rfl fun j _ => by rw [stayProbBaseline_eq_stayProb]
+
+/-- **Stabilized weights with a baseline numerator identify the stratum hazard.** Let the
+numerator of the stabilized weights condition on a baseline variable `B` that is a function of
+`V`. Under the hypotheses of `wsum_riskSet_ipcWeight` and `P(T ≥ k, B = b) > 0`, the stabilized
+weighted hazard computed within `B = b` is the hazard of `T` in that stratum: on the stratum
+the numerator is a positive constant on the risk set, and it cancels. -/
+theorem weightedHazard_stabilizedNum_restrict {𝓑 : Type*} [DecidableEq 𝓑]
+    (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (B : Ω → 𝓑) (hB : ∀ ω ω', V ω' = V ω → B ω' = B ω) (b : 𝓑)
+    (hnuc : SwitchNUC m T C V L k) (hpos : SwitchPositive m T C V L k)
+    (hk : 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ B ω = b)) :
+    weightedHazard (restrict m (ev B b)) T C
+        (stabilizedWeightNum m T C B (fun _ _ => ()) V L) k =
+      wmass m (univ.filter fun ω => T ω = k ∧ B ω = b) /
+        wmass m (univ.filter fun ω => k ≤ T ω ∧ B ω = b) := by
+  obtain ⟨hR, h⟩ := weightedHazard_ipcWeight_restrict_of hm k B hB b hnuc hpos hk
+  obtain ⟨ω₁, hω₁, hne⟩ := exists_ne_zero_of_sum_ne_zero hR.ne'
+  have hp₁ : 0 < m ω₁ := (hm ω₁).lt_of_ne fun h0 => hne (by rw [← h0, zero_mul])
+  obtain ⟨hv₁, hr₁⟩ := mem_inter.1 hω₁
+  have hc : 0 < ∏ j ∈ range k, stayProb m T C B (fun _ _ => ()) j ω₁ :=
+    prod_pos fun j hj => stayProb_pos_of_mem_riskSet hm (mem_range.1 hj) hp₁ hr₁
+  rw [← h]
+  refine weightedHazard_congr_mul _ _ k hc.ne' fun ω _ hω => ?_
+  have hV : B ω = B ω₁ := by
+    rw [mem_ev.1 hv₁]
+    by_contra hv
+    exact hω (by simp [Longitudinal.restrict, hv])
+  simp only [stabilizedWeightNum, ipcWeight, div_eq_mul_inv, prod_mul_distrib]
+  congr 1
+  exact prod_congr rfl fun j _ => stayProb_congr hV fun _ _ => rfl
+
+/-- **The stabilized product limit within a baseline numerator stratum.** Under the hypotheses
+of `weightedHazard_stabilizedNum_restrict`, the stabilized weighted product limit computed
+within `B = b` is the stratum survival `P(T > k | B = b)`. -/
+theorem weightedProductLimit_stabilizedNum_restrict {𝓑 : Type*} [DecidableEq 𝓑]
+    (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (B : Ω → 𝓑) (hB : ∀ ω ω', V ω' = V ω → B ω' = B ω) (b : 𝓑)
+    (hnuc : SwitchNUC m T C V L k) (hpos : SwitchPositive m T C V L k)
+    (hk : 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ B ω = b)) :
+    weightedProductLimit (restrict m (ev B b)) T C
+        (stabilizedWeightNum m T C B (fun _ _ => ()) V L) k =
+      wmass m (univ.filter fun ω => k < T ω ∧ B ω = b) /
+        wmass m (univ.filter fun ω => B ω = b) := by
+  rw [weightedProductLimit, ← prod_one_sub_stratumHazard hm _ k hk]
+  refine prod_congr rfl fun i hi => ?_
+  have hik := Nat.lt_succ_iff.1 (mem_range.1 hi)
+  rw [weightedHazard_stabilizedNum_restrict hm i B hB b (switchNUC_mono hik hnuc)
+    (switchPositive_mono hik hpos) (hk.trans_le (wmass_mono hm fun ω hω => by
+      simp only [mem_filter, mem_univ, true_and] at hω ⊢; exact ⟨by omega, hω.2⟩))]
+
+/-- **The stabilized product limit of Eq A1 within strata of the baseline covariates.** Under
+the hypotheses of `weightedHazard_stabilized_restrict`, the stabilized weighted product limit
+computed within `V = v` is the stratum survival `P(T > k | V = v)`. -/
+theorem weightedProductLimit_stabilized_restrict (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (v : 𝒱)
+    (hnuc : SwitchNUC m T C V L k) (hpos : SwitchPositive m T C V L k)
+    (hk : 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ V ω = v)) :
+    weightedProductLimit (restrict m (ev V v)) T C (stabilizedWeight m T C V L) k =
+      wmass m (univ.filter fun ω => k < T ω ∧ V ω = v) /
+        wmass m (univ.filter fun ω => V ω = v) := by
+  rw [stabilizedWeight_eq_stabilizedWeightNum]
+  exact weightedProductLimit_stabilizedNum_restrict hm k V (fun _ _ h => h) v hnuc hpos hk
+
+/-- Equality of the numerator and denominator factors of Eq A1 up to time `k`: for every `j < k`,
 within every baseline cell at `j`, remaining uncensored at the end of interval `j` is mean
-independent of the covariate history event `L̄_j = L̄_j ω`. In words: the history of the
-time-varying prognostic factors does not affect the hazard of switching once the baseline
-covariates are accounted for. -/
+independent of the covariate history event `L̄_j = L̄_j ω`. On a history of positive mass this
+says `stayProb j = stayProbBaseline j`: the recorded time-varying covariates do not change the
+probability of switching once the baseline covariates are accounted for. It is a condition on
+the recorded covariates only. It is not noninformative switching: it says nothing about the
+dependence of switching on the survival time without switching, and it holds, for instance,
+when the weight models omit a prognostic factor that drives switching (with constant `V` and
+`L` it holds trivially). Noninformative switching given the history is `SwitchNUC`. -/
 def NoInformativeSwitchGivenBaseline (m : Ω → ℝ) (T C : Ω → ℕ) (V : Ω → 𝒱) (L : ℕ → Ω → 𝓛)
     (k : ℕ) : Prop :=
   ∀ j < k, ∀ ω : Ω, MeanIndepOn m (baselineCell T C V j ω) (covHist L j ω)
     (fun ω' => if j + 1 ≤ C ω' then 1 else 0)
 
-/-- **The stabilized weight equals one without informative switching (Appendix A of TSD 16).**
-If the history of the time-varying covariates does not affect the hazard of switching given the
-baseline covariates, then under positivity every individual of positive mass in the risk set
-at `k` has stabilized weight `1`: each factor of Eq A1 is a ratio of two equal, positive
-conditional probabilities. -/
-theorem stabilizedWeight_eq_one (hm : ∀ ω, 0 ≤ m ω) (k : ℕ)
-    (hni : NoInformativeSwitchGivenBaseline m T C V L k) (hpos : SwitchPositive m T C V L k)
+/-- **The stabilized weight equals one when the numerator and denominator factors agree
+(Appendix A of TSD 16).** If the recorded history of the time-varying covariates does not
+change the probability of switching given the baseline covariates
+(`NoInformativeSwitchGivenBaseline`), every individual of positive mass in the risk set at `k`
+has stabilized weight `1`: each factor of Eq A1 is a ratio of two equal conditional
+probabilities, positive by local positivity (`stayProb_pos_of_mem_riskSet`). No global
+positivity assumption is needed. -/
+theorem stabilizedWeight_eq_one_of_mem (hm : ∀ ω, 0 ≤ m ω) (k : ℕ)
+    (hni : NoInformativeSwitchGivenBaseline m T C V L k)
     {ω : Ω} (h0 : 0 < m ω) (hω : ω ∈ riskSet T C k) :
     stabilizedWeight m T C V L k ω = 1 := by
   obtain ⟨hT, hC⟩ := (mem_filter.1 hω).2
   refine prod_eq_one fun j hj => ?_
   have hjk := mem_range.1 hj
-  have hπ := hpos j hjk ω h0 (by omega) (by omega)
+  have hπ := stayProb_pos_of_mem_riskSet (V := V) (L := L) hm hjk h0 hω
   have hmass : 0 < wmass m (baselineCell T C V j ω ∩ covHist L j ω) :=
     h0.trans_le (single_le_sum (fun x _ => hm x) (mem_riskCell_self (V := V) (L := L)
       (show j ≤ C ω by omega) (show j < T ω by omega)))
@@ -575,6 +805,14 @@ theorem stabilizedWeight_eq_one (hm : ∀ ω, 0 ≤ m ω) (k : ℕ)
   have hsp : stayProb m T C V L j ω = stayProbBaseline m T C V j ω := heq
   rw [← hsp]
   exact div_self hπ.ne'
+
+/-- The form of `stabilizedWeight_eq_one_of_mem` with a global positivity hypothesis, which is
+not needed. -/
+theorem stabilizedWeight_eq_one (hm : ∀ ω, 0 ≤ m ω) (k : ℕ)
+    (hni : NoInformativeSwitchGivenBaseline m T C V L k) (_hpos : SwitchPositive m T C V L k)
+    {ω : Ω} (h0 : 0 < m ω) (hω : ω ∈ riskSet T C k) :
+    stabilizedWeight m T C V L k ω = 1 :=
+  stabilizedWeight_eq_one_of_mem hm k hni h0 hω
 
 /-- Truncation of the weights at the level `c`: `min (w k ω) c`. -/
 noncomputable def truncate (c : ℝ) (w : ℕ → Ω → ℝ) : ℕ → Ω → ℝ := fun k ω => min (w k ω) c
@@ -687,6 +925,237 @@ theorem meanIndepOn_of_subset {s t : Finset Ω} (h : s ⊆ t) (f : Ω → ℝ) :
 
 end Lemmas
 
+section Policy
+
+/-! ### A treatment policy with several switches
+
+The censoring time `C` is the first switch that the policy under study forbids: the treatment
+`A (j + 1)` in interval `j + 1` is checked against the policy `allowed (j + 1)`, and follow-up
+ends at the horizon `K`. Earlier treatment changes that the policy allows are not censored;
+they are kept in the recorded history, paired with the time-varying covariates, since they can
+predict both the forbidden switch and survival. The target `T` is the survival time under the
+policy. -/
+
+variable {Ω : Type*} {𝒜 : Type*}
+
+/-- The first switch forbidden by the policy, with the horizon `K`: the least `j` such that the
+treatment `A (j + 1)` of interval `j + 1` is not allowed, and `K` if there is none before `K`.
+Individual `ω` remains uncensored at the end of interval `j` (`C ≥ j + 1`) exactly when it
+follows the policy in intervals `1, …, j + 1` and `j < K` (`lt_firstForbidden_iff`). A policy
+that depends on the arm is expressed by carrying the arm in the treatment value `A i ω`. -/
+noncomputable def firstForbidden (allowed : ℕ → 𝒜 → Prop) [∀ i, DecidablePred (allowed i)]
+    (A : ℕ → Ω → 𝒜) (K : ℕ) (ω : Ω) : ℕ :=
+  Nat.find (⟨K, Or.inl le_rfl⟩ : ∃ j, K ≤ j ∨ ¬ allowed (j + 1) (A (j + 1) ω))
+
+theorem lt_firstForbidden_iff (allowed : ℕ → 𝒜 → Prop) [∀ i, DecidablePred (allowed i)]
+    (A : ℕ → Ω → 𝒜) (K j : ℕ) (ω : Ω) :
+    j < firstForbidden allowed A K ω ↔ j < K ∧ ∀ i ≤ j, allowed (i + 1) (A (i + 1) ω) := by
+  rw [firstForbidden, Nat.lt_find_iff]
+  constructor
+  · intro h
+    exact ⟨not_le.1 (not_or.1 (h j le_rfl)).1, fun i hi => not_not.1 (not_or.1 (h i hi)).2⟩
+  · rintro ⟨hK, ha⟩ i hi
+    exact not_or.2 ⟨by omega, not_not.2 (ha i hi)⟩
+
+variable [Fintype Ω] [DecidableEq Ω] {m : Ω → ℝ} {T : Ω → ℕ}
+
+/-- **Arm-specific hazard and survival under a policy with several switches (Sec 4.2.2.1 and
+Sec 5.4 of TSD 24).** Censor at the first switch that the policy forbids (`firstForbidden`),
+keep the treatment history `A` in the recorded history together with the time-varying
+covariates `X`, and put the arm and further baseline adjustment variables `W` in the baseline
+covariates. Under no unmeasured confounding of the forbidden switch and positivity for this
+history up to `k`, and `P(T ≥ k, arm = a) > 0`, the weighted hazard and the weighted product
+limit computed within the arm `a` are the hazard `P(T = k | T ≥ k, arm = a)` and the survival
+`P(T > k | arm = a)` of the survival time under the policy. -/
+theorem weightedHazard_policy_arm {α 𝒲 𝒳 : Type*} [DecidableEq 𝒜] [DecidableEq α]
+    [DecidableEq 𝒲] [DecidableEq 𝒳] (allowed : ℕ → 𝒜 → Prop) [∀ i, DecidablePred (allowed i)]
+    (A : ℕ → Ω → 𝒜) (K : ℕ) (arm : Ω → α) (W : Ω → 𝒲) (X : ℕ → Ω → 𝒳)
+    (hm : ∀ ω, 0 ≤ m ω) (k : ℕ) (a : α)
+    (hnuc : SwitchNUC m T (firstForbidden allowed A K) (fun ω => (arm ω, W ω))
+      (fun i ω => (A i ω, X i ω)) k)
+    (hpos : SwitchPositive m T (firstForbidden allowed A K) (fun ω => (arm ω, W ω))
+      (fun i ω => (A i ω, X i ω)) k)
+    (hk : 0 < wmass m (univ.filter fun ω => k ≤ T ω ∧ arm ω = a)) :
+    weightedHazard (restrict m (ev arm a)) T (firstForbidden allowed A K)
+        (ipcWeight m T (firstForbidden allowed A K) (fun ω => (arm ω, W ω))
+          (fun i ω => (A i ω, X i ω))) k =
+      wmass m (univ.filter fun ω => T ω = k ∧ arm ω = a) /
+        wmass m (univ.filter fun ω => k ≤ T ω ∧ arm ω = a) ∧
+    weightedProductLimit (restrict m (ev arm a)) T (firstForbidden allowed A K)
+        (ipcWeight m T (firstForbidden allowed A K) (fun ω => (arm ω, W ω))
+          (fun i ω => (A i ω, X i ω))) k =
+      wmass m (univ.filter fun ω => k < T ω ∧ arm ω = a) /
+        wmass m (univ.filter fun ω => arm ω = a) := by
+  have hB : ∀ ω ω' : Ω, (arm ω', W ω') = (arm ω, W ω) → arm ω' = arm ω :=
+    fun _ _ h => congrArg Prod.fst h
+  exact ⟨(weightedHazard_ipcWeight_restrict_of hm k arm hB a hnuc hpos hk).2,
+    weightedProductLimit_ipcWeight_restrict_of hm k arm hB a hnuc hpos hk⟩
+
+end Policy
+
+section Observed
+
+/-! ### The weighted functionals of the observed record
+
+The observed record of an individual is `O ω = (X, Δ)`, the follow-up time `X = min(Tobs, C)`
+and the death indicator `Δ = 1{Tobs ≤ C}` (`Survival.observed Tobs C`), together with the
+baseline covariates `V` and the recorded history `L`. The functionals below are computed from
+these alone: the risk set `X ≥ k`, the deaths `X = k ∧ Δ`, the individuals eligible to stay
+unswitched at the end of interval `j` (`X > j`, or `X = j` and switched rather than dead), and
+among them those who stayed (`X > j`). On the record `observed T C` they coincide with the
+functionals of `(T, C)` above (`obsWeightedHazard_observed`, `obsIpcWeight_observed`). -/
+
+variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] {𝒱 𝓛 : Type*} [DecidableEq 𝒱] [DecidableEq 𝓛]
+
+/-- The observed risk set at `k`: follow-up time at least `k`. -/
+def obsRiskSet (O : Ω → ℕ × Bool) (k : ℕ) : Finset Ω := univ.filter fun ω => k ≤ (O ω).1
+
+/-- The observed deaths at `k`: follow-up time `k` ending in death. -/
+def obsEventSet (O : Ω → ℕ × Bool) (k : ℕ) : Finset Ω :=
+  univ.filter fun ω => (O ω).1 = k ∧ (O ω).2 = true
+
+/-- The observed stay cell of `ω` at `j`: individuals alive and unswitched after the deaths of
+interval `j` (follow-up beyond `j`, or ending at `j` by a switch), with the baseline covariates
+and the recorded history through `j` of `ω`. -/
+def obsStayCell (O : Ω → ℕ × Bool) (V : Ω → 𝒱) (L : ℕ → Ω → 𝓛) (j : ℕ) (ω : Ω) : Finset Ω :=
+  univ.filter fun ω' => (j < (O ω').1 ∨ ((O ω').1 = j ∧ (O ω').2 = false)) ∧ V ω' = V ω ∧
+    ∀ i ≤ j, L i ω' = L i ω
+
+/-- The individuals whose follow-up continues beyond `j`: they stayed unswitched at the end of
+interval `j` (within a stay cell). -/
+def obsStayed (O : Ω → ℕ × Bool) (j : ℕ) : Finset Ω := univ.filter fun ω => j < (O ω).1
+
+/-- The observed probability of staying unswitched at the end of interval `j` given the stay
+cell of `ω`. -/
+noncomputable def obsStayProb (m : Ω → ℝ) (O : Ω → ℕ × Bool) (V : Ω → 𝒱) (L : ℕ → Ω → 𝓛)
+    (j : ℕ) (ω : Ω) : ℝ :=
+  condProb m (obsStayCell O V L j ω) (obsStayed O j)
+
+/-- The observed unstabilized weight at `k`: `∏_{j < k} 1 / obsStayProb j`. -/
+noncomputable def obsIpcWeight (m : Ω → ℝ) (O : Ω → ℕ × Bool) (V : Ω → 𝒱) (L : ℕ → Ω → 𝓛)
+    (k : ℕ) (ω : Ω) : ℝ :=
+  ∏ j ∈ range k, (obsStayProb m O V L j ω)⁻¹
+
+/-- The observed weighted hazard at `k` with the time-indexed weights `w`. -/
+noncomputable def obsWeightedHazard (m : Ω → ℝ) (O : Ω → ℕ × Bool) (w : ℕ → Ω → ℝ) (k : ℕ) :
+    ℝ :=
+  wsum m (obsEventSet O k) (w k) / wsum m (obsRiskSet O k) (w k)
+
+/-- The observed weighted product limit at `k`: `∏_{i ≤ k} (1 - obsWeightedHazard i)`. -/
+noncomputable def obsWeightedProductLimit (m : Ω → ℝ) (O : Ω → ℕ × Bool) (w : ℕ → Ω → ℝ)
+    (k : ℕ) : ℝ :=
+  ∏ i ∈ range (k + 1), (1 - obsWeightedHazard m O w i)
+
+variable {m : Ω → ℝ} {T C : Ω → ℕ} {V : Ω → 𝒱} {L : ℕ → Ω → 𝓛}
+
+omit [DecidableEq Ω] in
+theorem obsRiskSet_observed (k : ℕ) : obsRiskSet (observed T C) k = riskSet T C k := by
+  ext ω; simp [obsRiskSet, riskSet, observed]
+
+omit [DecidableEq Ω] in
+theorem obsEventSet_observed (k : ℕ) : obsEventSet (observed T C) k = eventSet T C k := by
+  ext ω; simp only [obsEventSet, eventSet, observed, mem_filter, mem_univ, true_and,
+    decide_eq_true_eq]; omega
+
+theorem obsStayCell_observed (j : ℕ) (ω : Ω) :
+    obsStayCell (observed T C) V L j ω = riskCell T C V L j ω := by
+  have key : ∀ x, (j < min (T x) (C x) ∨ (min (T x) (C x) = j ∧ ¬ T x ≤ C x)) ↔
+      (j ≤ C x ∧ j < T x) := fun x => by omega
+  ext x
+  simp only [obsStayCell, observed, mem_filter, mem_univ, true_and, decide_eq_false_iff_not,
+    key, mem_riskCell, and_assoc]
+
+theorem obsStayProb_observed (j : ℕ) (ω : Ω) :
+    obsStayProb m (observed T C) V L j ω = stayProb m T C V L j ω := by
+  have h : riskCell T C V L j ω ∩ obsStayed (observed T C) j =
+      riskCell T C V L j ω ∩ uncensored C (j + 1) := by
+    ext x
+    simp only [mem_inter, mem_riskCell, obsStayed, uncensored, observed, mem_filter, mem_univ,
+      true_and]
+    constructor
+    · rintro ⟨h1, h2⟩
+      have h3 : j < min (T x) (C x) := (mem_filter.1 h2).2
+      exact ⟨h1, by omega⟩
+    · rintro ⟨h1, h2⟩
+      have h3 := h1.1.2.1
+      exact ⟨h1, mem_filter.2 ⟨mem_univ _, show j < min (T x) (C x) by omega⟩⟩
+  rw [obsStayProb, stayProb, condProb, condProb, obsStayCell_observed, h]
+
+theorem obsIpcWeight_observed :
+    obsIpcWeight m (observed T C) V L = ipcWeight m T C V L := by
+  funext k ω
+  exact prod_congr rfl fun j _ => by rw [obsStayProb_observed]
+
+omit [DecidableEq Ω] in
+theorem obsWeightedHazard_observed (w : ℕ → Ω → ℝ) (k : ℕ) :
+    obsWeightedHazard m (observed T C) w k = weightedHazard m T C w k := by
+  rw [obsWeightedHazard, weightedHazard, obsEventSet_observed, obsRiskSet_observed]
+
+omit [DecidableEq Ω] in
+theorem obsWeightedProductLimit_observed (w : ℕ → Ω → ℝ) (k : ℕ) :
+    obsWeightedProductLimit m (observed T C) w k = weightedProductLimit m T C w k :=
+  prod_congr rfl fun i _ => by rw [obsWeightedHazard_observed]
+
+/-- Two event times with the same artificially censored data `observed T C` have the same
+inverse probability of censoring weights. -/
+theorem ipcWeight_eq_of_observed_eq {T' : Ω → ℕ} (h : observed T C = observed T' C) :
+    ipcWeight m T C V L = ipcWeight m T' C V L := by
+  rw [← obsIpcWeight_observed, ← obsIpcWeight_observed, h]
+
+omit [DecidableEq Ω] in
+/-- Two event times with the same artificially censored data have the same weighted hazards. -/
+theorem weightedHazard_eq_of_observed_eq {T' : Ω → ℕ} (h : observed T C = observed T' C)
+    (w : ℕ → Ω → ℝ) (k : ℕ) : weightedHazard m T C w k = weightedHazard m T' C w k := by
+  rw [← obsWeightedHazard_observed, ← obsWeightedHazard_observed, h]
+
+/-- Under consistency up to the switch, the inverse probability of censoring weights computed
+from the observed death time `Tobs` equal those of the survival time without switching `T`. -/
+theorem ipcWeight_eq_of_consistentUntilSwitch {Tobs : Ω → ℕ}
+    (h : ConsistentUntilSwitch Tobs T C) : ipcWeight m Tobs C V L = ipcWeight m T C V L :=
+  ipcWeight_eq_of_observed_eq (observed_eq_of_consistentUntilSwitch h)
+
+omit [DecidableEq Ω] in
+/-- Under consistency up to the switch, the weighted hazards computed from the observed death
+time `Tobs` equal those of the survival time without switching `T`. -/
+theorem weightedHazard_eq_of_consistentUntilSwitch {Tobs : Ω → ℕ}
+    (h : ConsistentUntilSwitch Tobs T C) (w : ℕ → Ω → ℝ) (k : ℕ) :
+    weightedHazard m Tobs C w k = weightedHazard m T C w k :=
+  weightedHazard_eq_of_observed_eq (observed_eq_of_consistentUntilSwitch h) w k
+
+/-- The recorded history stopped at the end of follow-up: `L i ω` is recorded when `i ≤ X ω`
+(the individual is under observation at the start of interval `i`), and is missing otherwise. -/
+def stoppedHist (O : Ω → ℕ × Bool) (L : ℕ → Ω → 𝓛) (i : ℕ) (ω : Ω) : Option 𝓛 :=
+  if i ≤ (O ω).1 then some (L i ω) else none
+
+omit [DecidableEq Ω] in
+/-- The observed weighted hazard depends on the weights only on the observed risk set. -/
+theorem obsWeightedHazard_congr {O : Ω → ℕ × Bool} {w w' : ℕ → Ω → ℝ} {k : ℕ}
+    (h : ∀ ω ∈ obsRiskSet O k, w' k ω = w k ω) :
+    obsWeightedHazard m O w' k = obsWeightedHazard m O w k := by
+  have hsub : obsEventSet O k ⊆ obsRiskSet O k := fun ω hω => by
+    simp only [obsEventSet, obsRiskSet, mem_filter, mem_univ, true_and] at hω ⊢; omega
+  rw [obsWeightedHazard, obsWeightedHazard, wsum_congr fun ω hω => h ω (hsub hω),
+    wsum_congr h]
+
+/-- **The weighted hazard uses only the recorded history.** Replacing the history `L` by the
+history stopped at the end of follow-up (`stoppedHist`) does not change the observed weighted
+hazard: values of `L` after death or switch never enter it. -/
+theorem obsWeightedHazard_stoppedHist (O : Ω → ℕ × Bool) (k : ℕ) :
+    obsWeightedHazard m O (obsIpcWeight m O V (stoppedHist O L)) k =
+      obsWeightedHazard m O (obsIpcWeight m O V L) k := by
+  refine obsWeightedHazard_congr fun ω hω => prod_congr rfl fun j hj => ?_
+  have hk : k ≤ (O ω).1 := (mem_filter.1 hω).2
+  have hj := mem_range.1 hj
+  have hcell : obsStayCell O V (stoppedHist O L) j ω = obsStayCell O V L j ω := by
+    ext x
+    simp only [obsStayCell, mem_filter, mem_univ, true_and]
+    refine and_congr_right fun hx => and_congr_right fun _ => forall₂_congr fun i hi => ?_
+    have hxi : i ≤ (O x).1 := by omega
+    simp [stoppedHist, hxi, show i ≤ (O ω).1 by omega]
+  rw [obsStayProb, obsStayProb, hcell]
+
+end Observed
+
 section Measure
 
 variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] [MeasurableSpace Ω] [MeasurableSingletonClass Ω]
@@ -763,40 +1232,98 @@ theorem observedHazard_toMeasure (p : FiniteDist Ω) (k : ℕ) :
   rfl
 
 /-- **IPCW reduces to simple censoring when all confounders are unmeasured (Sec 4 of TSD 16).**
-If the weight models contain no covariates (`V` and every `L i` constant), then under
-positivity, and if the risk set at `k` has positive mass, the inverse probability of censoring
-weighted hazard at `k` is the naive observed hazard of the artificially censored data. No
-assumption on the switching mechanism is used: the weights are constant over the risk set. -/
-theorem weightedHazard_ipcWeight_eq_observedHazard (p : FiniteDist Ω) (k : ℕ)
+If the weight models contain no covariates (`V` and every `L i` constant), and the risk set at
+`k` has positive mass, the inverse probability of censoring weighted hazard at `k` is the naive
+observed hazard of the artificially censored data. No assumption on the switching mechanism
+and no positivity assumption is used: the weights are constant over the risk set, and positive
+there by local positivity (`stayProb_pos_of_mem_riskSet`). -/
+theorem weightedHazard_ipcWeight_eq_observedHazard_of_const (p : FiniteDist Ω) (k : ℕ)
     (hV : ∀ ω ω', V ω' = V ω) (hL : ∀ i ω ω', L i ω' = L i ω)
-    (hpos : SwitchPositive p T C V L k) (hk : 0 < wmass p (riskSet T C k)) :
+    (hk : 0 < wmass p (riskSet T C k)) :
     weightedHazard p T C (ipcWeight p T C V L) k =
       observedHazard (p.toMeasure.map (observed T C)) k := by
   obtain ⟨ω₀, hω₀, hne⟩ := exists_ne_zero_of_sum_ne_zero hk.ne'
   have hp₀ : 0 < p ω₀ := (p.nonneg ω₀).lt_of_ne (Ne.symm hne)
-  obtain ⟨hT, hC⟩ := (mem_filter.1 hω₀).2
   have hc : ipcWeight p T C V L k ω₀ ≠ 0 :=
-    prod_ne_zero_iff.2 fun j hj => inv_ne_zero (hpos j (mem_range.1 hj) ω₀ hp₀
-      (by have := mem_range.1 hj; omega) (by have := mem_range.1 hj; omega)).ne'
+    prod_ne_zero_iff.2 fun j hj => inv_ne_zero
+      (stayProb_pos_of_mem_riskSet p.nonneg (mem_range.1 hj) hp₀ hω₀).ne'
   rw [observedHazard_toMeasure, ← weightedHazard_one]
   refine weightedHazard_congr_mul _ _ k hc fun ω _ _ => ?_
   rw [mul_one, ipcWeight_congr (hV ω₀ ω) fun i _ => hL i ω₀ ω]
 
-/-- The product-limit form of `weightedHazard_ipcWeight_eq_observedHazard`: without covariates
-in the weight models, the inverse probability of censoring weighted product limit is the
-product-limit (Kaplan-Meier) functional of the artificially censored data
-(`Survival.productLimit`). -/
-theorem weightedProductLimit_ipcWeight_eq_productLimit (p : FiniteDist Ω) (k : ℕ)
+/-- The form of `weightedHazard_ipcWeight_eq_observedHazard_of_const` with a global positivity
+hypothesis, which is not needed. -/
+theorem weightedHazard_ipcWeight_eq_observedHazard (p : FiniteDist Ω) (k : ℕ)
     (hV : ∀ ω ω', V ω' = V ω) (hL : ∀ i ω ω', L i ω' = L i ω)
-    (hpos : SwitchPositive p T C V L k) (hk : 0 < wmass p (riskSet T C k)) :
+    (_hpos : SwitchPositive p T C V L k) (hk : 0 < wmass p (riskSet T C k)) :
+    weightedHazard p T C (ipcWeight p T C V L) k =
+      observedHazard (p.toMeasure.map (observed T C)) k :=
+  weightedHazard_ipcWeight_eq_observedHazard_of_const p k hV hL hk
+
+/-- The product-limit form of `weightedHazard_ipcWeight_eq_observedHazard_of_const`: without
+covariates in the weight models, and with a risk set of positive mass at `k`, the inverse
+probability of censoring weighted product limit is the product-limit (Kaplan-Meier) functional
+of the artificially censored data (`Survival.productLimit`). No positivity assumption is
+used. -/
+theorem weightedProductLimit_ipcWeight_eq_productLimit_of_const (p : FiniteDist Ω) (k : ℕ)
+    (hV : ∀ ω ω', V ω' = V ω) (hL : ∀ i ω ω', L i ω' = L i ω)
+    (hk : 0 < wmass p (riskSet T C k)) :
     weightedProductLimit p T C (ipcWeight p T C V L) k =
       productLimit (p.toMeasure.map (observed T C)) k := by
   refine prod_congr rfl fun i hi => ?_
   have hik := Nat.lt_succ_iff.1 (mem_range.1 hi)
   have hsub : riskSet T C k ⊆ riskSet T C i := fun ω hω => by
     simp only [riskSet, mem_filter, mem_univ, true_and] at hω ⊢; omega
-  rw [weightedHazard_ipcWeight_eq_observedHazard p i hV hL (switchPositive_mono hik hpos)
+  rw [weightedHazard_ipcWeight_eq_observedHazard_of_const p i hV hL
     (hk.trans_le (wmass_mono p.nonneg hsub))]
+
+/-- The form of `weightedProductLimit_ipcWeight_eq_productLimit_of_const` with a global
+positivity hypothesis, which is not needed. -/
+theorem weightedProductLimit_ipcWeight_eq_productLimit (p : FiniteDist Ω) (k : ℕ)
+    (hV : ∀ ω ω', V ω' = V ω) (hL : ∀ i ω ω', L i ω' = L i ω)
+    (_hpos : SwitchPositive p T C V L k) (hk : 0 < wmass p (riskSet T C k)) :
+    weightedProductLimit p T C (ipcWeight p T C V L) k =
+      productLimit (p.toMeasure.map (observed T C)) k :=
+  weightedProductLimit_ipcWeight_eq_productLimit_of_const p k hV hL hk
+
+/-- **Observed-data identification of the hazard (Sec 3.2.1 of TSD 16).** Let `Tobs` be the
+observed death time, consistent with the survival time without switching `T` up to the switch
+(`ConsistentUntilSwitch`). The weighted hazard computed from the observed record
+`(min(Tobs, C), 1{Tobs ≤ C})`, the baseline covariates and the recorded history alone
+(`obsWeightedHazard`, `obsIpcWeight`) equals the hazard `P(T = k | T ≥ k)` of `T`, under
+sequential no unmeasured confounding of the switch and positivity up to `k`, and
+`P(T ≥ k) > 0`. By `obsWeightedHazard_stoppedHist` the history may be stopped at the end of
+follow-up. -/
+theorem obsWeightedHazard_ipcWeight (p : FiniteDist Ω) (k : ℕ) {Tobs : Ω → ℕ}
+    (hcons : ConsistentUntilSwitch Tobs T C) (hnuc : SwitchNUC p T C V L k)
+    (hpos : SwitchPositive p T C V L k) (hk : 0 < atRisk p.toMeasure T k) :
+    obsWeightedHazard p (observed Tobs C) (obsIpcWeight p (observed Tobs C) V L) k =
+      hazard p.toMeasure T k := by
+  rw [observed_eq_of_consistentUntilSwitch hcons, obsIpcWeight_observed,
+    obsWeightedHazard_observed]
+  exact (weightedHazard_ipcWeight p k hnuc hpos hk).2
+
+/-- **Observed-data identification of survival (Sec 3.2.1 of TSD 16).** Under the hypotheses of
+`obsWeightedHazard_ipcWeight`, the weighted product limit computed from the observed record
+equals the survival `P(T > k)` of the survival time without switching. -/
+theorem obsWeightedProductLimit_ipcWeight (p : FiniteDist Ω) (k : ℕ) {Tobs : Ω → ℕ}
+    (hcons : ConsistentUntilSwitch Tobs T C) (hnuc : SwitchNUC p T C V L k)
+    (hpos : SwitchPositive p T C V L k) (hk : 0 < atRisk p.toMeasure T k) :
+    obsWeightedProductLimit p (observed Tobs C) (obsIpcWeight p (observed Tobs C) V L) k =
+      survival p.toMeasure T k := by
+  rw [observed_eq_of_consistentUntilSwitch hcons, obsIpcWeight_observed,
+    obsWeightedProductLimit_observed]
+  exact (weightedProductLimit_ipcWeight p k hnuc hpos hk).2
+
+/-- The form of `obsWeightedHazard_ipcWeight` with the functionals of `weightedHazard` evaluated
+at the observed death time: `weightedHazard p Tobs C (ipcWeight p Tobs C V L) k` is the hazard
+of `T` at `k`. -/
+theorem weightedHazard_ipcWeight_of_consistent (p : FiniteDist Ω) (k : ℕ) {Tobs : Ω → ℕ}
+    (hcons : ConsistentUntilSwitch Tobs T C) (hnuc : SwitchNUC p T C V L k)
+    (hpos : SwitchPositive p T C V L k) (hk : 0 < atRisk p.toMeasure T k) :
+    weightedHazard p Tobs C (ipcWeight p Tobs C V L) k = hazard p.toMeasure T k := by
+  rw [ipcWeight_eq_of_consistentUntilSwitch hcons, weightedHazard_eq_of_consistentUntilSwitch hcons]
+  exact (weightedHazard_ipcWeight p k hnuc hpos hk).2
 
 end Measure
 
@@ -1040,6 +1567,104 @@ theorem not_identified_without_positivity :
   · rw [hazard_toMeasure, wmass_filter_p]
     simp [T']
 
+/-! ### No unmeasured confounding of the switch is untestable
+
+Write `ω = (u, v)`. Individuals with `u = true` switch at the end of interval `0`, the others
+are followed to time `2`; no covariates are recorded. In model A the survival time without
+switching is `1` if `v` and `2` otherwise, independent of switching. Model B differs only for
+the switchers, who would all die in interval `1`. -/
+
+/-- The switching time: `0` if `u`, `2` otherwise. -/
+def Cu (ω : Bool × Bool) : ℕ := if ω.1 then 0 else 2
+
+/-- Model A: the survival time without switching depends only on `v`. -/
+def TA (ω : Bool × Bool) : ℕ := if ω.2 then 1 else 2
+
+/-- Model B: the switchers would die in interval `1`; the others as in model A. -/
+def TB (ω : Bool × Bool) : ℕ := if ω.1 then 1 else TA ω
+
+theorem riskCell_Cu {T₀ : Bool × Bool → ℕ} (hT : ∀ ω, 0 < T₀ ω) (ω : Bool × Bool) :
+    riskCell T₀ Cu V L₀ 0 ω = univ := by
+  ext x; simp [hT x, V, L₀]
+
+theorem stayProb_Cu {T₀ : Bool × Bool → ℕ} (hT : ∀ ω, 0 < T₀ ω) (ω : Bool × Bool) :
+    stayProb p T₀ Cu V L₀ 0 ω = 1 / 2 := by
+  rw [stayProb, condProb, riskCell_Cu hT, univ_inter, uncensored, wmass_filter_p, wmass_p]
+  simp [Cu]
+  norm_num
+
+theorem switchPositive_Cu {T₀ : Bool × Bool → ℕ} (hT : ∀ ω, 0 < T₀ ω) :
+    SwitchPositive p T₀ Cu V L₀ 1 := by
+  intro j hj ω _ _ _
+  obtain rfl : j = 0 := by omega
+  rw [stayProb_Cu hT]
+  norm_num
+
+theorem TA_pos (ω : Bool × Bool) : 0 < TA ω := by unfold TA; split_ifs <;> omega
+
+theorem TB_pos (ω : Bool × Bool) : 0 < TB ω := by
+  unfold TB; split_ifs
+  · omega
+  · exact TA_pos ω
+
+/-- **No unmeasured confounding of the switch cannot be tested (Sec 3.2.1 of TSD 16).** Models
+A and B have the same artificially censored data, the same (empty) recorded history and the
+same mass function; one observed death time is consistent with both. Positivity holds in both,
+with stay probability `1/2`, and the at-risk probability at time `1` is positive in both. No
+unmeasured confounding of the switch holds in model A and fails in model B, and the hazards at
+time `1` differ (`1/2` and `3/4`). So the observed data cannot tell whether the condition
+holds: the inverse probability of censoring weighted hazard is `1/2` in both models, and it
+recovers the target only in model A. -/
+theorem switchNUC_untestable :
+    observed TA Cu = observed TB Cu ∧ ConsistentUntilSwitch TA TA Cu ∧
+      ConsistentUntilSwitch TA TB Cu ∧ SwitchPositive p TA Cu V L₀ 1 ∧
+      SwitchPositive p TB Cu V L₀ 1 ∧ SwitchNUC p TA Cu V L₀ 1 ∧ ¬ SwitchNUC p TB Cu V L₀ 1 ∧
+      0 < atRisk p.toMeasure TA 1 ∧ 0 < atRisk p.toMeasure TB 1 ∧
+      weightedHazard p TA Cu (ipcWeight p TA Cu V L₀) 1 = 1 / 2 ∧
+      weightedHazard p TB Cu (ipcWeight p TB Cu V L₀) 1 = 1 / 2 ∧
+      hazard p.toMeasure TA 1 = 1 / 2 ∧ hazard p.toMeasure TB 1 = 3 / 4 := by
+  have hobs : observed TA Cu = observed TB Cu := by funext ω; revert ω; decide
+  have hA : hazard p.toMeasure TA 1 = 1 / 2 := by
+    rw [hazard_toMeasure, wmass_filter_p, wmass_filter_p]
+    simp only [Fintype.sum_bool]
+    norm_num [TA]
+  have hB : hazard p.toMeasure TB 1 = 3 / 4 := by
+    rw [hazard_toMeasure, wmass_filter_p, wmass_filter_p]
+    simp only [Fintype.sum_bool]
+    norm_num [TA, TB]
+  have hrisk : ∀ T₀ : Bool × Bool → ℕ, (∀ ω, 0 < T₀ ω) → 0 < atRisk p.toMeasure T₀ 1 :=
+    fun T₀ hT => by
+      rw [atRisk_toMeasure]
+      exact wmass_pos_of_mem p.nonneg (ω := (false, false))
+        (by simp only [mem_filter, mem_univ, true_and]; exact hT _) (p_pos _)
+  have hnucA : SwitchNUC p TA Cu V L₀ 1 := by
+    intro j hj ω t
+    obtain rfl : j = 0 := by omega
+    rw [riskCell_Cu TA_pos]
+    by_cases ht : t = 1 ∨ t = 2
+    · rcases ht with rfl | rfl <;>
+        simp [MeanIndepOn, wsum, wmass, ev, sum_filter, Fintype.sum_prod_type, TA, Cu, p] <;>
+        simp only [show ∀ b : Bool, (univ.filter fun ω : Bool × Bool => ω.2 = b).card = 2 by
+          decide] <;>
+        norm_num
+    · have he : ev TA t = ∅ := by
+        refine eq_empty_iff_forall_notMem.2 fun x hx => ?_
+        rw [mem_ev] at hx
+        unfold TA at hx
+        split_ifs at hx <;> omega
+      rw [MeanIndepOn, he, inter_empty]
+      simp [wsum, wmass]
+  have h2 := (weightedHazard_ipcWeight p 1 hnucA (switchPositive_Cu TA_pos) (hrisk TA TA_pos)).2
+  rw [hA] at h2
+  have h2B : weightedHazard p TB Cu (ipcWeight p TB Cu V L₀) 1 = 1 / 2 := by
+    rw [← ipcWeight_eq_of_observed_eq hobs, ← weightedHazard_eq_of_observed_eq hobs, h2]
+  refine ⟨hobs, by unfold ConsistentUntilSwitch; decide, by unfold ConsistentUntilSwitch; decide,
+    switchPositive_Cu TA_pos, switchPositive_Cu TB_pos, hnucA, fun h => ?_, hrisk TA TA_pos,
+    hrisk TB TB_pos, h2, h2B, hA, hB⟩
+  have h1 := (weightedHazard_ipcWeight p 1 h (switchPositive_Cu TB_pos) (hrisk TB TB_pos)).2
+  rw [h2B, hB] at h1
+  norm_num at h1
+
 end Example
 
 namespace Example₂
@@ -1129,11 +1754,14 @@ theorem riskCell_Vt (j : ℕ) (hj : j < 2) (ω : Bool × Bool) :
     riskCell T C Vt L j ω = univ.filter fun x => x.1 = ω.1 := by
   interval_cases j <;> revert ω <;> decide
 
-/-- **The numerator must not contain a time-varying confounder (Sec 4.2.2 of TSD 24).** If the
-numerator of the stabilized weights conditions on the time-varying confounder `L 1`, no
-unmeasured confounding of the switch and positivity still hold, but the stabilized weights are
-all `1` (`stabilizedWeight_eq_one`) and the stabilized weighted hazard of the trial population
-at time `2` is the naive `1/3`, not the hazard `1/2`. -/
+/-- **A time-varying confounder in both weight models from time `0` (Sec 4.2.2 of TSD 24).**
+Here the confounder `L 1` is used as a baseline covariate `Vt`, so it enters the numerator and
+the denominator at every period, including period `0`, before it is measured. No unmeasured
+confounding of the switch and positivity still hold, but the stabilized weights are all `1`
+(`stabilizedWeight_eq_one_of_mem`) and the stabilized weighted hazard of the trial population
+at time `2` is the naive `1/3`, not the hazard `1/2`. The version with the denominator kept
+fixed and the confounder entering the numerator only from period `1` is
+`numerator_time_varying`. -/
 theorem numerator_with_time_varying_confounder :
     SwitchNUC p T C Vt L 2 ∧ SwitchPositive p T C Vt L 2 ∧
       weightedHazard p T C (stabilizedWeight p T C Vt L) 2 = 1 / 3 ∧
@@ -1161,6 +1789,29 @@ theorem numerator_with_time_varying_confounder :
   rw [← (two_period_ipcw).1, ← weightedHazard_one]
   refine weightedHazard_congr_mul _ _ 2 one_ne_zero fun ω hω _ => ?_
   rw [stabilizedWeight_eq_one p.nonneg 2 hni hpos (p_pos ω) hω, one_mul]
+
+/-- **The numerator must not contain a time-varying confounder (Sec 4.2.2 of TSD 24).** Keep
+the denominator of the weights fixed: no baseline covariates and the time-varying covariate
+`L`, for which no unmeasured confounding of the switch and positivity hold. With a numerator
+on the (empty) baseline covariates only, the stabilized weighted hazard at time `2` is the
+hazard `1/2`. With the time-varying covariate in the numerator, from period `1` on where it is
+measured (`L 0` is uninformative), the numerator equals the denominator, the weights are `1`
+on the risk set, and the stabilized weighted hazard is the naive `1/3`. -/
+theorem numerator_time_varying :
+    SwitchNUC p T C V L 2 ∧ SwitchPositive p T C V L 2 ∧
+      weightedHazard p T C (stabilizedWeightNum p T C V (fun _ _ => ()) V L) 2 = 1 / 2 ∧
+      weightedHazard p T C (stabilizedWeightNum p T C V L V L) 2 = 1 / 3 := by
+  have hω₀ : ((false, false) : Bool × Bool) ∈ riskSet T C 2 := by decide
+  have hc : 0 < ∏ j ∈ range 2, stayProb p T C V (fun _ _ => ()) j (false, false) :=
+    prod_pos fun j hj => stayProb_pos_of_mem_riskSet p.nonneg (mem_range.1 hj) (p_pos _) hω₀
+  refine ⟨switchNUC, switchPositive, ?_, ?_⟩
+  · rw [← (two_period_ipcw).2]
+    refine weightedHazard_congr_mul _ _ 2 hc.ne' fun ω _ _ => ?_
+    simp only [stabilizedWeightNum, ipcWeight, div_eq_mul_inv, prod_mul_distrib]
+    congr 1
+  · rw [← (two_period_ipcw).1, ← weightedHazard_one]
+    refine weightedHazard_congr_mul _ _ 2 one_ne_zero fun ω hω _ => ?_
+    rw [stabilizedWeightNum_self_eq_one p.nonneg 2 (p_pos ω) hω, one_mul]
 
 end Example₂
 

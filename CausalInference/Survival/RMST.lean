@@ -6,6 +6,7 @@ Authors: Adam R Sophie
 module
 
 public import CausalInference.Survival.Censoring
+public import CausalInference.Survival.IPCW
 public import Mathlib.MeasureTheory.Integral.Bochner.Set
 
 /-!
@@ -31,6 +32,12 @@ discrete-time setting of `CausalInference.Survival.Basic` (`S k = P(T > k)`).
 * `Survival.rmst_eq_sum_productLimit`: under independent censoring, with a positive at-risk
   probability at every `k < τ`, `RMST(τ)` is the sum of the product-limit functional of the
   observed-data law over `k < τ`. This is identification from the observed-data law.
+* `Survival.rmst_eq_sum_weightedProductLimit`, `Survival.rmst_eq_sum_obsWeightedProductLimit`:
+  under treatment switching, with no unmeasured confounding of the switch and positivity for
+  the periods before `τ - 1` and a positive at-risk probability `P(T ≥ k)` at every `k < τ`,
+  `RMST(τ)` of the survival time without switching is the sum over `k < τ` of the inverse
+  probability of censoring weighted product limit of `Survival.IPCW`; in the second form the
+  product limit is computed from the observed record under consistency up to the switch.
 * `Survival.RMSTExample.sum_productLimit_ne_rmst`: under dependent censoring the same sum
   misses `RMST(3)` in the model `CensoringExample.depModel` (`2.71` against `2.305`).
 
@@ -40,7 +47,8 @@ H. Bell Gorrod, N. R. Latimer, K. R. Abrams, *NICE DSU Technical Support Documen
 survival time estimates in the presence of treatment switching: an update to TSD 16* (2024),
 Section 3.1, last bullet: restricted mean survival time summarizes the survival benefit
 observed during the trial, and RMST adjusted for switching can be estimated from the adjusted or
-weighted survival times produced by the adjustment methods.
+weighted survival times produced by the adjustment methods. The weighted product limit is that
+of `CausalInference.Survival.IPCW` (TSD 16, Sec 3.2.1).
 The discrete-time setting is that of M. A. Hernán and J. M. Robins, *Causal Inference: What If*
 (2020), Chapter 17.
 -/
@@ -124,6 +132,47 @@ theorem rmst_eq_sum_productLimit [IsProbabilityMeasure μ] {C : Ω → ℕ} (hT 
     rmst μ T τ = ∑ k ∈ Finset.range τ, productLimit (μ.map (observed T C)) k :=
   Finset.sum_congr rfl fun k hk' =>
     (productLimit_map_observed_eq_survival hT hC hind k (hk k (Finset.mem_range.1 hk'))).symm
+
+section Switching
+
+open CausalInference.Longitudinal IPCW
+
+variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] [MeasurableSpace Ω] [MeasurableSingletonClass Ω]
+  {𝒱 𝓛 : Type*} [DecidableEq 𝒱] [DecidableEq 𝓛] {T C : Ω → ℕ} {V : Ω → 𝒱} {L : ℕ → Ω → 𝓛}
+
+/-- **Restricted mean survival time adjusted for switching (Sec 3.1 of TSD 24).** Under
+sequential no unmeasured confounding of the switch and positivity up to time `τ - 1`, and a
+positive at-risk probability `P(T ≥ k)` at every `k < τ`, the restricted mean survival time of
+the survival time without switching is the sum over `k < τ` of the inverse probability of
+censoring weighted product limit: `RMST(τ) = ∑_{k < τ} weightedProductLimit k`. The product
+limit at `k` uses the switching assumptions for the periods before `k` only, so `τ - 1`
+suffices. -/
+theorem rmst_eq_sum_weightedProductLimit (p : FiniteDist Ω) (τ : ℕ)
+    (hnuc : SwitchNUC p T C V L (τ - 1)) (hpos : SwitchPositive p T C V L (τ - 1))
+    (hk : ∀ k < τ, 0 < atRisk p.toMeasure T k) :
+    rmst p.toMeasure T τ =
+      ∑ k ∈ Finset.range τ, weightedProductLimit p T C (ipcWeight p T C V L) k :=
+  Finset.sum_congr rfl fun k hk' => by
+    have hkτ := Finset.mem_range.1 hk'
+    exact ((weightedProductLimit_ipcWeight p k (switchNUC_mono (by omega) hnuc)
+      (switchPositive_mono (by omega) hpos) (hk k hkτ)).2).symm
+
+/-- **Restricted mean survival time from the observed record.** Under consistency up to the
+switch of the observed death time `Tobs` and the hypotheses of
+`rmst_eq_sum_weightedProductLimit`, `RMST(τ)` of the survival time without switching is the sum
+over `k < τ` of the weighted product limit computed from the observed record
+`(min(Tobs, C), 1{Tobs ≤ C})`, the baseline covariates and the recorded history. -/
+theorem rmst_eq_sum_obsWeightedProductLimit (p : FiniteDist Ω) (τ : ℕ) {Tobs : Ω → ℕ}
+    (hcons : ConsistentUntilSwitch Tobs T C)
+    (hnuc : SwitchNUC p T C V L (τ - 1)) (hpos : SwitchPositive p T C V L (τ - 1))
+    (hk : ∀ k < τ, 0 < atRisk p.toMeasure T k) :
+    rmst p.toMeasure T τ = ∑ k ∈ Finset.range τ,
+      obsWeightedProductLimit p (observed Tobs C) (obsIpcWeight p (observed Tobs C) V L) k := by
+  rw [rmst_eq_sum_weightedProductLimit p τ hnuc hpos hk, observed_eq_of_consistentUntilSwitch hcons,
+    obsIpcWeight_observed]
+  exact Finset.sum_congr rfl fun k _ => (obsWeightedProductLimit_observed _ k).symm
+
+end Switching
 
 namespace RMSTExample
 
