@@ -32,9 +32,14 @@ variables, and the arrows into the counterfactual copy of `X` (including those f
   induced distribution is the law of `twinConfig M X x u` under the noise law of `M`.
 * `SCM.twin_dist_map_twinPair` (**twin network theorem**, Pearl 2009, section 7.1.4): the
   induced distribution of the twin model, marginalized to the two copies, is `cfJointDist`.
+* `SCM.counterfactualProb_eq_cond_cfJointDist`, `SCM.counterfactualProb_eq_cond_twin`: the
+  counterfactual probability `P(Q(V_x) | E)` is a conditional probability under the joint law
+  of the two worlds, and under the distribution of the twin model.
 * `SCM.condIndep_twinConfig_of_dSep`: a d-separation in the twin graph gives a conditional
   independence between noise, factual and counterfactual variables (global Markov property of
-  the twin model).
+  the twin model); `SCM.condIndepFun_twinConfig_of_dSep` states it for the corresponding
+  random variables of the noise, with any conditioning set (used with a nonempty one in
+  `SCM.chain_condIndepFun_cf_noise`).
 * `SCM.chain_condIndepFun_cf` (Pearl 2009, Figure 7.3): in every model on the chain
   `X → Z → Y`, `Y_x ⫫ X`. `SCM.TwinChainExample.chainModel_not_condIndepFun`: a concrete model
   in which `Y_x ⫫ X | Z` fails; `SCM.chain_twin_not_dSep` is the open path in the twin graph.
@@ -44,14 +49,18 @@ variables, and the arrows into the counterfactual copy of `X` (including those f
   independent, with the kernels as laws.
 * `SCM.condIndepFun_intervene_singleton_parents` (counterfactual reading of the back-door
   criterion, Pearl 2009, section 11.3.2, for the admissible set of parents): `V_x ⫫ X | PA_X`.
+  `SCM.condIndepFun_intervene_singleton_parents_family` and `..._pair`: the joint version for
+  a family of interventions, `(V_{x_k})_k ⫫ X | PA_X`, as in equation (11.4).
+* `SCM.isAncestor_of_solve_intervene_ne` (recursiveness, Pearl 2009, Definition 7.3.4):
+  counterfactual influence of `i` on `j` requires a directed path from `i` to `j`.
 * `FiniteDist.probOf_pi_and_of_indep`: under a product law, a coordinate is independent of every
   event that does not depend on it.
 
 The value and noise types `α` and `ε` live in one universe, because the twin model has both as
 value types.
 
-Sources: Balke and Pearl (1994); Pearl (2009), *Causality*, 2nd edition, sections 7.1.4, 7.3.2
-and 11.3.2.
+Sources: Balke and Pearl (1994); Pearl (2009), *Causality*, 2nd edition, sections 7.1.4, 7.3.1,
+7.3.2 and 11.3.2.
 -/
 
 @[expose] public section
@@ -285,6 +294,40 @@ theorem twin_dist_map_twinPair (M : SCM G α ε) (X : Finset V) (x : ∀ v, α v
   rw [twin_dist, FiniteDist.map_map]
   rfl
 
+omit [∀ v, DecidableEq (ε v)] in
+/-- The factual marginal of the joint law: the probability of factual evidence `E(V)` under
+`cfJointDist` is its probability `P_M(E)` under the observational distribution. -/
+theorem probOf_cfJointDist_fst (M : SCM G α ε) (X : Finset V) (x : ∀ v, α v)
+    (E : (∀ v, α v) → Prop) [DecidablePred E] :
+    (M.cfJointDist X x).probOf (fun p => E p.1) = M.dist.probOf E := by
+  rw [cfJointDist, FiniteDist.probOf_map, probOf_dist]
+
+omit [∀ v, DecidableEq (ε v)] in
+/-- **Counterfactual queries as conditional probabilities of the joint law** (Balke and Pearl
+1994; Pearl 2009, section 7.1.4): for factual evidence `E` of positive probability, the
+counterfactual probability `P(Q(V_x) | E)` computed by abduction, action and prediction is the
+conditional probability of `Q` on the counterfactual copy given `E` on the factual copy, under
+the joint law `cfJointDist` of the two worlds. -/
+theorem counterfactualProb_eq_cond_cfJointDist (M : SCM G α ε) (E : (∀ v, α v) → Prop)
+    [DecidablePred E] (hE : 0 < M.dist.probOf E) (X : Finset V) (x : ∀ v, α v)
+    (Q : (∀ v, α v) → Prop) [DecidablePred Q] :
+    M.counterfactualProb E hE X x Q = ((M.cfJointDist X x).cond (fun p => E p.1)
+      (by rwa [probOf_cfJointDist_fst])).probOf (fun p => Q p.2) := by
+  rw [FiniteDist.probOf_cond, probOf_cfJointDist_fst, counterfactualProb_eq, cfJointDist,
+    FiniteDist.probOf_map]
+
+/-- **Counterfactual queries in the twin network**: the counterfactual probability
+`P(Q(V_x) | E)` is the conditional probability, under the distribution induced by the twin
+model, of `Q` on the counterfactual copy given `E` on the factual copy. -/
+theorem counterfactualProb_eq_cond_twin (M : SCM G α ε) (E : (∀ v, α v) → Prop)
+    [DecidablePred E] (hE : 0 < M.dist.probOf E) (X : Finset V) (x : ∀ v, α v)
+    (Q : (∀ v, α v) → Prop) [DecidablePred Q] :
+    M.counterfactualProb E hE X x Q = ((M.twin X x).dist.cond (fun y => E (twinPair y).1)
+      (by rwa [← FiniteDist.probOf_map (M.twin X x).dist twinPair (fun p => E p.1),
+        twin_dist_map_twinPair, probOf_cfJointDist_fst])).probOf (fun y => Q (twinPair y).2) := by
+  rw [counterfactualProb_eq_cond_cfJointDist, FiniteDist.probOf_cond, FiniteDist.probOf_cond,
+    ← twin_dist_map_twinPair, FiniteDist.probOf_map, FiniteDist.probOf_map]
+
 /-- **d-separation in the twin graph gives counterfactual independence** (Pearl 2009,
 section 7.1.4): if `A` and `B` are d-separated by `C` in the twin graph, then, under the joint
 law of the noise, the factual solution and the counterfactual solution, the coordinates in `A`
@@ -295,6 +338,20 @@ theorem condIndep_twinConfig_of_dSep (M : SCM G α ε) (X : Finset V) (x : ∀ v
     (M.noiseDist.map (twinConfig M X x)).CondIndep A B C := by
   rw [← twin_dist]
   exact (M.twin X x).factorizes.condIndep_of_dSep (M.twin X x).acyclic h
+
+omit [∀ v, Fintype (α v)] in
+/-- **d-separation in the twin graph gives conditional independence of counterfactual random
+variables**: if `A` and `B` are d-separated by `C` in the twin graph (`C` may be any set, in
+particular a nonempty one), then under the noise law of `M` the twin-network coordinates in `A`
+and in `B`, as functions of the noise, are conditionally independent given those in `C`. -/
+theorem condIndepFun_twinConfig_of_dSep [∀ v, Finite (α v)] (M : SCM G α ε) (X : Finset V)
+    (x : ∀ v, α v) {A B C : Finset (V ⊕ V ⊕ V)} (h : (twinGraph G X).DSep ↑A ↑B ↑C) :
+    M.noiseDist.CondIndepFun (fun u => A.restrict (twinConfig M X x u))
+      (fun u => B.restrict (twinConfig M X x u)) (fun u => C.restrict (twinConfig M X x u)) :=
+  have : ∀ v, Fintype (α v) := fun _ => Fintype.ofFinite _
+  (FiniteDist.condIndepFun_map_iff M.noiseDist (twinConfig M X x) (A.restrict (π := twinVal α ε))
+    (B.restrict (π := twinVal α ε)) (C.restrict (π := twinVal α ε))).1
+    (condIndep_twinConfig_of_dSep M X x h)
 
 end SCM
 
@@ -343,6 +400,30 @@ theorem chain_twin_not_dSep :
       ↑({.inr (.inl 1)} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3)) := by
   simp only [coe_singleton]
   decide
+
+/-- In the twin graph of the chain `0 → 1 → 2` for an intervention on `0`, the factual `0` and the
+counterfactual `2*` are d-separated by the factual `1` together with its noise `U_1`: the collider
+at the factual `1` is opened, but the path `0 → 1 ← U_1 → 1* → 2*` is blocked at `U_1`. -/
+theorem chain_twin_dSep_noise :
+    (twinGraph chain {0}).DSep ↑({.inr (.inl 0)} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3))
+      ↑({.inr (.inr 2)} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3))
+      ↑({.inr (.inl 1), .inl 1} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3)) := by
+  simp only [coe_singleton, coe_insert]
+  decide
+
+omit [∀ v, Fintype (α v)] in
+/-- **`Y_x ⫫ X | Z, U_Z` in the chain**, through the twin network with a nonempty conditioning
+set: in every model on the chain `X → Z → Y` (vertices `0 → 1 → 2`), the counterfactual `Y_x`
+is conditionally independent of the factual `X` given the factual `Z` and its noise `U_Z`. Here
+the coordinates are those of the twin configuration (`twinConfig`). Without `U_Z` the
+independence fails (`TwinChainExample.chainModel_not_condIndepFun`). -/
+theorem chain_condIndepFun_cf_noise [∀ v, Finite (α v)] (M : SCM chain α ε) (x : ∀ v, α v) :
+    M.noiseDist.CondIndepFun
+      (fun u => ({.inr (.inl 0)} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3)).restrict (twinConfig M {0} x u))
+      (fun u => ({.inr (.inr 2)} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3)).restrict (twinConfig M {0} x u))
+      (fun u => ({.inr (.inl 1), .inl 1} : Finset (Fin 3 ⊕ Fin 3 ⊕ Fin 3)).restrict
+        (twinConfig M {0} x u)) :=
+  condIndepFun_twinConfig_of_dSep M {0} x chain_twin_dSep_noise
 
 omit [∀ v, Fintype (α v)] [∀ v, DecidableEq (ε v)] in
 /-- **`Y_x ⫫ X` in the chain** (Pearl 2009, section 7.1.4, Figure 7.3): in every model on the
@@ -458,8 +539,10 @@ theorem map_pi_map {κ' : ι → Type*} [∀ i, Fintype (κ' i)] [∀ i, Decidab
   rfl
 
 omit [∀ i, DecidableEq (κ i)] in
-/-- Changing one coordinate of an outcome changes its product mass by the ratio of the masses of
-the two values of that coordinate. -/
+/-- Cross-product identity for changing one coordinate of an outcome under a product law:
+`P(ω[i := a]) * p_i(ω i) = P(ω) * p_i(a)`. It holds unconditionally; when `p_i(ω i) = 0` both
+sides vanish and it says nothing about `P(ω[i := a])`, which may be positive. The ratio form,
+under `0 < p_i(ω i)`, is `pi_update_eq_div`. -/
 theorem pi_update_mul (p : ∀ i, FiniteDist (κ i)) (ω : ∀ i, κ i) (i : ι) (a : κ i) :
     pi p (Function.update ω i a) * p i (ω i) = pi p ω * p i a := by
   simp only [pi_apply]
@@ -471,6 +554,14 @@ theorem pi_update_mul (p : ∀ i, FiniteDist (κ i)) (ω : ∀ i, κ i) (i : ι)
       rw [Function.update_of_ne (by simpa using hj)]
   rw [this]
   ring
+
+omit [∀ i, DecidableEq (κ i)] in
+/-- Changing one coordinate of an outcome multiplies its product mass by the ratio of the masses
+of the two values of that coordinate: `P(ω[i := a]) = P(ω) * p_i(a) / p_i(ω i)`, when the
+original value has positive mass `0 < p_i(ω i)`. -/
+theorem pi_update_eq_div (p : ∀ i, FiniteDist (κ i)) (ω : ∀ i, κ i) (i : ι) (a : κ i)
+    (h : 0 < p i (ω i)) : pi p (Function.update ω i a) = pi p ω * p i a / p i (ω i) := by
+  rw [eq_div_iff h.ne', pi_update_mul]
 
 omit [∀ i, DecidableEq (κ i)] in
 /-- **Independence of one coordinate of a product law from the others**: if the event `E` does
@@ -663,7 +754,101 @@ theorem condIndepFun_intervene_singleton_parents [∀ v, Finite (α v)] (i : V) 
     simp only [Finset.restrict, hpar _ p, hupd]
   rw [hupd, hz]
 
+omit [∀ v, Fintype (α v)] in
+/-- **Joint counterfactual reading of the back-door criterion with the parents** (Pearl 2009,
+section 11.3.2 and equation (11.4), for the admissible set `Z = PA_X`): for any finite family
+of interventions `do(X := x k)` on a single vertex `X`, the whole family of counterfactual
+solutions `(V_{x k})_k`, computed at one shared noise value, is conditionally independent of the
+factual value of `X` given the factual values of the parents of `X`. This is a joint statement
+about all potential responses at once; it does not follow from the independences for each
+`k` separately. -/
+theorem condIndepFun_intervene_singleton_parents_family [∀ v, Finite (α v)] {κ : Type*}
+    [Fintype κ] (i : V) (x : κ → ∀ v, α v) :
+    M.noiseDist.CondIndepFun (fun u => M.solve u i) (fun u k => (M.intervene {i} (x k)).solve u)
+      (fun u => (G.parentsFinset i).restrict (M.solve u)) := by
+  classical
+  have : ∀ v, Fintype (α v) := fun v => Fintype.ofFinite _
+  have hpar : ∀ (u : ∀ v, ε v) (p : G.parentsFinset i) (y : ∀ v, α v),
+      M.solve u p = (M.intervene {i} y).solve u p := by
+    intro u p y
+    refine (M.solve_intervene_of_notMem_descendantsOf u fun h => ?_).symm
+    obtain ⟨s, hs, hsp⟩ := Digraph.mem_descendantsOf.1 h
+    rw [coe_singleton, Set.mem_singleton_iff] at hs
+    subst hs
+    exact M.acyclic s (Relation.TransGen.tail' hsp (Digraph.mem_parentsFinset.1 p.2))
+  have hupd : ∀ (u : ∀ v, ε v) (e : ε i),
+      (fun k => (M.intervene {i} (x k)).solve (Function.update u i e)) =
+        fun k => (M.intervene {i} (x k)).solve u :=
+    fun u e => funext fun k => M.solve_intervene_congr_noise (x k) fun v hv =>
+      Function.update_of_ne (fun h => hv (mem_singleton.2 h)) _ _
+  rw [FiniteDist.condIndepFun_iff_exists_mul]
+  refine ⟨fun a c => M.kernel i c a, fun b c => M.noiseDist.probOf
+    (fun u => (fun k => (M.intervene {i} (x k)).solve u) = b ∧
+      (G.parentsFinset i).restrict (M.solve u) = c), fun a b c => ?_⟩
+  rw [FiniteDist.probOf_congr _ (Q := fun u => M.f i c (u i) = a ∧
+      ((fun k => (M.intervene {i} (x k)).solve u) = b ∧
+        (G.parentsFinset i).restrict (M.solve u) = c))
+    fun u => by
+      rw [M.solve_eq u i]
+      constructor
+      · rintro ⟨h1, h2, h3⟩
+        exact ⟨h3 ▸ h1, h2, h3⟩
+      · rintro ⟨h1, h2, h3⟩
+        exact ⟨h3 ▸ h1, h2, h3⟩]
+  dsimp only
+  refine FiniteDist.probOf_pi_and_of_indep M.noise i (fun e => M.f i c e = a)
+    (fun u => (fun k => (M.intervene {i} (x k)).solve u) = b ∧
+      (G.parentsFinset i).restrict (M.solve u) = c)
+    fun u e => ?_
+  have hz : (G.parentsFinset i).restrict (M.solve (Function.update u i e)) =
+      (G.parentsFinset i).restrict (M.solve u) := by
+    funext p
+    simp only [Finset.restrict]
+    rw [hpar _ p (M.solve u), M.solve_intervene_congr_noise (M.solve u)
+      (u := Function.update u i e) (u' := u)
+      (fun v hv => Function.update_of_ne (fun h => hv (mem_singleton.2 h)) _ _),
+      ← hpar u p (M.solve u)]
+  rw [hupd, hz]
+
+omit [∀ v, Fintype (α v)] in
+/-- **The pair of potential responses is independent of the treatment given its parents**
+(Pearl 2009, section 11.3.2, equation (11.4), with `Z = PA_X`): for two interventions
+`do(X := x)` and `do(X := x')` on a single vertex `X`, the pair `(V_x, V_{x'})` of counterfactual
+solutions at one noise value is conditionally independent of the factual `X` given `PA_X`. -/
+theorem condIndepFun_intervene_singleton_parents_pair [∀ v, Finite (α v)] (i : V)
+    (x x' : ∀ v, α v) :
+    M.noiseDist.CondIndepFun (fun u => M.solve u i)
+      (fun u => ((M.intervene {i} x).solve u, (M.intervene {i} x').solve u))
+      (fun u => (G.parentsFinset i).restrict (M.solve u)) := by
+  have : ∀ v, Fintype (α v) := fun v => Fintype.ofFinite _
+  exact (M.condIndepFun_intervene_singleton_parents_family i (fun k : Bool => if k then x else x')
+    ).of_right (fun f => (f true, f false)) fun u => by simp
+
 end Restrictions
+
+section Influence
+
+variable {V : Type*} [Fintype V] [DecidableEq V] {G : Digraph V} [DecidableRel G.Adj]
+  {α : V → Type*} {ε : V → Type*} [∀ v, Fintype (ε v)] (M : SCM G α ε)
+
+/-- **Counterfactual influence requires a directed path** (Pearl 2009, section 7.3.1 and
+Definition 7.3.4, recursiveness): for distinct vertices `i` and `j`, a further intervention
+`do(i := x)` on top of any intervention `do(W := w)` can change the value of `j` only if `i` is
+a proper ancestor of `j` in the graph of the model: `j_{x, w}(u) ≠ j_w(u)` implies `i ⇝ j`.
+Since the graph is acyclic, the relation of counterfactual influence has no cycles. The graph
+of the model may have edges along which nothing is transmitted; the converse fails. -/
+theorem isAncestor_of_solve_intervene_ne {i j : V} (hij : i ≠ j) (W : Finset V)
+    (w x : ∀ v, α v) (u : ∀ v, ε v)
+    (h : ((M.intervene W w).intervene {i} x).solve u j ≠ (M.intervene W w).solve u j) :
+    G.IsAncestor i j := by
+  by_contra hanc
+  refine h ((M.intervene W w).solve_intervene_of_notMem_descendantsOf u ?_)
+  rw [coe_singleton]
+  exact notMem_descendantsOf_singleton hij fun h' =>
+    hanc (Relation.TransGen.mono (r := (G.deleteIncoming (W : Set V)).Adj) (p := G.Adj)
+      (fun _ _ hab => hab.1) i j h')
+
+end Influence
 
 end SCM
 

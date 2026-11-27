@@ -20,18 +20,26 @@ a fixed noise value, with a decidable checker, and the standard examples checked
   times; `SCM.iterSolve_eq` proves it is `M.solve u`. Unlike `SCM.solve` (well-founded
   recursion), it reduces in the kernel, which makes the checkers below usable by `decide`.
 * `HPCause.AC1`, `HPCause.AC2`, `HPCause.IsActualCause`, `HPCause.Sustains`: the definitions on
-  an abstract response function `R`, where `R S s` is the world after `do(S := s)`. They are
-  decidable when all value types are finite with decidable equality and the effect is a
-  decidable predicate.
+  an abstract response function `R`, where `R S s` is the world after `do(S := s)`. Every
+  assignment passed to `R S` agrees with the actual world off `S` (`HPCause.assign`), so only
+  the values on the intervened set matter. Sustenance requires the contingency set `W` to be
+  disjoint from `X`. They are decidable when all value types are finite with decidable
+  equality and the effect is a decidable predicate.
 * `SCM.IsActualCause M u X x φ`, `SCM.Sustains M u X x W φ`: the definitions for the world
   `(M, u)`, with `R S s = (M.intervene S s).solve u`. The effect `φ` is any decidable property
   of the configuration (an event `Y = y`, or a Boolean combination as in Pearl's remarks on
-  multivariate events).
+  multivariate events). Both are decidable, through the iterated solver, so `decide` applies
+  to them directly.
 
 ## Main results
 
 * `HPCause.isActualCause_singleton_iff`, `SCM.isActualCause_singleton_iff`: for a single cause,
-  the minimality condition AC3 is automatic.
+  the minimality condition AC3 is automatic. `HPCause.not_isActualCause_empty`: the empty set
+  is never an actual cause, for any response function.
+* `HPCause.sustainsOverlapping_iff`, `Overlap.sustainsOverlapping_self`: the reading of
+  sustenance without disjointness is sustenance relative to `W \ X`; in the model `Y := X` it
+  accepts the contingency set `W = {X}`, which `SCM.Sustains` rejects (the joint intervention of
+  Definition 10.2.1 presupposes disjointness).
 * Desert traveler (Pearl 2009, Example 10.1.1): the shot is an actual cause of death, the poison
   is not (exhaustive search), the shot is not a but-for cause; both sustain death relative to
   suitable contingencies, which illustrates the caution of section 10.2.
@@ -148,16 +156,24 @@ with `x` on `X`, and satisfies the effect `φ`. -/
 def AC1 (actual : ∀ v, α v) (X : Finset V) (x : ∀ v, α v) (φ : (∀ v, α v) → Prop) : Prop :=
   (∀ v ∈ X, actual v = x v) ∧ φ actual
 
+/-- The assignment that agrees with `s` on the intervention set `S` and with the actual
+configuration `actual` off `S`. Every intervention below passes through it, so a response
+function is only ever evaluated at assignments that carry no information off the intervened
+set: the definitions do not depend on what `R S s` does with the values of `s` off `S`. -/
+def assign (actual : ∀ v, α v) (S : Finset V) (s : ∀ v, α v) : ∀ v, α v :=
+  fun v => if v ∈ S then s v else actual v
+
 /-- **AC2** of Halpern and Pearl (2005), on a response function `R`, where `R S s` is the world
-after the intervention `do(S := s)` (only the values of `s` on `S` matter). There is a set `W`
-disjoint from `X` (its complement is `Z ⊇ X`) and a configuration `c`, carrying an alternative
-setting `x'` of `X` and a contingency `w` of `W`, such that
+after the intervention `do(S := s)`. Only the values of the assignment on `S` are used: off `S`
+it carries the actual values (`assign`). There is a set `W` disjoint from `X` (its complement is
+`Z ⊇ X`) and a configuration `c`, carrying an alternative setting `x'` of `X` and a contingency
+`w` of `W`, such that
 (a) under `do(X := x', W := w)` the effect `φ` fails, and
 (b) for every `W' ⊆ W` and every `Z' ⊆ Z`, under `do(X := x, W' := w, Z' := z*)`, where `z*` are
 the actual values, the effect `φ` holds. -/
 def AC2 (R : Finset V → (∀ v, α v) → (∀ v, α v)) (actual : ∀ v, α v) (X : Finset V)
     (x : ∀ v, α v) (φ : (∀ v, α v) → Prop) : Prop :=
-  ∃ W : Finset V, Disjoint X W ∧ ∃ c : ∀ v, α v, ¬ φ (R (X ∪ W) c) ∧
+  ∃ W : Finset V, Disjoint X W ∧ ∃ c : ∀ v, α v, ¬ φ (R (X ∪ W) (assign actual (X ∪ W) c)) ∧
     ∀ W' : Finset V, W' ⊆ W → ∀ Z' : Finset V, Z' ⊆ Wᶜ →
       φ (R (X ∪ W' ∪ Z') fun v => if v ∈ W' then c v else if v ∈ X then x v else actual v)
 
@@ -171,12 +187,25 @@ def IsActualCause (R : Finset V → (∀ v, α v) → (∀ v, α v)) (actual : �
     ∀ X' : Finset V, X' ⊂ X → ¬ (AC1 actual X' x φ ∧ AC2 R actual X' x φ)
 
 /-- **Sustenance** (Pearl 2009, Definition 10.2.1): `X = x` causally sustains the effect `φ`
-relative to contingencies in `W`: (i), (ii) cause and effect hold actually; (iii) with `X` set to
-`x`, the effect holds under every setting of `W`; (iv) some alternative setting `x'` of `X`
-(differing from `x` somewhere on `X`) together with some setting of `W` makes the effect fail.
-The configuration `c` in (iv) carries both `x'` and the setting of `W`. -/
+relative to contingencies in `W`, a set disjoint from `X` (otherwise the joint intervention
+`do(X := x, W := w)` of (iii) would assign two values to the vertices of `X ∩ W`): (i), (ii)
+cause and effect hold actually; (iii) with `X` set to `x`, the effect holds under every setting
+of `W`; (iv) some alternative setting `x'` of `X` (differing from `x` somewhere on `X`) together
+with some setting of `W` makes the effect fail. The configuration `c` in (iv) carries both `x'`
+and the setting of `W`. Off `X ∪ W` the assignments carry the actual values (`assign`). -/
 def Sustains (R : Finset V → (∀ v, α v) → (∀ v, α v)) (actual : ∀ v, α v) (X : Finset V)
     (x : ∀ v, α v) (W : Finset V) (φ : (∀ v, α v) → Prop) : Prop :=
+  Disjoint X W ∧ AC1 actual X x φ ∧
+    (∀ w : ∀ v, α v, φ (R (X ∪ W) (assign actual (X ∪ W) fun v => if v ∈ X then x v else w v))) ∧
+    ∃ c : ∀ v, α v, (∃ v ∈ X, c v ≠ x v) ∧ ¬ φ (R (X ∪ W) (assign actual (X ∪ W) c))
+
+/-- The reading of Definition 10.2.1 without the disjointness of `X` and `W`, in which a vertex
+of `X ∩ W` silently takes its value from `x` and the contingency assignment there is discarded.
+It is recorded only to show what disjointness changes: by `sustainsOverlapping_iff` it is
+sustenance relative to `W \ X`, so it accepts contingency sets that Definition 10.2.1 does not
+make sense of (`Overlap.sustainsOverlapping_self`). -/
+def SustainsOverlapping (R : Finset V → (∀ v, α v) → (∀ v, α v)) (actual : ∀ v, α v)
+    (X : Finset V) (x : ∀ v, α v) (W : Finset V) (φ : (∀ v, α v) → Prop) : Prop :=
   AC1 actual X x φ ∧ (∀ w : ∀ v, α v, φ (R (X ∪ W) fun v => if v ∈ X then x v else w v)) ∧
     ∃ c : ∀ v, α v, (∃ v ∈ X, c v ≠ x v) ∧ ¬ φ (R (X ∪ W) c)
 
@@ -189,7 +218,8 @@ instance : Decidable (AC1 actual X x φ) :=
 
 instance : Decidable (AC2 R actual X x φ) :=
   inferInstanceAs (Decidable (∃ W : Finset V, Disjoint X W ∧ ∃ c : ∀ v, α v,
-    ¬ φ (R (X ∪ W) c) ∧ ∀ W' : Finset V, W' ⊆ W → ∀ Z' : Finset V, Z' ⊆ Wᶜ →
+    ¬ φ (R (X ∪ W) (assign actual (X ∪ W) c)) ∧ ∀ W' : Finset V, W' ⊆ W → ∀ Z' : Finset V,
+      Z' ⊆ Wᶜ →
       φ (R (X ∪ W' ∪ Z') fun v => if v ∈ W' then c v else if v ∈ X then x v else actual v)))
 
 instance : Decidable (IsActualCause R actual X x φ) :=
@@ -197,31 +227,52 @@ instance : Decidable (IsActualCause R actual X x φ) :=
     ∀ X' : Finset V, X' ⊂ X → ¬ (AC1 actual X' x φ ∧ AC2 R actual X' x φ)))
 
 instance (W : Finset V) : Decidable (Sustains R actual X x W φ) :=
-  inferInstanceAs (Decidable (AC1 actual X x φ ∧
-    (∀ w : ∀ v, α v, φ (R (X ∪ W) fun v => if v ∈ X then x v else w v)) ∧
-    ∃ c : ∀ v, α v, (∃ v ∈ X, c v ≠ x v) ∧ ¬ φ (R (X ∪ W) c)))
+  inferInstanceAs (Decidable (Disjoint X W ∧ AC1 actual X x φ ∧
+    (∀ w : ∀ v, α v, φ (R (X ∪ W) (assign actual (X ∪ W) fun v => if v ∈ X then x v else w v))) ∧
+    ∃ c : ∀ v, α v, (∃ v ∈ X, c v ≠ x v) ∧ ¬ φ (R (X ∪ W) (assign actual (X ∪ W) c))))
 
 omit [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)] [DecidablePred φ] in
-/-- The empty set never satisfies AC2, provided the response to an intervention depends only on
-the values assigned to the intervened set: AC2(a) and AC2(b) with `W' = W`, `Z' = ∅` contradict
-each other. -/
-theorem not_ac2_empty (hR : ∀ S s s', (∀ v ∈ S, s v = s' v) → R S s = R S s') :
-    ¬ AC2 R actual ∅ x φ := by
+/-- The empty set never satisfies AC2, for any response function: AC2(a) and AC2(b) with
+`W' = W`, `Z' = ∅` evaluate `R` at the same intervention and contradict each other. -/
+theorem not_ac2_empty : ¬ AC2 R actual ∅ x φ := by
   rintro ⟨W, -, c, ha, hb⟩
   refine ha ?_
   have := hb W subset_rfl ∅ (empty_subset _)
-  rw [empty_union]
-  rwa [empty_union, union_empty, hR W _ c fun v hv => by simp [hv]] at this
+  simp only [empty_union, union_empty, notMem_empty, ite_false] at this ⊢
+  exact this
+
+omit [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)] [DecidablePred φ] in
+/-- **The empty set is never an actual cause**, for any response function `R`, even one that
+reads the assignment off the intervention set (such as `R S s = s`): the response is only
+evaluated at assignments that agree with the actual world off the intervened set. -/
+theorem not_isActualCause_empty : ¬ IsActualCause R actual ∅ x φ :=
+  fun h => not_ac2_empty R actual x φ h.2.1
 
 omit [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)] [DecidablePred φ] in
 /-- For a single cause, minimality (AC3) is automatic: `X = {i}` is an actual cause exactly when
 AC1 and AC2 hold. -/
-theorem isActualCause_singleton_iff (hR : ∀ S s s', (∀ v ∈ S, s v = s' v) → R S s = R S s')
-    (i : V) : IsActualCause R actual {i} x φ ↔ AC1 actual {i} x φ ∧ AC2 R actual {i} x φ := by
+theorem isActualCause_singleton_iff (i : V) :
+    IsActualCause R actual {i} x φ ↔ AC1 actual {i} x φ ∧ AC2 R actual {i} x φ := by
   refine ⟨fun h => ⟨h.1, h.2.1⟩, fun h => ⟨h.1, h.2, fun X' hX' h' => ?_⟩⟩
   rw [ssubset_singleton_iff] at hX'
   subst hX'
-  exact not_ac2_empty R actual x φ hR h'.2
+  exact not_ac2_empty R actual x φ h'.2
+
+omit [Fintype V] [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)] [DecidablePred φ] in
+/-- **What disjointness changes in sustenance**: for a response function that depends only on
+the values assigned to the intervened set, the reading without disjointness relative to `W` is
+sustenance relative to `W \ X`. So it never gives a verdict that some disjoint contingency set
+does not give, but it accepts sets `W` that meet `X`, for which the intervention
+`do(X := x, W := w)` of Definition 10.2.1 is not defined. -/
+theorem sustainsOverlapping_iff (hR : ∀ S s s', (∀ v ∈ S, s v = s' v) → R S s = R S s')
+    (W : Finset V) :
+    SustainsOverlapping R actual X x W φ ↔ Sustains R actual X x (W \ X) φ := by
+  have hU : X ∪ W \ X = X ∪ W := union_sdiff_self_eq_union
+  simp only [SustainsOverlapping, Sustains, hU, disjoint_sdiff, true_and]
+  refine and_congr Iff.rfl (and_congr (forall_congr' fun w => ?_) (exists_congr fun c => ?_))
+  · rw [hR (X ∪ W) (assign actual (X ∪ W) fun v => if v ∈ X then x v else w v)
+      (fun v => if v ∈ X then x v else w v) fun v hv => by simp [assign, hv]]
+  · rw [hR (X ∪ W) (assign actual (X ∪ W) c) c fun v hv => by simp [assign, hv]]
 
 end HPCause
 
@@ -263,7 +314,7 @@ theorem isActualCause_singleton_iff (u : ∀ v, ε v) (y₀ : ∀ v, α v) (i : 
       HPCause.AC1 (M.iterSolve u y₀) {i} x φ ∧
         HPCause.AC2 (fun S s => (M.intervene S s).iterSolve u y₀) (M.iterSolve u y₀) {i} x φ
     := by
-  rw [IsActualCause, HPCause.isActualCause_singleton_iff _ _ _ _ (M.response_congr u)]
+  rw [IsActualCause, HPCause.isActualCause_singleton_iff]
   simp only [iterSolve_eq]
   rfl
 
@@ -280,7 +331,55 @@ theorem sustains_iff_iterSolve (u : ∀ v, ε v) (y₀ : ∀ v, α v) (X : Finse
   simp only [Sustains, iterSolve_eq]
   rfl
 
+variable [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)]
+
+/-- Actual causation in a finite structural model is decidable, through the iterated solver
+seeded with the configuration `x` (`isActualCause_iff_iterSolve`); `decide` evaluates it. -/
+instance (u : ∀ v, ε v) (X : Finset V) (x : ∀ v, α v) (φ : (∀ v, α v) → Prop)
+    [DecidablePred φ] : Decidable (M.IsActualCause u X x φ) :=
+  decidable_of_iff _ (M.isActualCause_iff_iterSolve u x X x φ).symm
+
+/-- Sustenance in a finite structural model is decidable, through the iterated solver seeded
+with the configuration `x` (`sustains_iff_iterSolve`); `decide` evaluates it. -/
+instance (u : ∀ v, ε v) (X : Finset V) (x : ∀ v, α v) (W : Finset V) (φ : (∀ v, α v) → Prop)
+    [DecidablePred φ] : Decidable (M.Sustains u X x W φ) :=
+  decidable_of_iff _ (M.sustains_iff_iterSolve u x X x W φ).symm
+
 end SCM
+
+/-! ### Why the contingency set is disjoint from the cause -/
+
+namespace Overlap
+
+open GraphExamples
+
+/-- The model `Y := X` on the chain `0 → 1 → 2` (the vertex `2` is a copy of its noise): `X = 0`
+is read off the noise and `Y = 1` copies it. -/
+noncomputable def model : SCM chain (fun _ => Bool) (fun _ => Bool) where
+  acyclic := by decide
+  f v z e := if h : v = 1 then z ⟨0, by subst h; exact Digraph.mem_parentsFinset.2 rfl⟩ else e
+  noise _ := FiniteDist.uniform
+
+/-- The actual world: `X = 1`. -/
+def world : Fin 3 → Bool := fun _ => true
+
+/-- **The reading without disjointness accepts `W = {X}`**: in the model `Y := X` with
+`X = 1`, it declares that `X = 1` sustains `Y = 1` relative to the contingency set `{X}`; the
+contingency setting `X = 0` in (iii) is discarded in favor of `X = 1`. `SCM.Sustains`, which
+requires `W` disjoint from `X` (the joint intervention `do(X := x, W := w)` of Definition 10.2.1
+presupposes it), rejects this contingency set; the verdict of the reading without disjointness
+is that of the empty contingency set (`HPCause.sustainsOverlapping_iff`). -/
+theorem sustainsOverlapping_self :
+    HPCause.SustainsOverlapping (model.response world) (model.solve world) {0} (fun _ => true)
+        {0} (fun y => y 1 = true) ∧
+      ¬ model.Sustains world {0} (fun _ => true) {0} (fun y => y 1 = true) ∧
+      model.Sustains world {0} (fun _ => true) ∅ (fun y => y 1 = true) := by
+  have h : model.Sustains world {0} (fun _ => true) ∅ (fun y => y 1 = true) := by decide +kernel
+  refine ⟨?_, fun h' => absurd h'.1 (by decide), h⟩
+  rw [HPCause.sustainsOverlapping_iff _ _ _ _ _ (model.response_congr world), sdiff_self]
+  exact h
+
+end Overlap
 
 /-! ### The desert traveler -/
 
@@ -401,7 +500,6 @@ theorem first_isActualCause :
 /-- `A₂ = true` is an actual cause of `E = true`, with the contingency `A₁ = false`. -/
 theorem second_isActualCause :
     model.IsActualCause world {1} (fun _ => true) (fun y => y 2 = true) := by
-  rw [model.isActualCause_singleton_iff world (fun _ => false)]
   decide +kernel
 
 end Disjunctive
