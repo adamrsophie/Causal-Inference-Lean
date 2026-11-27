@@ -152,3 +152,5 @@ public import CausalInference.Survival.RMST
 public import CausalInference.Measures.Aggregation
 public import CausalInference.Measures.NumberNeededToTreat
 public import CausalInference.BiasAnalysis.EcologicalBias
+public import CausalInference.Survival.HazardRatio
+public import CausalInference.Bias.HazardMixture
