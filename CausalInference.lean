@@ -163,3 +163,4 @@ public import CausalInference.BiasAnalysis.BiasedEstimates
 public import CausalInference.StructuralNested.FailureTime
 public import CausalInference.StructuralNested.RPSFTM
 public import CausalInference.StructuralNested.RPSFTMCounterexamples
+public import CausalInference.StructuralNested.IPE
