@@ -26,7 +26,8 @@ outcomes (`log E[Y]`, not `E[log Y]`), and every mean entering a logarithm is as
 ## Main definitions
 
 * `DiDScale.AdditiveParallel`, `DiDScale.LogParallel`, `DiDScale.LogitParallel`: parallel trends
-  of four means on the additive, log, and logit scales.
+  of four means on the additive, log, and logit scales; the log and logit predicates include
+  their domain conditions (positive means, means in `(0, 1)`).
 * `DiDScale.LogParallelTrends`: log-scale parallel trends of untreated means in the two by two
   model.
 * `DiDScale.ratioDid`: the observed estimand of the ATT under log-scale parallel trends,
@@ -65,16 +66,22 @@ namespace DiDScale
 /-- **Additive parallel trends** of untreated means: `a₁ - a₀ = b₁ - b₀`. -/
 def AdditiveParallel (a₀ a₁ b₀ b₁ : ℝ) : Prop := a₁ - a₀ = b₁ - b₀
 
-/-- **Log-scale parallel trends** of untreated means: `log a₁ - log a₀ = log b₁ - log b₀`.
-Meaningful for positive means only. -/
-def LogParallel (a₀ a₁ b₀ b₁ : ℝ) : Prop := Real.log a₁ - Real.log a₀ = Real.log b₁ - Real.log b₀
+/-- **Log-scale parallel trends** of untreated means: the four means are positive and
+`log a₁ - log a₀ = log b₁ - log b₀`. The positivity conditions are part of the predicate, so it
+never holds through Lean's convention `Real.log 0 = 0`. -/
+def LogParallel (a₀ a₁ b₀ b₁ : ℝ) : Prop :=
+  0 < a₀ ∧ 0 < a₁ ∧ 0 < b₀ ∧ 0 < b₁ ∧
+    Real.log a₁ - Real.log a₀ = Real.log b₁ - Real.log b₀
 
 /-- The logit `log (p / (1 - p))`, meaningful for `0 < p < 1`. -/
 noncomputable def logit (p : ℝ) : ℝ := Real.log (p / (1 - p))
 
-/-- **Logit-scale parallel trends** of untreated means (probabilities):
-`logit a₁ - logit a₀ = logit b₁ - logit b₀`. -/
-def LogitParallel (a₀ a₁ b₀ b₁ : ℝ) : Prop := logit a₁ - logit a₀ = logit b₁ - logit b₀
+/-- **Logit-scale parallel trends** of untreated means (probabilities): the four means lie in
+`(0, 1)` and `logit a₁ - logit a₀ = logit b₁ - logit b₀`. The range conditions are part of the
+predicate, so it never holds through the totalized logits at `0` and `1`. -/
+def LogitParallel (a₀ a₁ b₀ b₁ : ℝ) : Prop :=
+  a₀ ∈ Set.Ioo 0 1 ∧ a₁ ∈ Set.Ioo 0 1 ∧ b₀ ∈ Set.Ioo 0 1 ∧ b₁ ∈ Set.Ioo 0 1 ∧
+    logit a₁ - logit a₀ = logit b₁ - logit b₀
 
 /-- For positive means, log-scale parallel trends says the ratios agree,
 `a₁ / a₀ = b₁ / b₀`, written without division as `a₁ b₀ = b₁ a₀`. -/
@@ -82,11 +89,12 @@ theorem logParallel_iff_mul {a₀ a₁ b₀ b₁ : ℝ} (ha₀ : 0 < a₀) (ha�
     (hb₁ : 0 < b₁) : LogParallel a₀ a₁ b₀ b₁ ↔ a₁ * b₀ = b₁ * a₀ := by
   rw [LogParallel, ← Real.log_div ha₁.ne' ha₀.ne', ← Real.log_div hb₁.ne' hb₀.ne']
   constructor
-  · intro h
+  · rintro ⟨-, -, -, -, h⟩
     have := Real.log_injOn_pos (div_pos ha₁ ha₀) (div_pos hb₁ hb₀) h
     field_simp at this
     linarith
   · intro h
+    refine ⟨ha₀, ha₁, hb₀, hb₁, ?_⟩
     congr 1
     field_simp
     linarith
@@ -129,7 +137,8 @@ theorem logit_example :
     AdditiveParallel 0.2 0.3 0.7 0.8 ∧ LogitParallel 0.2 0.3 0.7 0.8 ∧ (0.3 : ℝ) ≠ 0.2 ∧
       (0.2 : ℝ) ≠ 0.7 := by
   refine ⟨by norm_num [AdditiveParallel], ?_, by norm_num, by norm_num⟩
-  rw [LogitParallel, logit, logit, logit, logit, ← Real.log_div (by norm_num) (by norm_num),
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, ?_⟩
+  rw [logit, logit, logit, logit, ← Real.log_div (by norm_num) (by norm_num),
     ← Real.log_div (by norm_num) (by norm_num)]
   norm_num
 
@@ -139,8 +148,8 @@ open TwoPeriod TwoPeriod.Period
 
 variable {Ω : Type*} [MeasurableSpace Ω]
 
-/-- **Log-scale parallel trends** in the two by two model: the untreated means satisfy
-`log E[Y post 0 | G = 1] - log E[Y pre 0 | G = 1]
+/-- **Log-scale parallel trends** in the two by two model: the four untreated means are
+positive and satisfy `log E[Y post 0 | G = 1] - log E[Y pre 0 | G = 1]
   = log E[Y post 0 | G = 0] - log E[Y pre 0 | G = 0]`. -/
 def LogParallelTrends (μ : Measure Ω) (G : Ω → Bool) (Y : Period → Bool → Ω → ℝ) : Prop :=
   LogParallel (∫ ω, Y pre false ω ∂μ[|treated G]) (∫ ω, Y post false ω ∂μ[|treated G])
@@ -166,21 +175,18 @@ noncomputable def ratioDid (μ : Measure Ω) (G : Ω → Bool) (Yobs : Period �
       (∫ ω, Yobs pre ω ∂μ[|control G])
 
 /-- **Identification of the ATT under log-scale parallel trends.** Under consistency, no
-anticipation, and log-scale parallel trends of untreated means, with the four untreated means
-positive and the treatment-period potential outcomes integrable given `G = 1`, the ATT equals
-`ratioDid`: the treated group's untreated mean in the treatment period is its pre-period mean
-scaled by the comparison group's growth factor. Positivity of the means also makes both groups
-non-null. -/
+anticipation, and log-scale parallel trends of untreated means (which include positivity of the
+four untreated means), with the treatment-period potential outcomes integrable given `G = 1`,
+the ATT equals `ratioDid`: the treated group's untreated mean in the treatment period is its
+pre-period mean scaled by the comparison group's growth factor. Positivity of the means also
+makes both groups non-null. -/
 theorem att_eq_ratioDid {μ : Measure Ω} {G : Ω → Bool} {Y : Period → Bool → Ω → ℝ}
     {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G)) (hcons : Consistency G Y Yobs)
     (hNA : NoAnticipation μ G Y) (hLPT : LogParallelTrends μ G Y)
-    (hT0pre : 0 < ∫ ω, Y pre false ω ∂μ[|treated G])
-    (hT0post : 0 < ∫ ω, Y post false ω ∂μ[|treated G])
-    (hC0pre : 0 < ∫ ω, Y pre false ω ∂μ[|control G])
-    (hC0post : 0 < ∫ ω, Y post false ω ∂μ[|control G])
     (hT1 : Integrable (Y post true) μ[|treated G]) (hT0 : Integrable (Y post false) μ[|treated G]) :
     att μ G Y = ratioDid μ G Yobs := by
   have hC : MeasurableSet (control G) := control_eq_compl G ▸ hG.compl
+  obtain ⟨hT0pre, hT0post, hC0pre, hC0post, -⟩ := id hLPT
   have hmul := (logParallel_iff_mul hT0pre hT0post hC0pre hC0post).mp hLPT
   have eT : ∀ t, ∫ ω, Yobs t ω ∂μ[|treated G] = ∫ ω, Y t true ω ∂μ[|treated G] := fun t =>
     DiD.integral_cond_congr hG fun ω hω => by rw [hcons, show G ω = true from hω]

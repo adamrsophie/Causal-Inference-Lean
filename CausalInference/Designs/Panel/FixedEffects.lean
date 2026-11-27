@@ -9,6 +9,8 @@ public import Mathlib.Probability.Moments.Covariance
 public import Mathlib.Probability.Moments.Variance
 public import Mathlib.MeasureTheory.Function.ConditionalExpectation.PullOut
 public import Mathlib.Probability.UniformOn
+public import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
+public import Mathlib.Analysis.Real.Sqrt
 
 /-!
 # Linear panel models: fixed effects, first differences, pooled and random effects slopes
@@ -29,7 +31,12 @@ ratio of covariances; sampling and consistency are not treated here.
   mean form `E[ε t | D, α] = 0`.
 * `LinearPanel.fdSlope` (first differences over any finite set of period pairs),
   `LinearPanel.quasiSlope` (quasi-demeaning `X t - θ X̄`), `LinearPanel.withinSlope` (`θ = 1`),
-  `LinearPanel.pooledSlope` (`θ = 0`). All slopes are pooled over periods with period dummies.
+  `LinearPanel.pooledSlope` (`θ = 0`). These slopes are pooled over periods with period dummies.
+* `LinearPanel.ordinarySlope`: the ordinary pooled least squares slope of the stacked data with
+  a single intercept (no period dummies), `LinearPanel.stackedCov`, `LinearPanel.grandMean`.
+* `LinearPanel.compoundSymmetric` (the composite error covariance `σε² I + σα² 1 1ᵀ`),
+  `LinearPanel.periodAverage` (the matrix `1 1ᵀ / T`), `LinearPanel.reTheta` (the random
+  effects parameter `1 - √(σε² / (σε² + T σα²))`).
 
 ## Main results
 
@@ -39,9 +46,20 @@ ratio of covariances; sampling and consistency are not treated here.
 * `LinearPanel.quasiSlope_eq`: under strict exogeneity the quasi-demeaned slope is
   `β + (1 - θ)² ∑ₜ Cov(D t, α) / ∑ₜ Var(D t - θ D̄)`. Corollaries:
   `LinearPanel.withinSlope_eq_beta` (fixed effects identify `β`),
-  `LinearPanel.quasiSlope_eq_beta_of_uncorrelated` (random effects slopes identify `β` when the
-  heterogeneity is uncorrelated with the treatment), `LinearPanel.quasiSlope_ne_beta` (and do not
-  when it is correlated).
+  `LinearPanel.quasiSlope_eq_beta_of_uncorrelated` (quasi-demeaned slopes identify `β` when
+  `∑ₜ Cov(D t, α) = 0`), `LinearPanel.quasiSlope_ne_beta` (they differ from `β` when `θ ≠ 1` and
+  `∑ₜ Cov(D t, α) ≠ 0`). The condition is on the sum over periods: correlations of opposite
+  sign in different periods can cancel, and then every quasi-demeaned slope equals `β`.
+* `LinearPanel.quasi_mul_quasi_mul_compoundSymmetric`, `LinearPanel.inv_compoundSymmetric`,
+  `LinearPanel.gls_quadForm_eq`, `LinearPanel.quasiDemean_eq_mulVec`: under compound symmetry
+  with `σε² > 0` and `σα² ≥ 0`, and with `(1 - θ)² (σε² + T σα²) = σε²` (solved by `reTheta`,
+  which lies in `[0, 1)`), the inverse covariance is `σε⁻² (I - θ 1 1ᵀ / T)²`, so the generalized
+  least squares quadratic form of a unit's residual vector is `σε⁻²` times the squared norm of
+  its quasi-demeaned residual vector. `LinearPanel.gls_quadForm_of_compoundSymmetry` states
+  this for the model under the hypothesis `LinearPanel.CompoundSymmetry` on the composite errors.
+* `LinearPanel.ordinarySlope_eq`: under contemporaneous exogeneity the ordinary pooled slope is
+  `β` plus `∑ₜ Cov(D t, α)` plus the covariation over periods of the mean treatment with the
+  period effects and the mean errors, over the stacked treatment variance.
 * `LinearPanel.pooledSlope_eq`, `LinearPanel.pooledSlope_ne_beta`: the pooled slope is
   `β + ∑ₜ Cov(D t, α) / ∑ₜ Var(D t)` under contemporaneous exogeneity alone.
 * `LinearPanel.withinSlope_eq_fdSlope`: with two periods the within and first-difference slopes
@@ -51,10 +69,21 @@ ratio of covariances; sampling and consistency are not treated here.
   slope is `1`, and every quasi-demeaned slope with `θ ≠ 1` differs from `β`.
 * `LinearPanel.Counterexample.feedback_slopes`: no unit effect and contemporaneous exogeneity,
   but the treatment responds to a past shock; the first-difference slope is `-1 ≠ β = 0`.
+* `LinearPanel.Counterexample.timeVarying_slopes`: strict exogeneity holds but the unit effect
+  enters the outcome with a loading that changes over time; the first-difference slope is
+  `1 ≠ β = 0`, while with a constant loading it is `β`.
+* `LinearPanel.Counterexample.timing_slopes`: treatment switched on for everybody in the second
+  period; the period-dummy denominator `∑ₜ Var(D t)` is zero, while the ordinary pooled slope is
+  `β + c` for a period effect `c`.
 
-The random effects estimator is generalized least squares, which in this model is the
-quasi-demeaned slope for a `θ ∈ [0, 1)` fixed by the variance components; the bias formula
-holds for every fixed `θ`, and no optimality property of any `θ` is claimed.
+The random effects estimator is generalized least squares. Its link to quasi-demeaning holds
+under compound symmetry of the composite error only: then the weight matrix is proportional to
+the square of `I - θ 1 1ᵀ / T` with `θ = reTheta`. With a general error covariance (for example
+independent period errors of unequal variances) no scalar `θ` reproduces the generalized least
+squares weights, since every such square has equal diagonal entries. The bias formula of
+`quasiSlope_eq` holds for every fixed `θ`. That the covariance ratio `quasiSlope` is the
+minimizer of the quasi-demeaned least squares objective with period dummies is not proved here,
+and no optimality property of any `θ` is claimed.
 
 Source: NICE Decision Support Unit, Technical Support Document 17 (Faria, Hernandez Alava,
 Manca and Wailoo, 2015), Section 2.4.2 (panel data models) and Section 2.5.1 (difference in
@@ -225,16 +254,19 @@ noncomputable def unitMean (X : τ → Ω → ℝ) (ω : Ω) : ℝ :=
   (Fintype.card τ : ℝ)⁻¹ * ∑ s, X s ω
 
 /-- Quasi-demeaning with parameter `θ`: `X t ω - θ X̄ ω`. The value `θ = 1` is the within
-(fixed effects) transformation, `θ = 0` leaves the data unchanged (pooled least squares), and the
-random effects (generalized least squares) transformation is `θ ∈ [0, 1)`, determined by the
-variance components. -/
+(fixed effects) transformation and `θ = 0` leaves the data unchanged (pooled least squares).
+Under compound symmetry of the composite error the random effects (generalized least squares)
+transformation is the value `θ = reTheta T σε² σα² ∈ [0, 1)` (`gls_quadForm_eq`); without
+compound symmetry no single `θ` gives generalized least squares. -/
 noncomputable def quasiDemean (θ : ℝ) (X : τ → Ω → ℝ) (t : τ) (ω : Ω) : ℝ :=
   X t ω - θ * unitMean X ω
 
 variable (P μ) in
 /-- The population slope after quasi-demeaning with parameter `θ`, pooled over periods with a
-separate intercept for each period (period dummies):
-`∑ₜ Cov(D t - θ D̄, Y t - θ Ȳ) / ∑ₜ Var(D t - θ D̄)`. -/
+separate intercept for each period (period dummies), written as the covariance ratio
+`∑ₜ Cov(D t - θ D̄, Y t - θ Ȳ) / ∑ₜ Var(D t - θ D̄)`. It is defined for every fixed `θ`; its
+reading as the random effects estimand needs compound symmetry and `θ = reTheta`
+(`gls_quadForm_eq`). -/
 noncomputable def quasiSlope (θ : ℝ) : ℝ :=
   (∑ t, cov[quasiDemean θ P.D t, quasiDemean θ P.Y t; μ]) /
     ∑ t, Var[quasiDemean θ P.D t; μ]
@@ -454,6 +486,254 @@ theorem withinSlope_eq_fdSlope [DecidableEq τ] [IsProbabilityMeasure μ]
 
 end Quasi
 
+/-! ### Random effects as generalized least squares under compound symmetry -/
+
+section GLS
+
+open Matrix
+
+variable [Fintype τ] [DecidableEq τ]
+
+/-- The period-averaging matrix `1 1ᵀ / T` on the periods, `T` the number of periods. -/
+noncomputable def periodAverage : Matrix τ τ ℝ := (Fintype.card τ : ℝ)⁻¹ • Matrix.of fun _ _ => 1
+
+omit [DecidableEq τ] in
+/-- The period-averaging matrix is idempotent. -/
+theorem periodAverage_mul_self [Nonempty τ] :
+    (periodAverage : Matrix τ τ ℝ) * periodAverage = periodAverage := by
+  ext i j
+  simp [periodAverage, Matrix.mul_apply, Finset.sum_const, Finset.card_univ]
+
+/-- The **compound symmetric** covariance `s I + a 1 1ᵀ` of the composite errors
+`α + ε t` of one unit over the periods, with `s = σε²` (variance of the idiosyncratic errors,
+assumed uncorrelated over periods with a common variance) and `a = σα²` (variance of the unit
+effect, uncorrelated with the idiosyncratic errors). -/
+noncomputable def compoundSymmetric (s a : ℝ) : Matrix τ τ ℝ :=
+  s • (1 : Matrix τ τ ℝ) + a • Matrix.of fun _ _ => 1
+
+/-- The **random effects parameter** `θ = 1 - √(s / (s + T a))` for `T` periods,
+idiosyncratic variance `s` and unit effect variance `a`. -/
+noncomputable def reTheta (T s a : ℝ) : ℝ := 1 - Real.sqrt (s / (s + T * a))
+
+omit [Fintype τ] [DecidableEq τ] in
+/-- The random effects parameter solves `(1 - θ)² (s + T a) = s` when `s > 0`, `T ≥ 0` and
+`a ≥ 0`. -/
+theorem one_sub_reTheta_sq {T s a : ℝ} (hs : 0 < s) (hT : 0 ≤ T) (ha : 0 ≤ a) :
+    (1 - reTheta T s a) ^ 2 * (s + T * a) = s := by
+  have h : 0 < s + T * a := by positivity
+  rw [reTheta, sub_sub_cancel, Real.sq_sqrt (by positivity)]
+  field_simp
+
+omit [Fintype τ] [DecidableEq τ] in
+/-- The random effects parameter lies in `[0, 1)` when `s > 0`, `T ≥ 0` and `a ≥ 0`; it is
+`0` (pooled least squares) when `a = 0`. -/
+theorem reTheta_mem {T s a : ℝ} (hs : 0 < s) (hT : 0 ≤ T) (ha : 0 ≤ a) :
+    0 ≤ reTheta T s a ∧ reTheta T s a < 1 := by
+  have h : 0 < s + T * a := by positivity
+  refine ⟨?_, ?_⟩
+  · rw [reTheta, sub_nonneg, Real.sqrt_le_one]
+    rw [div_le_one h]; nlinarith [mul_nonneg hT ha]
+  · rw [reTheta, sub_lt_self_iff]; positivity
+
+/-- **Quasi-demeaning whitens a compound symmetric covariance.** If
+`(1 - θ)² (s + T a) = s`, then `(I - θ 1 1ᵀ / T)² (s I + a 1 1ᵀ) = s I`. -/
+theorem quasi_mul_quasi_mul_compoundSymmetric [Nonempty τ] {s a θ : ℝ}
+    (hθ : (1 - θ) ^ 2 * (s + Fintype.card τ * a) = s) :
+    (1 - θ • periodAverage) * (1 - θ • periodAverage) * compoundSymmetric s a =
+      s • (1 : Matrix τ τ ℝ) := by
+  have hT : (Fintype.card τ : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
+  have hJ : (Matrix.of fun _ _ => (1 : ℝ) : Matrix τ τ ℝ) =
+      (Fintype.card τ : ℝ) • periodAverage := by
+    rw [periodAverage, smul_smul, mul_inv_cancel₀ hT, one_smul]
+  have hP := periodAverage_mul_self (τ := τ)
+  rw [compoundSymmetric, hJ, smul_smul]
+  simp only [sub_mul, mul_sub, mul_add, one_mul, mul_one, smul_mul_assoc,
+    mul_smul_comm, hP, smul_sub]
+  linear_combination (norm := module) hθ • (periodAverage : Matrix τ τ ℝ)
+
+/-- Quasi-demeaning is multiplication of a unit's trajectory by `I - θ 1 1ᵀ / T`. -/
+theorem quasiDemean_eq_mulVec (θ : ℝ) (X : τ → Ω → ℝ) (t : τ) (ω : Ω) :
+    quasiDemean θ X t ω = ((1 - θ • periodAverage) *ᵥ fun s => X s ω) t := by
+  rw [quasiDemean_eq_sum]
+  simp [Matrix.mulVec, dotProduct, periodAverage, Matrix.one_apply, eq_comm]
+
+/-- **The inverse of a compound symmetric covariance.** If `s ≠ 0` and
+`(1 - θ)² (s + T a) = s`, then `(s I + a 1 1ᵀ)⁻¹ = s⁻¹ (I - θ 1 1ᵀ / T)²`. -/
+theorem inv_compoundSymmetric [Nonempty τ] {s a θ : ℝ} (hs : s ≠ 0)
+    (hθ : (1 - θ) ^ 2 * (s + Fintype.card τ * a) = s) :
+    (compoundSymmetric s a : Matrix τ τ ℝ)⁻¹ =
+      s⁻¹ • ((1 - θ • periodAverage) * (1 - θ • periodAverage)) := by
+  refine Matrix.inv_eq_left_inv ?_
+  rw [smul_mul_assoc, quasi_mul_quasi_mul_compoundSymmetric hθ, smul_smul, inv_mul_cancel₀ hs,
+    one_smul]
+
+/-- **Random effects is least squares on quasi-demeaned data, under compound symmetry**
+(TSD 17, Section 2.4.2). If the composite errors of a unit have the compound symmetric
+covariance `V = s I + a 1 1ᵀ` with `s ≠ 0` and `θ` solves `(1 - θ)² (s + T a) = s` (for
+`s > 0`, `a ≥ 0` the solution `reTheta` lies in `[0, 1)`), then for every residual vector `r`
+of a unit the generalized least squares quadratic form `rᵀ V⁻¹ r` equals `s⁻¹` times the squared
+norm of the quasi-demeaned residual vector `(I - θ 1 1ᵀ / T) r`. So the generalized least
+squares objective is a constant multiple of the least squares objective of the data
+quasi-demeaned with this `θ`. -/
+theorem gls_quadForm_eq [Nonempty τ] {s a θ : ℝ} (hs : s ≠ 0)
+    (hθ : (1 - θ) ^ 2 * (s + Fintype.card τ * a) = s) (r : τ → ℝ) :
+    r ⬝ᵥ ((compoundSymmetric s a : Matrix τ τ ℝ)⁻¹ *ᵥ r) =
+      s⁻¹ * ((1 - θ • periodAverage) *ᵥ r) ⬝ᵥ ((1 - θ • periodAverage) *ᵥ r) := by
+  have hQ : (1 - θ • (periodAverage : Matrix τ τ ℝ))ᵀ = 1 - θ • periodAverage := by
+    ext i j; simp [periodAverage, Matrix.one_apply, eq_comm]
+  rw [inv_compoundSymmetric hs hθ, Matrix.smul_mulVec, dotProduct_smul, ← Matrix.mulVec_mulVec,
+    Matrix.dotProduct_mulVec, ← Matrix.mulVec_transpose, hQ, smul_eq_mul]
+/-- `gls_quadForm_eq` at the random effects parameter: for `s > 0` and `a ≥ 0`, with
+`θ = reTheta T s a ∈ [0, 1)`, the quadratic form of `(s I + a 1 1ᵀ)⁻¹` is `s⁻¹` times the
+squared norm of the quasi-demeaned vector. -/
+theorem gls_quadForm_reTheta [Nonempty τ] {s a : ℝ} (hs : 0 < s) (ha : 0 ≤ a) (r : τ → ℝ) :
+    r ⬝ᵥ ((compoundSymmetric s a : Matrix τ τ ℝ)⁻¹ *ᵥ r) =
+      s⁻¹ * ((1 - reTheta (Fintype.card τ) s a • periodAverage) *ᵥ r) ⬝ᵥ
+        ((1 - reTheta (Fintype.card τ) s a • periodAverage) *ᵥ r) :=
+  gls_quadForm_eq hs.ne' (one_sub_reTheta_sq hs (Nat.cast_nonneg _) ha) r
+
+variable (P μ) in
+/-- The covariance matrix over periods of a unit's composite errors `α + ε t`. -/
+noncomputable def compositeCov : Matrix τ τ ℝ :=
+  Matrix.of fun u v => cov[fun ω ↦ P.α ω + P.ε u ω, fun ω ↦ P.α ω + P.ε v ω; μ]
+
+variable (P μ) in
+/-- **Compound symmetry** of the composite errors, the random effects variance assumption:
+the covariance matrix of `(α + ε t)ₜ` is `s I + a 1 1ᵀ`, that is every composite error has
+variance `s + a` and any two periods have covariance `a`. -/
+def CompoundSymmetry (s a : ℝ) : Prop := P.compositeCov μ = compoundSymmetric s a
+
+/-- **Random effects is generalized least squares on quasi-demeaned data, model form.** If the
+composite errors of the panel satisfy compound symmetry with `s > 0` and `a ≥ 0`, then for every
+residual vector `r` the generalized least squares quadratic form with the composite error
+covariance equals `s⁻¹` times the squared norm of `(I - θ 1 1ᵀ / T) r` with
+`θ = reTheta T s a`. -/
+theorem gls_quadForm_of_compoundSymmetry [Nonempty τ] {s a : ℝ}
+    (hCS : P.CompoundSymmetry μ s a) (hs : 0 < s) (ha : 0 ≤ a) (r : τ → ℝ) :
+    r ⬝ᵥ ((P.compositeCov μ)⁻¹ *ᵥ r) =
+      s⁻¹ * ((1 - reTheta (Fintype.card τ) s a • periodAverage) *ᵥ r) ⬝ᵥ
+        ((1 - reTheta (Fintype.card τ) s a • periodAverage) *ᵥ r) := by
+  rw [show P.compositeCov μ = compoundSymmetric s a from hCS]
+  exact gls_quadForm_reTheta hs ha r
+
+end GLS
+
+/-- A second moment about arbitrary centers:
+`E[(X - a)(Z - b)] = Cov(X, Z) + (E X - a)(E Z - b)`. -/
+theorem integral_sub_mul_sub [IsProbabilityMeasure μ] {X Z : Ω → ℝ} (hX : MemLp X 2 μ)
+    (hZ : MemLp Z 2 μ) (a b : ℝ) :
+    ∫ ω, (X ω - a) * (Z ω - b) ∂μ = cov[X, Z; μ] + (μ[X] - a) * (μ[Z] - b) := by
+  have hXi := hX.integrable one_le_two
+  have hZi := hZ.integrable one_le_two
+  have hXZ : Integrable (fun ω => X ω * Z ω) μ := hX.integrable_mul hZ
+  have e : (fun ω => (X ω - a) * (Z ω - b)) =
+      fun ω => X ω * Z ω - b * X ω - a * Z ω + a * b := by funext ω; ring
+  have h1 : Integrable (fun ω => X ω * Z ω - b * X ω) μ := hXZ.sub (hXi.const_mul b)
+  have h2 : Integrable (fun ω => X ω * Z ω - b * X ω - a * Z ω) μ := h1.sub (hZi.const_mul a)
+  rw [e, integral_add h2 (integrable_const _), integral_sub h1 (hZi.const_mul a),
+    integral_sub hXZ (hXi.const_mul b), integral_const_mul, integral_const_mul, integral_const,
+    covariance_eq_sub hX hZ]
+  simp only [probReal_univ, smul_eq_mul, one_mul, Pi.mul_apply]
+  ring
+
+section Ordinary
+
+variable [Fintype τ]
+
+variable (μ) in
+/-- The grand mean of a panel variable over the stacked data, each period with weight `1 / T`:
+`(1 / T) ∑ₜ E[X t]`. -/
+noncomputable def grandMean (X : τ → Ω → ℝ) : ℝ :=
+  (Fintype.card τ : ℝ)⁻¹ * ∑ t, ∫ ω, X t ω ∂μ
+
+variable (μ) in
+/-- The covariation of two panel variables in the stacked data around their grand means,
+`∑ₜ E[(X t - X̄̄)(Z t - Z̄̄)]`: `T` times the covariance of `X J` and `Z J` for a period `J`
+drawn uniformly and independently of the unit. -/
+noncomputable def stackedCov (X Z : τ → Ω → ℝ) : ℝ :=
+  ∑ t, ∫ ω, (X t ω - grandMean μ X) * (Z t ω - grandMean μ Z) ∂μ
+
+variable (P μ) in
+/-- The population **ordinary pooled least squares slope** of the stacked data with a single
+intercept and no period dummies: `stackedCov D Y / stackedCov D D`, the covariance ratio of
+`Y J` on `D J` for a uniformly drawn period `J`. -/
+noncomputable def ordinarySlope : ℝ := stackedCov μ P.D P.Y / stackedCov μ P.D P.D
+
+/-- The stacked covariation splits into the within-period covariances and the covariation of
+the period means: `stackedCov X Z = ∑ₜ Cov(X t, Z t) + ∑ₜ (E X t - X̄̄)(E Z t - Z̄̄)`. -/
+theorem stackedCov_eq [IsProbabilityMeasure μ] {X Z : τ → Ω → ℝ} (hX : ∀ t, MemLp (X t) 2 μ)
+    (hZ : ∀ t, MemLp (Z t) 2 μ) :
+    stackedCov μ X Z = ∑ t, cov[X t, Z t; μ] +
+      ∑ t, (μ[X t] - grandMean μ X) * (μ[Z t] - grandMean μ Z) := by
+  simp only [stackedCov, integral_sub_mul_sub (hX _) (hZ _), Finset.sum_add_distrib]
+
+omit [Fintype τ] in
+/-- The mean outcome in a period: `E[Y t] = δ t + E[α] + β E[D t] + E[ε t]`. -/
+theorem integral_Y [IsProbabilityMeasure μ] (h : P.SecondMoments μ) (t : τ) :
+    μ[P.Y t] = P.δ t + μ[P.α] + P.β * μ[P.D t] + μ[P.ε t] := by
+  have hα := h.memLp_α.integrable one_le_two
+  have hD := (h.memLp_D t).integrable one_le_two
+  have hε := (h.memLp_ε t).integrable one_le_two
+  change ∫ ω, (P.δ t + P.α ω + P.β * P.D t ω + P.ε t ω) ∂μ = _
+  have h1 : Integrable (fun ω => P.δ t + P.α ω) μ := (integrable_const _).add hα
+  have h2 : Integrable (fun ω => P.δ t + P.α ω + P.β * P.D t ω) μ := h1.add (hD.const_mul _)
+  rw [integral_add h2 hε, integral_add h1 (hD.const_mul _),
+    integral_add (integrable_const _) hα, integral_const_mul, integral_const]
+  simp
+
+/-- The deviation of a period mean outcome from the grand mean: the unit effect cancels, and
+`E[Y t] - Ȳ̄ = (δ t - δ̄) + β (E[D t] - D̄̄) + (E[ε t] - ε̄̄)`. -/
+theorem integral_Y_sub_grandMean [Nonempty τ] [IsProbabilityMeasure μ] (h : P.SecondMoments μ)
+    (t : τ) :
+    μ[P.Y t] - grandMean μ P.Y = (P.δ t - (Fintype.card τ : ℝ)⁻¹ * ∑ s, P.δ s) +
+      P.β * (μ[P.D t] - grandMean μ P.D) + (μ[P.ε t] - grandMean μ P.ε) := by
+  have hT : (Fintype.card τ : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
+  have e : ∀ s, ∫ ω, P.Y s ω ∂μ = P.δ s + μ[P.α] + P.β * μ[P.D s] + μ[P.ε s] :=
+    integral_Y h
+  simp only [grandMean, e, Finset.sum_add_distrib, Finset.sum_const,
+    Finset.card_univ, nsmul_eq_mul, ← Finset.mul_sum]
+  field_simp
+  ring
+
+/-- **The ordinary pooled slope with its bias.** Under finite second moments and
+contemporaneous exogeneity, with a nonzero stacked treatment variation, the ordinary pooled
+slope (no period dummies) is `β` plus
+`[∑ₜ Cov(D t, α) + ∑ₜ (E[D t] - D̄̄)((δ t - δ̄) + (E[ε t] - ε̄̄))] / stackedCov D D`. Dividing
+numerator and denominator by `T`, this is
+`β + [Cov(D_J, α) + Cov(E[D_J | J], δ_J + E[ε_J | J])] / Var(D_J)` for a uniform period `J`.
+Besides the correlation of the unit effect with the treatment, period effects (and mean errors)
+that move with the mean treatment over periods bias it (`Counterexample.timing_slopes`). -/
+theorem ordinarySlope_eq [Nonempty τ] [IsProbabilityMeasure μ] (h : P.SecondMoments μ)
+    (hE : P.ContemporaneousExogeneity μ) (hV : stackedCov μ P.D P.D ≠ 0) :
+    P.ordinarySlope μ = P.β + (∑ t, cov[P.D t, P.α; μ] + ∑ t, (μ[P.D t] - grandMean μ P.D) *
+      ((P.δ t - (Fintype.card τ : ℝ)⁻¹ * ∑ s, P.δ s) + (μ[P.ε t] - grandMean μ P.ε))) /
+        stackedCov μ P.D P.D := by
+  have key : ∀ t, cov[P.D t, P.Y t; μ] + (μ[P.D t] - grandMean μ P.D) *
+      (μ[P.Y t] - grandMean μ P.Y) = P.β * (cov[P.D t, P.D t; μ] +
+        (μ[P.D t] - grandMean μ P.D) * (μ[P.D t] - grandMean μ P.D)) +
+      (cov[P.D t, P.α; μ] + (μ[P.D t] - grandMean μ P.D) *
+        ((P.δ t - (Fintype.card τ : ℝ)⁻¹ * ∑ s, P.δ s) + (μ[P.ε t] - grandMean μ P.ε))) := by
+    intro t
+    rw [cov_D_Y h, hE t, integral_Y_sub_grandMean h,
+      covariance_self (h.memLp_D t).aemeasurable]
+    ring
+  have hnum : stackedCov μ P.D P.Y = P.β * stackedCov μ P.D P.D +
+      (∑ t, cov[P.D t, P.α; μ] + ∑ t, (μ[P.D t] - grandMean μ P.D) *
+        ((P.δ t - (Fintype.card τ : ℝ)⁻¹ * ∑ s, P.δ s) + (μ[P.ε t] - grandMean μ P.ε))) := by
+    rw [stackedCov_eq h.memLp_D h.memLp_Y, stackedCov_eq h.memLp_D h.memLp_D,
+      ← Finset.sum_add_distrib, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib,
+      Finset.mul_sum, ← Finset.sum_add_distrib]
+    exact Finset.sum_congr rfl fun t _ => key t
+  rw [ordinarySlope, hnum, add_div, mul_div_assoc, div_self hV, mul_one]
+end Ordinary
+
+variable (P) in
+/-- The outcome of a panel model with **time-varying heterogeneity**: the unit effect enters
+period `t` with loading `lam t`, `Y t = δ t + lam t α + β D t + ε t`. The linear panel model is
+the case of a constant loading `1` (`Counterexample.loadedY_one`). -/
+def loadedY (lam : τ → ℝ) (t : τ) (ω : Ω) : ℝ :=
+  P.δ t + lam t * P.α ω + P.β * P.D t ω + P.ε t ω
+
 /-! ### Countermodels -/
 
 namespace Counterexample
@@ -567,6 +847,65 @@ theorem feedback_slopes :
     norm_num at this
   · rw [hfd]; simp [feedback]
   · simp [pooledSlope, cov_coin, var_coin, Y, feedback, ind]
+
+/-- **Treatment timing confounded with a period effect.** Two periods and two equally likely
+units, no unit effect and no error; nobody is treated in the first period and everybody in the
+second (`D t = 1{t}` for every unit), with causal slope `β` and period effect `c` in the second
+period. -/
+noncomputable def timing (β c : ℝ) : LinearPanel Bool Bool where
+  β := β
+  δ := fun t ↦ if t then c else 0
+  α := fun _ ↦ 0
+  D := fun t _ ↦ if t then 1 else 0
+  ε := fun _ _ ↦ 0
+
+/-- **Countermodel: the ordinary pooled slope without period dummies.** In `timing β c`
+strict exogeneity holds and the period-dummy denominator `∑ₜ Var(D t)` is zero (so the slopes
+with period dummies are not defined by the data), while the stacked treatment variation is
+`1 / 2` and the ordinary pooled slope is `β + c`: it recovers `β` when there is no period
+effect and is biased by `c` otherwise. -/
+theorem timing_slopes (β c : ℝ) :
+    (timing β c).StrictExogeneity coin ∧ ∑ t, Var[(timing β c).D t; coin] = 0 ∧
+      stackedCov coin (timing β c).D (timing β c).D = 1 / 2 ∧
+      (timing β c).ordinarySlope coin = β + c := by
+  have hb : ({false, true} : Set Bool) = Set.univ := by
+    ext b; cases b <;> simp
+  have hu : coin.real ({false, true} : Set Bool) = 1 := by
+    simp only [hb, probReal_univ]
+  refine ⟨fun s t ↦ by simp [timing], by simp [timing, var_coin], ?_, ?_⟩
+  · simp [stackedCov, grandMean, timing, hu]
+    norm_num
+  · simp [ordinarySlope, stackedCov, grandMean, timing, Y, hu]
+    ring
+
+/-- With a constant loading `1` the loaded outcome is the outcome of the linear panel. -/
+theorem loadedY_one (P : LinearPanel Ω τ) : P.loadedY (fun _ ↦ 1) = P.Y := by
+  funext t ω; simp [loadedY, Y]
+
+/-- **Countermodel: time-invariant heterogeneity fails** (TSD 17, Section 2.4.2, names time
+invariance of the unobserved heterogeneity as the assumption first differences and fixed
+effects require). In `correlated` strict exogeneity holds and the first-difference slope of the
+outcome `Y` recovers `β = 0`. If instead the unit effect enters with the time-varying loading
+`0` in the first period and `1` in the second (`loadedY`), with treatment, errors and `β`
+unchanged, the first-difference slope `Cov(ΔD, ΔY) / Var(ΔD)` is `1 ≠ β`, with a positive
+denominator. Only time invariance of the unit effect fails. -/
+theorem timeVarying_slopes :
+    correlated.StrictExogeneity coin ∧
+      correlated.fdSlope coin {(false, true)} = correlated.β ∧
+      cov[fun ω ↦ correlated.D true ω - correlated.D false ω,
+        fun ω ↦ correlated.loadedY (fun t ↦ if t then 1 else 0) true ω -
+          correlated.loadedY (fun t ↦ if t then 1 else 0) false ω; coin] /
+        Var[fun ω ↦ correlated.D true ω - correlated.D false ω; coin] = 1 ∧
+      Var[fun ω ↦ correlated.D true ω - correlated.D false ω; coin] ≠ 0 ∧
+      (1 : ℝ) ≠ correlated.β := by
+  have hE : correlated.StrictExogeneity coin := fun s t ↦ by simp [correlated]
+  have hV : Var[fun ω ↦ correlated.D true ω - correlated.D false ω; coin] ≠ 0 := by
+    simp [var_coin, correlated, ind]; norm_num
+  have hSM : correlated.SecondMoments coin :=
+    ⟨memLp_coin _, fun _ ↦ memLp_coin _, fun _ ↦ memLp_coin _⟩
+  refine ⟨hE, fdSlope_eq_beta hSM hE _ (by simpa using hV), ?_, hV, by simp [correlated]⟩
+  simp [cov_coin, var_coin, loadedY, correlated, ind]
+  norm_num
 
 end Counterexample
 
