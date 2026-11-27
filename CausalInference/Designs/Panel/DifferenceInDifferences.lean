@@ -24,8 +24,10 @@ population version on a probability space `(Ω, μ)` of units, with conditional 
   binary group indicator `G` with both groups of positive probability, the covariance ratio
   `Cov(G, Yobs post - Yobs pre) / Var(G)` is the observed difference in differences
   `TwoPeriod.did`. This is a statement about observed data only. It is an identity of
-  covariance ratios under integrability; its reading as the population least squares slope
-  needs a finite squared error objective, that is a square integrable outcome change.
+  covariance ratios under integrability.
+* `LinearPanel.did_isLeastSquares`: with a square integrable outcome change the ratio is the
+  unique population least squares slope of the change on the group, with the intercept
+  profiled out.
 * `LinearPanel.fdSlope_eq_did`: in a linear panel model over the periods `pre, post` in which
   nobody is treated before and the group `G` is treated after, the first-difference slope equals
   `TwoPeriod.did`.
@@ -95,6 +97,46 @@ theorem covRatio_fd_eq_did [IsProbabilityMeasure μ] {G : Ω → Bool} (hG : Mea
     integral_sub (DiD.integrable_cond (hY post) _) (DiD.integrable_cond (hY pre) _),
     integral_sub (DiD.integrable_cond (hY post) _) (DiD.integrable_cond (hY pre) _), did]
   field_simp
+
+/-- **The difference in differences is the least squares slope of the change on the group.**
+Let `G` be a measurable group indicator with both groups of positive probability, `Yobs`
+integrable observed outcomes, and the change `ΔY = Yobs post - Yobs pre` square integrable.
+Then the slope `b = TwoPeriod.did μ G Yobs` (the covariance ratio of `covRatio_fd_eq_did`) with
+the intercept `a = E[ΔY] - b E[G]` minimizes `E[(ΔY - a - b G)²]` over all `a, b`, and any
+minimizing pair is this one. Under mere integrability of `ΔY` only the ratio identity
+`covRatio_fd_eq_did` holds: the squared error objective can then be infinite for every `a, b`. -/
+theorem did_isLeastSquares [IsProbabilityMeasure μ] {G : Ω → Bool} (hG : Measurable G)
+    {Yobs : Period → Ω → ℝ} (hY : ∀ t, Integrable (Yobs t) μ)
+    (hΔ : MemLp (fun ω ↦ Yobs post ω - Yobs pre ω) 2 μ) (h1 : μ (treated G) ≠ 0)
+    (h0 : μ (control G) ≠ 0) :
+    (∀ a b : ℝ, ∫ ω, (Yobs post ω - Yobs pre ω - (μ[fun ω ↦ Yobs post ω - Yobs pre ω] -
+          TwoPeriod.did μ G Yobs * μ[fun ω ↦ boolToReal (G ω)]) -
+          TwoPeriod.did μ G Yobs * boolToReal (G ω)) ^ 2 ∂μ ≤
+        ∫ ω, (Yobs post ω - Yobs pre ω - a - b * boolToReal (G ω)) ^ 2 ∂μ) ∧
+      ∀ a b : ℝ, ∫ ω, (Yobs post ω - Yobs pre ω - a - b * boolToReal (G ω)) ^ 2 ∂μ =
+          ∫ ω, (Yobs post ω - Yobs pre ω - (μ[fun ω ↦ Yobs post ω - Yobs pre ω] -
+            TwoPeriod.did μ G Yobs * μ[fun ω ↦ boolToReal (G ω)]) -
+            TwoPeriod.did μ G Yobs * boolToReal (G ω)) ^ 2 ∂μ →
+        b = TwoPeriod.did μ G Yobs ∧ a = μ[fun ω ↦ Yobs post ω - Yobs pre ω] -
+          TwoPeriod.did μ G Yobs * μ[fun ω ↦ boolToReal (G ω)] := by
+  have hGm : MemLp (fun ω ↦ boolToReal (G ω)) 2 μ :=
+    MemLp.of_bound (measurable_boolToReal.comp hG).aestronglyMeasurable 1
+      (ae_of_all _ fun ω ↦ by cases G ω <;> simp [boolToReal])
+  have hpos : ∀ {A : Set Ω}, μ A ≠ 0 → 0 < μ.real A := fun hA ↦
+    lt_of_le_of_ne measureReal_nonneg fun h ↦ hA ((measureReal_eq_zero_iff).1 h.symm)
+  have hV : 0 < ∑ _i : Unit, Var[fun ω ↦ boolToReal (G ω); μ] := by
+    rw [Fintype.sum_unique, variance_boolToReal hG]
+    exact mul_pos (hpos h1) (hpos h0)
+  obtain ⟨hmin, huniq⟩ := lsSlope_isMin (ι := Unit) (X := fun _ ↦ fun ω ↦ boolToReal (G ω))
+    (Z := fun _ ↦ fun ω ↦ Yobs post ω - Yobs pre ω) (fun _ ↦ hGm) (fun _ ↦ hΔ) hV
+  have hs : lsSlope μ (fun _ : Unit ↦ fun ω ↦ boolToReal (G ω))
+      (fun _ ↦ fun ω ↦ Yobs post ω - Yobs pre ω) = TwoPeriod.did μ G Yobs := by
+    rw [lsSlope, Fintype.sum_unique, Fintype.sum_unique]
+    exact covRatio_fd_eq_did hG hY h1 h0
+  simp only [lsObjective, lsIntercept, hs, Fintype.sum_unique] at hmin huniq
+  refine ⟨fun a b ↦ hmin b fun _ ↦ a, fun a b hab ↦ ?_⟩
+  obtain ⟨hb, ha⟩ := huniq b (fun _ ↦ a) hab
+  exact ⟨hb, congrFun ha ()⟩
 
 /-- **The first-difference slope of a two-period panel is the difference in differences.** In a
 linear panel model over the periods `pre, post` with finite second moments, in which nobody is
