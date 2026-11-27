@@ -7,6 +7,7 @@ module
 
 public import CausalInference.Bias.Selection
 public import CausalInference.PartialIdentification.IdentifiedSet
+public import CausalInference.MissingData.Weighting
 public import Mathlib.Topology.Order.IntermediateValue
 public import Mathlib.Topology.Instances.Real.Lemmas
 
@@ -27,16 +28,18 @@ positivity hypotheses wherever a ratio is formed.
   nonparticipants (Equation 4.1) and the selection proportions it implies (Table 4.5).
 * `partRisk`, `nonpartRisk`, `mixRisk`: risks among participants, nonparticipants and the
   source when participation depends on a modifier `U` only (Figure 4.3).
-* `adjRate`: the rate adjusted for loss to follow-up (Table 4.7).
+* `adjRate`: the rate adjusted for loss to follow-up (Equation 4.3, Table 4.7).
 * `participationUnexposed`: Equation 12.1.
 
 ## Main results
 
-* `oddsRatio_selected`, `oddsRatio_source_eq`: `OR_obs = OR_src * sOR`, hence Equation 4.2
-  `OR_src = OR_obs / sOR`; `oddsRatio_selected_gt_iff`: the direction of the bias is that of
-  `sOR` relative to one; `selectionOddsRatio_multiplicative` and
-  `selected_indep_of_multiplicative` (built on `Bias.stratum_indep_of_multiplicative`):
-  multiplicative selection does not bias the odds ratio.
+* `oddsRatio_selected`, `oddsRatio_source_eq`: `OR_obs = OR_src * sOR` with positive
+  denominator cells, hence Equation 4.2 `OR_src = OR_obs / sOR`; `oddsRatio_selected_gt_iff`:
+  the direction of the bias is that of `sOR` relative to one;
+  `selectionOddsRatio_multiplicative`, `selected_indep_of_multiplicative` and
+  `selected_condIndep_of_multiplicative` (built on `Bias.stratum_indep_of_multiplicative`):
+  multiplicative selection does not bias the odds ratio; `selected_mem_Icc`, `projSel_mem_Ioc`:
+  admissibility of the selection model and of the projected selection proportions.
 * `ipw_selected`, `oddsRatio_ipw`: weighting by `1 / S` recovers the source table and gives
   `OR_obs / sOR`; `proj_eq_source`, `projection_ipw_selectionOddsRatio`: the projection,
   selection odds ratio and weighting methods agree.
@@ -46,27 +49,33 @@ positivity hypotheses wherever a ratio is formed.
 * `partRD_sub_sourceRD`: with `U` independent of exposure and participation depending on `U`
   only, the selection bias of the risk difference is `1 - π` times the variation across
   exposure of the participation to disease risk difference (the condition of Hernán 2017 quoted
-  in the book); `partRD_eq_of_const`, `partRR_eq_of_const`: no bias on a scale on which `U`
-  does not modify the effect; `Examples.example43`: the book's counterexample (0 versus 0.1).
+  in the book); `partRR_eq_sourceRR_iff`: the exact condition on the ratio scale (equal ratios
+  of participants' to nonparticipants' risks); `partRD_eq_of_const`, `partRR_eq_of_const`: no
+  bias on a scale on which `U` does not modify the effect; `Examples.example43`: the book's
+  counterexample (0 versus 0.1).
 * `adjRate_eq_of_same_rate`, `adjRate_lost_as_followed`: the mediant identity;
   `adjRateRatio_mem_Icc`, `adjRateDiff_mem_Icc`: extreme scenarios for loss to follow-up;
-  `sum_ipw_eq`, `ipw_rate`: inverse probability of follow-up weighting over strata.
+  `sum_ipw_eq`, `ipw_rate`: inverse probability of attrition weighting over strata (an
+  identity in expected stratum totals); `ipcw_rate`: its expectation-level form on a
+  probability space, derived from `MissingData.ipcw_identity`.
 * `participationUnexposed_eq` and its admissibility conditions; `Examples.eq121_inadmissible`.
 
 ## Worked examples and printed values
 
-The section `Examples` checks Tables 4.1, 4.3, 4.5, 4.6, 4.7, Equation 4.1 and the values of
-Equation 12.1 by `norm_num`. Two printed rows of Table 4.7 ("all lost died", "no lost died")
-do not follow from the stated person-time (`Examples.table47_all_died`,
-`Examples.table47_none_died`), and neither the diagonal rows of Table 4.7 nor the "all exposed"
-and "all unexposed" rows of Table 4.3 are the extremes of the adjustment
-(`Examples.table47_extremes`, `Examples.orProj_stang_corners`).
+The section `Examples` checks Tables 4.1, 4.3, 4.5 to 4.8, Equations 4.1, 4.3 and 4.4, the
+weighting display of p. 92 and the values of Equation 12.1 by `norm_num`. Table 4.7 imputes the
+deaths of the lost from the rates at the two hospitals with incomplete registries
+(`Examples.table47`, `Examples.table47_adjusted`); the "most extreme case" after it is the lower
+end of `adjRateRatio_mem_Icc` (`Examples.extreme47`). The diagonal scenarios "all lost died" and
+"no lost died" are additional scenarios computed from Table 4.6, and neither they nor the "all
+exposed" and "all unexposed" rows of Table 4.3 are the extremes of the adjustment
+(`Examples.scenario46_extremes`, `Examples.orProj_stang_corners`).
 
 ## References
 
 * M. P. Fox, R. F. MacLehose and T. L. Lash, *Applying Quantitative Bias Analysis to
-  Epidemiologic Data*, second edition, Springer (2021), Chapter 4 (Tables 4.1 to 4.7,
-  Equations 4.1 and 4.2) and Chapter 12 (Equation 12.1).
+  Epidemiologic Data*, second edition, Springer (2021), Chapter 4 (Tables 4.1 to 4.8,
+  Equations 4.1 to 4.4) and Chapter 12 (Equation 12.1).
 * M. A. Hernán (2017), as cited by Fox, MacLehose and Lash (2021), Chapter 4, for selection
   bias without colliders.
 -/
@@ -87,8 +96,10 @@ exposed). -/
 abbrev Table := Bool → Bool → ℝ
 
 /-- The odds ratio of a two-by-two table: `t 1 1 * t 0 0 / (t 1 0 * t 0 1)`, the exposed cases
-times the unexposed noncases over the unexposed cases times the exposed noncases. It is only
-meaningful when the four cells are positive; every theorem below that uses it says so. -/
+times the unexposed noncases over the unexposed cases times the exposed noncases. It is a real
+quotient only when the two denominator cells `t 1 0` and `t 0 1` are nonzero (a zero numerator
+cell gives the defined value zero); every theorem below that reads it as an odds ratio assumes
+this. -/
 noncomputable def oddsRatio (t : Table) : ℝ :=
   t true true * t false false / (t true false * t false true)
 
@@ -100,7 +111,8 @@ def selected (S src : Table) : Table := fun d e ↦ S d e * src d e
 
 /-- The selection odds ratio `sOR = S_{case,1} S_{control,0} / (S_{case,0} S_{control,1})`
 (Fox, MacLehose and Lash 2021, text before Equation 4.2). It is undefined (Lean returns a junk
-value) when a selection proportion is zero. -/
+value) when a denominator selection proportion `S_{case,0}` or `S_{control,1}` is zero; a zero
+numerator proportion gives the defined value zero. -/
 noncomputable def selectionOddsRatio (S : Table) : ℝ := oddsRatio S
 
 /-- Inverse probability of participation weighting: each observed cell is divided by its
@@ -108,14 +120,26 @@ selection proportion (Fox, MacLehose and Lash 2021, "Bias Analysis Using Inverse
 Participation Weighting"). -/
 noncomputable def ipw (S obs : Table) : Table := fun d e ↦ obs d e / S d e
 
-/-- The odds ratio among participants factors as the source odds ratio times the selection odds
-ratio: `OR_obs = OR_src * sOR`. This is the identity behind Equation 4.2 of Fox, MacLehose and
-Lash (2021). -/
-theorem oddsRatio_selected (S src : Table) :
+/-- The algebraic identity `oddsRatio (selected S src) = oddsRatio src * selectionOddsRatio S`
+between totalized expressions: it holds for all tables because Lean sets `x / 0 = 0`, so it says
+nothing when a denominator cell vanishes. `oddsRatio_selected` is the guarded statement. -/
+theorem oddsRatio_selected_totalized (S src : Table) :
     oddsRatio (selected S src) = oddsRatio src * selectionOddsRatio S := by
   simp only [oddsRatio, selectionOddsRatio, selected]
   rw [div_mul_div_comm]
   ring_nf
+
+/-- The odds ratio among participants factors as the source odds ratio times the selection odds
+ratio: `OR_obs = OR_src * sOR`. This is the identity behind Equation 4.2 of Fox, MacLehose and
+Lash (2021). The denominator cells `S_{case,0}`, `S_{control,1}` of the selection proportions and
+`src_{case,0}`, `src_{control,1}` of the source table are assumed positive, so that the observed
+denominator cells are positive (also concluded) and all three odds ratios are real quotients.
+The numerator cells may be zero. -/
+theorem oddsRatio_selected (S src : Table) (hS10 : 0 < S true false) (hS01 : 0 < S false true)
+    (hsrc10 : 0 < src true false) (hsrc01 : 0 < src false true) :
+    0 < selected S src true false ∧ 0 < selected S src false true ∧
+      oddsRatio (selected S src) = oddsRatio src * selectionOddsRatio S :=
+  ⟨mul_pos hS10 hsrc10, mul_pos hS01 hsrc01, oddsRatio_selected_totalized S src⟩
 
 /-- Equation 4.2 of Fox, MacLehose and Lash (2021): if the participants' table arises from a
 source table with positive cells by the selection model and all selection proportions are
@@ -133,7 +157,7 @@ theorem oddsRatio_source_eq (S src : Table) (hS : ∀ d e, 0 < S d e)
     have := hsrc true true; have := hsrc false false; have := hsrc true false
     have := hsrc false true
     positivity
-  · rw [oddsRatio_selected, mul_div_assoc, div_self h, mul_one]
+  · rw [oddsRatio_selected_totalized, mul_div_assoc, div_self h, mul_one]
 
 /-- Inverse probability of participation weighting recovers the source table: if
 `obs = selected S src` with positive selection proportions, then `obs d e / S d e = src d e`
@@ -156,27 +180,31 @@ theorem oddsRatio_ipw (S obs : Table) (hS : ∀ d e, 0 < S d e) (hobs : ∀ d e,
   rwa [show selected S (ipw S obs) = obs by
     funext d e; simp only [selected, ipw]; field_simp [(hS d e).ne']] at key
 
-/-- Direction of selection bias for the odds ratio: with positive source cells, the participants'
-odds ratio exceeds the source odds ratio if and only if the selection odds ratio exceeds one
-(`one_lt_selectionOddsRatio_iff` restates the latter without division when the selection
-proportions are positive). -/
-theorem oddsRatio_selected_gt_iff (S src : Table) (hsrc : ∀ d e, 0 < src d e) :
-    oddsRatio src < oddsRatio (selected S src) ↔ 1 < selectionOddsRatio S := by
+/-- With positive denominator selection proportions `S_{case,0}` and `S_{control,1}`, the
+selection odds ratio exceeds one if and only if
+`S_{case,0} S_{control,1} < S_{case,1} S_{control,0}`. -/
+theorem one_lt_selectionOddsRatio_iff (S : Table) (hS10 : 0 < S true false)
+    (hS01 : 0 < S false true) :
+    1 < selectionOddsRatio S ↔ S true false * S false true < S true true * S false false := by
+  simp only [selectionOddsRatio, oddsRatio]
+  rw [one_lt_div (by positivity)]
+
+/-- Direction of selection bias for the odds ratio: with positive source cells and positive
+denominator selection proportions `S_{case,0}`, `S_{control,1}`, the participants' odds ratio
+exceeds the source odds ratio if and only if `S_{case,0} S_{control,1} < S_{case,1}
+S_{control,0}`, that is (`one_lt_selectionOddsRatio_iff`), if and only if the selection odds
+ratio exceeds one. -/
+theorem oddsRatio_selected_gt_iff (S src : Table) (hS10 : 0 < S true false)
+    (hS01 : 0 < S false true) (hsrc : ∀ d e, 0 < src d e) :
+    oddsRatio src < oddsRatio (selected S src) ↔
+      S true false * S false true < S true true * S false false := by
   have h : 0 < oddsRatio src := by
     simp only [oddsRatio]
     have := hsrc true true; have := hsrc false false; have := hsrc true false
     have := hsrc false true
     positivity
-  rw [oddsRatio_selected]
-  exact lt_mul_iff_one_lt_right h
-
-/-- With positive selection proportions, the selection odds ratio exceeds one if and only if
-`S_{case,0} S_{control,1} < S_{case,1} S_{control,0}`. -/
-theorem one_lt_selectionOddsRatio_iff (S : Table) (hS : ∀ d e, 0 < S d e) :
-    1 < selectionOddsRatio S ↔ S true false * S false true < S true true * S false false := by
-  simp only [selectionOddsRatio, oddsRatio]
-  have := hS true false; have := hS false true
-  rw [one_lt_div (by positivity)]
+  rw [oddsRatio_selected_totalized, lt_mul_iff_one_lt_right h,
+    one_lt_selectionOddsRatio_iff S hS10 hS01]
 
 /-- Multiplicative selection (`S d e = s d * t e`, selection depending on disease and exposure
 through separate factors, for example disease only) gives a selection odds ratio of one, so the
@@ -200,6 +228,29 @@ theorem selected_indep_of_multiplicative (S : Table) (pD pE g h : Bool → ℝ)
   rw [this]
   exact stratum_indep_of_multiplicative pD pE S g h hS
 
+/-- The probability form of `selected_indep_of_multiplicative`: if the selected mass
+`∑ S d e * pD d * pE e` (the participation proportion) is positive, the conditional law of
+disease and exposure given participation, the normalized participants' table, is the product of
+its margins. -/
+theorem selected_condIndep_of_multiplicative (S : Table) (pD pE g h : Bool → ℝ)
+    (hS : ∀ d e, S d e = g e * h d)
+    (hT : 0 < ∑ d, ∑ e, selected S (fun d e ↦ pD d * pE e) d e) (d e : Bool) :
+    selected S (fun d e ↦ pD d * pE e) d e /
+        (∑ d', ∑ e', selected S (fun d e ↦ pD d * pE e) d' e') =
+      (∑ e', selected S (fun d e ↦ pD d * pE e) d e' /
+          (∑ d', ∑ e', selected S (fun d e ↦ pD d * pE e) d' e')) *
+        ∑ d', selected S (fun d e ↦ pD d * pE e) d' e /
+          (∑ d', ∑ e', selected S (fun d e ↦ pD d * pE e) d' e') :=
+  (tableIndep_iff_normalized _ hT).mp (selected_indep_of_multiplicative S pD pE g h hS) d e
+
+/-- Statistical reading of the selection model: with selection proportions in `[0, 1]` and
+nonnegative source cells, every participants' cell lies between zero and the corresponding
+source cell. -/
+theorem selected_mem_Icc (S src : Table) (hS0 : ∀ d e, 0 ≤ S d e) (hS1 : ∀ d e, S d e ≤ 1)
+    (hsrc : ∀ d e, 0 ≤ src d e) (d e : Bool) :
+    selected S src d e ∈ Set.Icc 0 (src d e) :=
+  ⟨mul_nonneg (hS0 d e) (hsrc d e), mul_le_of_le_one_left (hsrc d e) (hS1 d e)⟩
+
 /-! ### Projection of the exposure prevalence among nonparticipants -/
 
 /-- The projected source table of Fox, MacLehose and Lash (2021), "Bias Analysis by Projecting
@@ -213,6 +264,20 @@ def proj (a b : Table) (m p : Bool → ℝ) : Table :=
 cell (Fox, MacLehose and Lash 2021, Table 4.5). -/
 noncomputable def projSel (a b : Table) (m p : Bool → ℝ) : Table :=
   fun d e ↦ a d e / proj a b m p d e
+
+/-- The selection proportions implied by the projection are admissible probabilities: with
+positive participant cells, nonnegative classified and unclassified nonparticipant counts, and an
+assumed exposed fraction `p d ∈ [0, 1]`, every implied proportion lies in `(0, 1]`. -/
+theorem projSel_mem_Ioc (a b : Table) (m p : Bool → ℝ) (ha : ∀ d e, 0 < a d e)
+    (hb : ∀ d e, 0 ≤ b d e) (hm : ∀ d, 0 ≤ m d) (hp0 : ∀ d, 0 ≤ p d) (hp1 : ∀ d, p d ≤ 1)
+    (d e : Bool) : projSel a b m p d e ∈ Set.Ioc 0 1 := by
+  have hw : 0 ≤ (if e then p d else 1 - p d) * m d := by
+    have := hp0 d; have := hp1 d
+    split_ifs <;> exact mul_nonneg (by linarith) (hm d)
+  have hP : 0 < proj a b m p d e := by
+    unfold proj; linarith [ha d e, hb d e]
+  refine ⟨div_pos (ha d e) hP, (div_le_one hP).2 ?_⟩
+  unfold proj; linarith [hb d e]
 
 /-- The projection is the data-generating description: if the source table consists of the
 participants, the classified nonparticipants, and an unclassified part `c` split according to
@@ -458,6 +523,43 @@ theorem partRR_eq_of_const (q : Bool → ι → ℝ) (s : ι → ℝ) (r : Bool 
   simp only [partRisk, hindep]
   rw [key _ hp hr0', key _ hq hr0]
 
+/-- Hernán's condition on the risk ratio scale, the exact criterion. In the setting of
+`partRD_sub_sourceRD` (`U` independent of exposure, participation depending on `U` only), let the
+participation proportion `π = ∑ q s / ∑ q` satisfy `0 ≤ π < 1`, let the risk among unexposed
+participants be positive and the risks among nonparticipants be positive in both arms (so both
+risk ratios and both participation risk ratios are real quotients). Then the participants' risk
+ratio
+equals the source risk ratio if and only if the ratio of the risk among participants to the
+risk among nonparticipants is the same in both exposure arms. -/
+theorem partRR_eq_sourceRR_iff (q : Bool → ι → ℝ) (s : ι → ℝ) (r : Bool → ι → ℝ)
+    (hindep : q true = q false) (hq : ∑ u, q false u ≠ 0) (hp : ∑ u, q false u * s u ≠ 0)
+    (hn : ∑ u, q false u * (1 - s u) ≠ 0)
+    (hπ0 : 0 ≤ (∑ u, q false u * s u) / ∑ u, q false u)
+    (hπ1 : (∑ u, q false u * s u) / ∑ u, q false u < 1)
+    (hP0 : 0 < partRisk q s r false)
+    (hN1 : 0 < nonpartRisk q s r true) (hN0 : 0 < nonpartRisk q s r false) :
+    partRisk q s r true / partRisk q s r false =
+        mixRisk (q true) (r true) / mixRisk (q false) (r false) ↔
+      partRisk q s r true / nonpartRisk q s r true =
+        partRisk q s r false / nonpartRisk q s r false := by
+  simp only [partRisk, nonpartRisk, hindep] at hP0 hN1 hN0 ⊢
+  rw [mixRisk_eq_participation (q false) s (r true) hq hp hn,
+    mixRisk_eq_participation (q false) s (r false) hq hp hn]
+  set π := (∑ u, q false u * s u) / ∑ u, q false u
+  set P1 := mixRisk (fun u ↦ q false u * s u) (r true)
+  set P0 := mixRisk (fun u ↦ q false u * s u) (r false)
+  set N1 := mixRisk (fun u ↦ q false u * (1 - s u)) (r true)
+  set N0 := mixRisk (fun u ↦ q false u * (1 - s u)) (r false)
+  have h1π : 0 < 1 - π := by linarith
+  have hS0 : 0 < π * P0 + (1 - π) * N0 := by positivity
+  rw [div_eq_div_iff hP0.ne' hS0.ne', div_eq_div_iff hN1.ne' hN0.ne']
+  constructor
+  · intro h
+    have key : (1 - π) * (P1 * N0 - P0 * N1) = 0 := by linear_combination h
+    linear_combination (mul_eq_zero.mp key).resolve_left h1π.ne'
+  · intro h
+    linear_combination (1 - π) * h
+
 end EffectModification
 
 /-! ### Loss to follow-up -/
@@ -472,18 +574,20 @@ observed among the followed (Fox, MacLehose and Lash 2021, "Bias Analysis by Mod
 Outcomes", Table 4.7). -/
 noncomputable def adjRate (d T x t : ℝ) : ℝ := (d + x) / (T + t)
 
-/-- The mediant identity behind the "lost as followed" row of Table 4.7: if the lost contribute
-deaths and person-time at the observed rate `r` (`d = r T`, `x = r t`), the adjusted rate is
-`r`. -/
+/-- The mediant identity behind the remark of Fox, MacLehose and Lash (2021, after Equation 4.3)
+that imputing the observed rates in the missing person-time reproduces the crude result: if the
+lost contribute deaths and person-time at the observed rate `r` (`d = r T`, `x = r t`), the
+adjusted rate is `r`. -/
 theorem adjRate_eq_of_same_rate {d T x t r : ℝ} (hd : d = r * T) (hx : x = r * t)
     (hT : T + t ≠ 0) : adjRate d T x t = r := by
   unfold adjRate
   rw [div_eq_iff hT, hd, hx]
   ring
 
-/-- "Lost as followed" in the book's form: `n` followed with `d` deaths and `T` person-years,
-`l` lost, each credited with the observed mean person-time `T / n` and the observed risk
-`d / n`; the adjusted rate equals the observed rate `d / T`. -/
+/-- The "lost as followed" scenario: `n` followed with `d` deaths and `T` person-years, `l`
+lost, each credited with the observed mean person-time `T / n` (as in Equation 4.3) and the
+observed risk `d / n`; the adjusted rate equals the observed rate `d / T`. This is an instance
+of `adjRate_eq_of_same_rate`. -/
 theorem adjRate_lost_as_followed {d T n l : ℝ} (hT : 0 < T) (hn : 0 < n) (hl : 0 ≤ l) :
     adjRate d T (d / n * l) (T / n * l) = d / T := by
   apply adjRate_eq_of_same_rate (r := d / T)
@@ -498,11 +602,12 @@ theorem adjRate_mono {d T t x x' : ℝ} (hT : 0 < T + t) (hx : x ≤ x') :
   gcongr
 
 /-- Extreme scenarios for the rate ratio under loss to follow-up, with the person-time credited
-to the lost held fixed (as in Table 4.7): if `x1 ∈ [0, l1]` deaths are credited to the `l1` lost
-exposed and `x0 ∈ [0, l0]` to the `l0` lost unexposed, the adjusted rate ratio lies between its
-value with no lost exposed death and all lost unexposed dead, and its value with all lost
-exposed dead and no lost unexposed death. The diagonal scenarios "all lost died" and "no lost
-died" of Table 4.7 are in general not the extremes (see `Examples.table47_extremes`). -/
+to the lost held fixed (as in Equation 4.3 and Table 4.7): if `x1 ∈ [0, l1]` deaths are credited
+to the `l1` lost exposed and `x0 ∈ [0, l0]` to the `l0` lost unexposed, the adjusted rate ratio
+lies between its value with no lost exposed death and all lost unexposed dead (the "most
+extreme case" computed in the text after Table 4.7, `Examples.extreme47`), and its value with all
+lost exposed dead and no lost unexposed death. The diagonal scenarios "all lost died" and "no
+lost died" are in general not the extremes (see `Examples.scenario46_extremes`). -/
 theorem adjRateRatio_mem_Icc {d1 T1 t1 d0 T0 t0 l1 l0 x1 x0 : ℝ} (hd1 : 0 ≤ d1)
     (hd0 : 0 < d0) (h1 : 0 < T1 + t1) (h0 : 0 < T0 + t0) (hx1 : 0 ≤ x1) (hx1' : x1 ≤ l1)
     (hx0 : 0 ≤ x0) (hx0' : x0 ≤ l0) :
@@ -532,26 +637,60 @@ theorem adjRateDiff_mem_Icc {d1 T1 t1 d0 T0 t0 l1 l0 x1 x0 : ℝ} (h1 : 0 < T1 +
 
 /-- Inverse probability of follow-up weighting over a finite set of strata `h` (for example
 exposure by hospital): if in each stratum the followed contribution is the full-cohort
-contribution times the follow-up probability `π h ≠ 0` (follow-up at random within strata), the
-weighted total `∑ obs h / π h` equals the full-cohort total. Applied to deaths and to
-person-time it recovers the full-cohort rate (`ipw_rate`). This is a finite analogue (proved
-directly, not derived from it) of `ipcw_identity` of `CausalInference.MissingData.Weighting`. -/
+contribution times the follow-up probability `π h ≠ 0`, the weighted total `∑ obs h / π h`
+equals the full-cohort total. The hypothesis `obs h = π h * full h` is a statement about expected
+stratum totals (follow-up at random within strata); it does not hold for realized counts in
+general, since one person followed with probability `1/2` contributes all or nothing. The
+expectation-level statement on a probability space is `ipcw_rate`, derived from `ipcw_identity`
+of `CausalInference.MissingData.Weighting`; this finite form is the cellwise algebra. -/
 theorem sum_ipw_eq {κ : Type*} [Fintype κ] (π obs full : κ → ℝ) (hπ : ∀ h, π h ≠ 0)
     (hobs : ∀ h, obs h = π h * full h) : ∑ h, obs h / π h = ∑ h, full h := by
   congr 1; funext h
   rw [hobs, mul_div_cancel_left₀ _ (hπ h)]
 
-/-- The weighted rate recovers the full-cohort rate when deaths and person-time are both
-thinned by the stratum follow-up probabilities: the weighted deaths and the weighted
-person-time equal the full-cohort deaths and person-time separately, so the weighted rate is
-the full-cohort rate (which is defined when the full-cohort person-time is positive). -/
+/-- The weighted rate recovers the full-cohort rate when expected deaths and expected
+person-time are both thinned by the stratum follow-up probabilities (read as in `sum_ipw_eq`):
+the weighted deaths and the weighted person-time equal the full-cohort deaths and person-time
+separately; with positive full-cohort person-time, the weighted person-time is positive, so the
+weighted rate is a real quotient, and it is the full-cohort rate. -/
 theorem ipw_rate {κ : Type*} [Fintype κ] (π dObs TObs dFull TFull : κ → ℝ)
     (hπ : ∀ h, π h ≠ 0) (hd : ∀ h, dObs h = π h * dFull h)
-    (hT : ∀ h, TObs h = π h * TFull h) :
+    (hT : ∀ h, TObs h = π h * TFull h) (hTpos : 0 < ∑ h, TFull h) :
     ∑ h, dObs h / π h = ∑ h, dFull h ∧ ∑ h, TObs h / π h = ∑ h, TFull h ∧
+      0 < ∑ h, TObs h / π h ∧
       (∑ h, dObs h / π h) / (∑ h, TObs h / π h) = (∑ h, dFull h) / ∑ h, TFull h := by
   rw [sum_ipw_eq π dObs dFull hπ hd, sum_ipw_eq π TObs TFull hπ hT]
-  exact ⟨rfl, rfl, rfl⟩
+  exact ⟨rfl, rfl, hTpos, rfl⟩
+
+open MeasureTheory in
+/-- Inverse probability of attrition weighting at the level of expectations. Each unit `ω` of a
+cohort (a finite measure `μ`) has a stratum `X ω` (for example exposure by hospital), deaths
+`D ω` and person-time `T ω` over the full follow-up, and a follow-up indicator `Δ ω`. Let `K ∘ X`
+be a version of the follow-up probability `E[1{Δ} | X]`, positive almost surely, and assume
+follow-up is mean-ignorable given `X` for both deaths and person-time (`MARMean`, the
+noninformative censoring of `ipcw_identity`). Then the weighted expected deaths and person-time
+of the followed, `E[1{Δ} D / K(X)]` and `E[1{Δ} T / K(X)]`, equal the full-cohort `E[D]` and
+`E[T]`; with positive expected person-time `E[T]`, the weighted rate is a real quotient and
+equals the full-cohort rate `E[D] / E[T]`. -/
+theorem ipcw_rate {Ω 𝒳 : Type*} [MeasurableSpace Ω] [MeasurableSpace 𝒳] {μ : Measure Ω}
+    [IsFiniteMeasure μ] {X : Ω → 𝒳} {D T : Ω → ℝ} {Δ : Ω → Bool} (hX : Measurable X)
+    (hD : Measurable D) (hT : Measurable T) (hΔ : Measurable Δ) {K : 𝒳 → ℝ} (hK : Measurable K)
+    (hprop : μ[MissingData.respInd Δ | MeasurableSpace.comap X inferInstance] =ᵐ[μ]
+      fun ω ↦ K (X ω))
+    (hmarD : MissingData.MARMean μ X D Δ) (hmarT : MissingData.MARMean μ X T Δ)
+    (hpos : ∀ᵐ ω ∂μ, 0 < K (X ω))
+    (hintD : Integrable (fun ω ↦ MissingData.respInd Δ ω * D ω / K (X ω)) μ)
+    (hintT : Integrable (fun ω ↦ MissingData.respInd Δ ω * T ω / K (X ω)) μ)
+    (hTpos : 0 < ∫ ω, T ω ∂μ) :
+    ∫ ω, MissingData.respInd Δ ω * D ω / K (X ω) ∂μ = ∫ ω, D ω ∂μ ∧
+      ∫ ω, MissingData.respInd Δ ω * T ω / K (X ω) ∂μ = ∫ ω, T ω ∂μ ∧
+      0 < ∫ ω, MissingData.respInd Δ ω * T ω / K (X ω) ∂μ ∧
+      (∫ ω, MissingData.respInd Δ ω * D ω / K (X ω) ∂μ) /
+          (∫ ω, MissingData.respInd Δ ω * T ω / K (X ω) ∂μ) =
+        (∫ ω, D ω ∂μ) / ∫ ω, T ω ∂μ := by
+  rw [MissingData.ipcw_identity hX hD hΔ hK hprop hmarD hpos hintD,
+    MissingData.ipcw_identity hX hT hΔ hK hprop hmarT hpos hintT]
+  exact ⟨rfl, rfl, hTpos, rfl⟩
 
 end LossToFollowUp
 
@@ -703,8 +842,9 @@ theorem stang_selection :
 
 /-- The three methods agree on the Stang data (Equation 4.1, Equation 4.2, and inverse
 probability of participation weighting): the observed odds ratio divided by the selection odds
-ratio of Table 4.5 is the projected odds ratio of Equation 4.1. The weighting display after
-Table 4.5 is garbled in the source; this is the identity it intends. -/
+ratio of Table 4.5 is the projected odds ratio of Equation 4.1, and weighting the participants'
+cells by the inverse selection proportions reproduces the projected table. The weighting display
+of the book (p. 92) is the odds ratio of the weighted cells, `stang_ipw_display`. -/
 theorem stang_three_methods :
     oddsRatio stangA /
         selectionOddsRatio (projSel stangA stangB stangM fun d ↦ if d then 3 / 10 else 72 / 284)
@@ -717,6 +857,19 @@ theorem stang_three_methods :
     intro d e; cases d <;> cases e <;> norm_num [proj, stangA, stangB, stangM]
   obtain ⟨h1, h2⟩ := projection_ipw_selectionOddsRatio stangA stangB stangM _ ha hP
   exact ⟨h2.symm, h1⟩
+
+/-- The inverse probability of participation weighting display of Fox, MacLehose and Lash (2021,
+p. 92): `OR = (136 / S_{case,1} / (297 / S_{control,1})) / (107 / S_{case,0} / (165 /
+S_{control,0}))`, printed as 1.62. With the exact selection proportions of Table 4.5 it is the
+projected odds ratio `7501846/4619271` of Equation 4.1, about 1.624; with the rounded
+proportions `0.94, 0.85, 0.64, 0.25` displayed there it lies between 1.634 and 1.635, so the
+printed value comes from the unrounded proportions. -/
+theorem stang_ipw_display :
+    (136 / (1360 / 1441) / (297 / (781 / 1223))) / (107 / (1070 / 1259) / (165 / (3905 / 15618)))
+      = (7501846 / 4619271 : ℝ) ∧
+      (1.634 : ℝ) < (136 / 0.94 / (297 / 0.64)) / (107 / 0.85 / (165 / 0.25)) ∧
+      (136 / 0.94 / (297 / 0.64)) / (107 / 0.85 / (165 / 0.25)) < (1.635 : ℝ) := by
+  norm_num
 
 /-- The rounded display after Table 4.5, `0.71 * (0.85 * 0.64) / (0.94 * 0.25)`, evaluates to
 about `1.645`, not the printed 1.62; the book notes that unrounded components must be used. -/
@@ -746,7 +899,7 @@ theorem orProj_stang_corners :
       orProj stangA stangB stangM 0 0 < orProj stangA stangB stangM 1 0 := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> norm_num [orProj, oddsRatio, proj, stangA, stangB, stangM]
 
-/-! #### Table 4.7: loss to follow-up -/
+/-! #### Tables 4.6 to 4.8: loss to follow-up -/
 
 /-- Observed rates of Table 4.6: `40/687` and `65/2560` per person-year, rate difference about
 `3.3` per 100 person-years and rate ratio `20480/8931`, about `2.29` (printed 2.3). -/
@@ -755,30 +908,100 @@ theorem table46 :
       (40 / 687 : ℝ) / (65 / 2560) = 20480 / 8931 := by
   norm_num
 
-/-- "Lost as followed" in Table 4.7: crediting the 13 and 46 lost with the observed mean
-person-time (`687/104` and `2560/286` years) and the observed risk leaves both rates
-unchanged, hence also the rate difference and ratio. -/
-theorem table47_lost_as_followed :
+/-- Equation 4.3 of Fox, MacLehose and Lash (2021): the missing person-time is the mean
+follow-up of the followed times the number lost, `687 * 13 / 104 = 85.875` (printed 85.9) for
+less than guideline therapy and `2560 * 46 / 286 = 58880/143`, about `411.75` (printed 411.7),
+for guideline therapy. -/
+theorem eq43 :
+    (687 * 13 / 104 : ℝ) = 85.875 ∧ (2560 * 46 / 286 : ℝ) = 58880 / 143 ∧
+      (411.74 : ℝ) < 58880 / 143 ∧ (58880 / 143 : ℝ) < 411.75 := by
+  norm_num
+
+/-- The cells of Table 4.7 (p. 96), which imputes the deaths of the lost from the breast cancer
+mortality rates among the followed women diagnosed at the two hospitals with incomplete
+registries: rates `3/60.8` and `5/110.2` per person-year (printed 4.9 and 4.5 per 100
+person-years), rate difference about `0.40` per 100 person-years (printed 0.4) and rate ratio
+exactly `1.0875` (printed 1.1); imputed deaths `85.875 * 3/60.8 = 10305/2432`, about `4.24`
+(printed 4.2), and `(58880/143) * 5/110.2 = 1472000/78793`, about `18.68` (printed 18.7). -/
+theorem table47 :
+    (0.0493 : ℝ) < 3 / 60.8 ∧ (3 / 60.8 : ℝ) < 0.0494 ∧
+      (0.0453 : ℝ) < 5 / 110.2 ∧ (5 / 110.2 : ℝ) < 0.0454 ∧
+      (0.0039 : ℝ) < 3 / 60.8 - 5 / 110.2 ∧ (3 / 60.8 - 5 / 110.2 : ℝ) < 0.0040 ∧
+      (3 / 60.8 : ℝ) / (5 / 110.2) = 1.0875 ∧
+      (687 * 13 / 104 : ℝ) * (3 / 60.8) = 10305 / 2432 ∧
+      (4.237 : ℝ) < 10305 / 2432 ∧ (10305 / 2432 : ℝ) < 4.238 ∧
+      (2560 * 46 / 286 : ℝ) * (5 / 110.2) = 1472000 / 78793 ∧
+      (18.68 : ℝ) < 1472000 / 78793 ∧ (1472000 / 78793 : ℝ) < 18.69 := by
+  norm_num
+
+/-- The bias-adjusted rates after Table 4.7 (p. 96): adding the imputed deaths and missing
+person-time gives rates of about `5.72` and `2.82` per 100 person-years (printed 5.7 and 2.8),
+rate difference `8419676333/289553550336` per person-year, about `2.908` per 100 person-years
+(printed 2.9), and rate ratio `16573254080/8153577747`, about `2.033` (printed 2.0). -/
+theorem table47_adjusted :
+    adjRate 40 687 (687 * 13 / 104 * (3 / 60.8)) (687 * 13 / 104) = 107585 / 1879632 ∧
+      (0.0572 : ℝ) < 107585 / 1879632 ∧ (107585 / 1879632 : ℝ) < 0.0573 ∧
+      (0.0281 : ℝ) < adjRate 65 2560 (2560 * 46 / 286 * (5 / 110.2)) (2560 * 46 / 286) ∧
+      adjRate 65 2560 (2560 * 46 / 286 * (5 / 110.2)) (2560 * 46 / 286) < 0.0282 ∧
+      adjRate 40 687 (687 * 13 / 104 * (3 / 60.8)) (687 * 13 / 104) -
+          adjRate 65 2560 (2560 * 46 / 286 * (5 / 110.2)) (2560 * 46 / 286) =
+        8419676333 / 289553550336 ∧
+      (0.02907 : ℝ) < 8419676333 / 289553550336 ∧
+      (8419676333 / 289553550336 : ℝ) < 0.02908 ∧
+      adjRate 40 687 (687 * 13 / 104 * (3 / 60.8)) (687 * 13 / 104) /
+          adjRate 65 2560 (2560 * 46 / 286 * (5 / 110.2)) (2560 * 46 / 286) =
+        16573254080 / 8153577747 ∧
+      (2.0326 : ℝ) < 16573254080 / 8153577747 ∧ (16573254080 / 8153577747 : ℝ) < 2.0327 := by
+  norm_num [adjRate]
+
+/-- The "most extreme case" of the text after Table 4.7 (pp. 96 to 97): no lost woman with less
+than guideline therapy and every lost woman with guideline therapy died of breast cancer. The
+rates are about `5.18` and `3.74` per 100 person-years (printed 5.2 and 3.7), the rate
+difference about `1.44` per 100 person-years (printed 1.4), and the rate ratio
+`135987200/98142759`, about `1.386`. This scenario is the lower end of `adjRateRatio_mem_Icc`:
+no other allocation of deaths to the 13 and 46 lost, with the missing person-time of
+Equation 4.3, gives a smaller rate ratio. -/
+theorem extreme47 :
+    (0.0517 : ℝ) < adjRate 40 687 0 (687 * 13 / 104) ∧
+      adjRate 40 687 0 (687 * 13 / 104) < 0.0518 ∧
+      (0.0373 : ℝ) < adjRate 65 2560 46 (2560 * 46 / 286) ∧
+      adjRate 65 2560 46 (2560 * 46 / 286) < 0.0374 ∧
+      (0.0144 : ℝ) < adjRate 40 687 0 (687 * 13 / 104) - adjRate 65 2560 46 (2560 * 46 / 286) ∧
+      adjRate 40 687 0 (687 * 13 / 104) - adjRate 65 2560 46 (2560 * 46 / 286) < 0.0145 ∧
+      adjRate 40 687 0 (687 * 13 / 104) / adjRate 65 2560 46 (2560 * 46 / 286) =
+        135987200 / 98142759 ∧
+      ∀ x1 x0 : ℝ, 0 ≤ x1 → x1 ≤ 13 → 0 ≤ x0 → x0 ≤ 46 →
+        adjRate 40 687 0 (687 * 13 / 104) / adjRate 65 2560 46 (2560 * 46 / 286) ≤
+          adjRate 40 687 x1 (687 * 13 / 104) / adjRate 65 2560 x0 (2560 * 46 / 286) := by
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, fun x1 x0 h1 h1' h0 h0' ↦
+    (adjRateRatio_mem_Icc (by norm_num) (by norm_num) (by norm_num) (by norm_num) h1 h1' h0
+      h0').1⟩ <;> norm_num [adjRate]
+
+/-- An additional scenario computed from Table 4.6 (it is not a row of the printed Table 4.7):
+crediting the 13 and 46 lost with the observed mean person-time (`687/104` and `2560/286`
+years) and the observed risk leaves both rates unchanged, hence also the rate difference and
+ratio. The book makes this remark in words after Equation 4.3. -/
+theorem scenario46_lost_as_followed :
     adjRate 40 687 (40 / 104 * 13) (687 / 104 * 13) = 40 / 687 ∧
       adjRate 65 2560 (65 / 286 * 46) (2560 / 286 * 46) = 65 / 2560 :=
   ⟨adjRate_lost_as_followed (by norm_num) (by norm_num) (by norm_num),
     adjRate_lost_as_followed (by norm_num) (by norm_num) (by norm_num)⟩
 
-/-- Printed error in Table 4.7, "all lost died": with the exact credited person-time
-(`687/104` and `2560/286` years per lost participant) the rate ratio is about `1.84` and the
-rate difference about `3.1` per 100 person-years, not the printed 2.4 and 4.4. -/
-theorem table47_all_died :
+/-- An additional scenario computed from Table 4.6 (not a row of the printed Table 4.7), "all
+lost died": with the missing person-time of Equation 4.3 the rate ratio is about `1.84` and the
+rate difference about `3.1` per 100 person-years. -/
+theorem scenario46_all_lost_died :
     (1.83 : ℝ) < adjRate 40 687 13 (687 / 104 * 13) / adjRate 65 2560 46 (2560 / 286 * 46) ∧
       adjRate 40 687 13 (687 / 104 * 13) / adjRate 65 2560 46 (2560 / 286 * 46) < 1.84 ∧
       (0.031 : ℝ) < adjRate 40 687 13 (687 / 104 * 13) - adjRate 65 2560 46 (2560 / 286 * 46) ∧
       adjRate 40 687 13 (687 / 104 * 13) - adjRate 65 2560 46 (2560 / 286 * 46) < 0.032 := by
   norm_num [adjRate]
 
-/-- Printed error in Table 4.7, "no lost died": with the exact credited person-time the rate
-ratio is about `2.37` and the rate difference about `3.0` per 100 person-years, not the printed
-2.3 and 2.7. Crediting 12 years to every lost participant instead gives about `2.27` and `2.66`,
-which matches the printed row. -/
-theorem table47_none_died :
+/-- An additional scenario computed from Table 4.6 (not a row of the printed Table 4.7), "no
+lost died": with the missing person-time of Equation 4.3 the rate ratio is about `2.37` and the
+rate difference about `3.0` per 100 person-years. Crediting instead the full 12 years of
+follow-up to every lost participant gives about `2.27` and `2.66`. -/
+theorem scenario46_no_lost_died :
     (2.36 : ℝ) < adjRate 40 687 0 (687 / 104 * 13) / adjRate 65 2560 0 (2560 / 286 * 46) ∧
       adjRate 40 687 0 (687 / 104 * 13) / adjRate 65 2560 0 (2560 / 286 * 46) < 2.37 ∧
       (0.0298 : ℝ) < adjRate 40 687 0 (687 / 104 * 13) - adjRate 65 2560 0 (2560 / 286 * 46) ∧
@@ -789,14 +1012,108 @@ theorem table47_none_died :
       adjRate 40 687 0 (12 * 13) - adjRate 65 2560 0 (12 * 46) < 0.0266 := by
   norm_num [adjRate]
 
-/-- The diagonal rows of Table 4.7 do not bound the rate ratio: the extreme scenarios of
-`adjRateRatio_mem_Icc` (all 13 lost exposed died and no lost unexposed died; no lost exposed
-died and all 46 lost unexposed died) give about `3.14` and `1.39`, outside the interval between
-the "all lost died" (`1.84`) and "no lost died" (`2.37`) values. -/
-theorem table47_extremes :
+/-- The diagonal scenarios "all lost died" and "no lost died" do not bound the rate ratio: the
+extreme scenarios of `adjRateRatio_mem_Icc` (all 13 lost with less than guideline therapy died
+and no lost with guideline therapy died; the reverse, the book's most extreme case
+`extreme47`) give about `3.14` and `1.39`, outside the interval between the diagonal values
+`1.84` and `2.37`. -/
+theorem scenario46_extremes :
     (3.13 : ℝ) < adjRate 40 687 13 (687 / 104 * 13) / adjRate 65 2560 0 (2560 / 286 * 46) ∧
       adjRate 40 687 0 (687 / 104 * 13) / adjRate 65 2560 46 (2560 / 286 * 46) < 1.39 := by
   norm_num [adjRate]
+
+/-- The reidentification (follow-up) proportions of Table 4.8 (p. 98), by therapy `e` (`true`
+for less than guideline therapy) and hospital stratum `h` (`true` for the two hospitals with
+incomplete registries): `96/99` and `8/18` for less than guideline therapy, `273/284` and
+`13/48` for guideline therapy. -/
+noncomputable def reid48 (e h : Bool) : ℝ :=
+  if e then (if h then 8 / 18 else 96 / 99) else (if h then 13 / 48 else 273 / 284)
+
+/-- The breast cancer deaths among the reidentified women of Table 4.8. -/
+def deaths48 (e h : Bool) : ℝ :=
+  if e then (if h then 3 else 37) else (if h then 5 else 60)
+
+/-- The person-years among the reidentified women of Table 4.8. -/
+noncomputable def py48 (e h : Bool) : ℝ :=
+  if e then (if h then 60.8 else 626.2) else (if h then 110.2 else 2449.8)
+
+/-- Cells of Table 4.8: the reidentification proportions (printed 0.97, 0.96, 0.44, 0.27), the
+inverse probability of attrition weights `99/96 = 1.03125`, `284/273`, `18/8 = 2.25`, `48/13`
+(printed 1.03, 1.04, 2.25, 3.69), and, in the stratum of the six hospitals with complete
+registries, the crude rates `37/626.2` and `60/2449.8` (printed 5.9 and 2.4 per 100
+person-years), their difference (printed 3.5 per 100 person-years) and their ratio (printed
+2.4). -/
+theorem table48 :
+    (0.9696 : ℝ) < reid48 true false ∧ reid48 true false < 0.9697 ∧
+      (0.9612 : ℝ) < reid48 false false ∧ reid48 false false < 0.9613 ∧
+      (0.4444 : ℝ) < reid48 true true ∧ reid48 true true < 0.4445 ∧
+      (0.2708 : ℝ) < reid48 false true ∧ reid48 false true < 0.2709 ∧
+      1 / reid48 true false = 1.03125 ∧
+      (1.0402 : ℝ) < 1 / reid48 false false ∧ 1 / reid48 false false < 1.0403 ∧
+      1 / reid48 true true = 2.25 ∧
+      (3.6923 : ℝ) < 1 / reid48 false true ∧ 1 / reid48 false true < 3.6924 ∧
+      (0.0590 : ℝ) < deaths48 true false / py48 true false ∧
+      deaths48 true false / py48 true false < 0.0591 ∧
+      (0.0244 : ℝ) < deaths48 false false / py48 false false ∧
+      deaths48 false false / py48 false false < 0.0245 ∧
+      (0.0345 : ℝ) < deaths48 true false / py48 true false -
+        deaths48 false false / py48 false false ∧
+      deaths48 true false / py48 true false - deaths48 false false / py48 false false <
+        0.0346 ∧
+      (2.41 : ℝ) < deaths48 true false / py48 true false /
+        (deaths48 false false / py48 false false) ∧
+      deaths48 true false / py48 true false / (deaths48 false false / py48 false false) <
+        2.42 := by
+  norm_num [reid48, deaths48, py48]
+
+/-- Inverse probability of attrition weighting, Table 4.8 and Equation 4.4 (pp. 98 to 99): the
+weighted rates `∑ A_h / π_h / ∑ PY_h / π_h` over the two hospital strata are `2395/41737`, about
+5.74 per 100 person-years, for less than guideline therapy and `9200/336177`, about 2.74, for
+guideline therapy (printed 5.7 and 2.7); the weighted rate difference is
+`421163515/14031019449`, about 3.002 per 100 person-years (printed 3.0), and the weighted rate
+ratio `161028783/76796080`, about 2.097 (printed 2.10). The displays of Equation 4.4 use the
+rounded weights 1.03, 2.25 and 1.04, 3.69 and give the same printed rates. -/
+theorem table48_ipaw :
+    (∑ h, deaths48 true h / reid48 true h) / (∑ h, py48 true h / reid48 true h) =
+        2395 / 41737 ∧
+      (∑ h, deaths48 false h / reid48 false h) / (∑ h, py48 false h / reid48 false h) =
+        9200 / 336177 ∧
+      (0.0573 : ℝ) < 2395 / 41737 ∧ (2395 / 41737 : ℝ) < 0.0574 ∧
+      (0.0273 : ℝ) < 9200 / 336177 ∧ (9200 / 336177 : ℝ) < 0.0274 ∧
+      (2395 / 41737 - 9200 / 336177 : ℝ) = 421163515 / 14031019449 ∧
+      (0.03001 : ℝ) < 421163515 / 14031019449 ∧ (421163515 / 14031019449 : ℝ) < 0.03002 ∧
+      (2395 / 41737 : ℝ) / (9200 / 336177) = 161028783 / 76796080 ∧
+      (2.0968 : ℝ) < 161028783 / 76796080 ∧ (161028783 / 76796080 : ℝ) < 2.0969 ∧
+      (0.0573 : ℝ) < (37 * 1.03 + 3 * 2.25) / (626.2 * 1.03 + 60.8 * 2.25) ∧
+      (37 * 1.03 + 3 * 2.25) / (626.2 * 1.03 + 60.8 * 2.25) < (0.0574 : ℝ) ∧
+      (0.0273 : ℝ) < (60 * 1.04 + 5 * 3.69) / (2449.8 * 1.04 + 110.2 * 3.69) ∧
+      (60 * 1.04 + 5 * 3.69) / (2449.8 * 1.04 + 110.2 * 3.69) < (0.0274 : ℝ) := by
+  norm_num [reid48, deaths48, py48, Fintype.sum_bool]
+
+/-- `ipw_rate` applied to Table 4.8: if the reidentified deaths and person-years are the expected
+full-cohort stratum totals `dFull e h`, `TFull e h` thinned by the reidentification proportions
+(reidentification at random within therapy and hospital strata, the key assumption stated on
+p. 99), then the full-cohort rates are the weighted rates `2395/41737` and `9200/336177` of
+`table48_ipaw`. -/
+theorem table48_full_cohort (dFull TFull : Bool → Bool → ℝ)
+    (hd : ∀ e h, deaths48 e h = reid48 e h * dFull e h)
+    (hT : ∀ e h, py48 e h = reid48 e h * TFull e h) :
+    (∑ h, dFull true h) / (∑ h, TFull true h) = 2395 / 41737 ∧
+      (∑ h, dFull false h) / (∑ h, TFull false h) = 9200 / 336177 := by
+  have hπ : ∀ e h, reid48 e h ≠ 0 := by
+    intro e h; cases e <;> cases h <;> norm_num [reid48]
+  have hTpos : ∀ e, 0 < ∑ h, TFull e h := by
+    intro e
+    have hT' : ∀ h, TFull e h = py48 e h / reid48 e h := fun h ↦ by
+      rw [hT e h, mul_div_cancel_left₀ _ (hπ e h)]
+    simp only [hT', Fintype.sum_bool]
+    cases e <;> norm_num [reid48, py48]
+  obtain ⟨h1, h0, -⟩ := table48_ipaw
+  refine ⟨?_, ?_⟩
+  · rw [← (ipw_rate (reid48 true) (deaths48 true) (py48 true) (dFull true) (TFull true)
+      (hπ true) (hd true) (hT true) (hTpos true)).2.2.2, h1]
+  · rw [← (ipw_rate (reid48 false) (deaths48 false) (py48 false) (dFull false) (TFull false)
+      (hπ false) (hd false) (hT false) (hTpos false)).2.2.2, h0]
 
 /-! #### Equation 12.1 -/
 
