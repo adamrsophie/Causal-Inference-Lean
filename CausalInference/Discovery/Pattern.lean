@@ -48,7 +48,8 @@ wrong.
   the rules keeps the invariant, so every edge the rules orient is compelled.
 
 Completeness of the rules (Meek 1995: closing the v-structure pattern under the rules gives the
-pattern) is not proved here.
+pattern) is proved in `CausalInference.Discovery.PatternCompleteness`
+(`Digraph.closure_eq_pattern`, `Digraph.meekComplete`).
 
 ## References
 

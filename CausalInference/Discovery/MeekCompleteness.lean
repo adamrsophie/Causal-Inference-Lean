@@ -9,7 +9,7 @@ public import CausalInference.Discovery.PC
 public import CausalInference.Discovery.FaithfulExistence
 
 /-!
-# Toward the completeness of the orientation rules, and the PC output
+# Reversible edges, partial patterns, and the PC output
 
 This file collects what is proved about the completeness of the orientation rules R1 to R4
 (Meek 1995) and its consequences for the PC algorithm.
@@ -37,13 +37,11 @@ This file collects what is proved about the completeness of the orientation rule
 * `Digraph.meekComplete_iff`: the completeness statement `Digraph.MeekComplete` is equivalent to
   the statement that every undirected edge of a closed partial pattern is reversible.
 
-What is missing for `Digraph.MeekComplete V` is that *every* undirected edge is reversible, not
-just one: by `Digraph.meekComplete_iff` and `Digraph.isReversible_iff_exists_isCovered`, that for
-every undirected edge `u ∼ v` of a closed partial pattern with `u → v` in `G`, some acyclic graph
-Markov equivalent to `G` has `u → v` covered. The argument above finds one covered undirected
-edge, but not a prescribed one, and repeating it can cycle: for the undirected triangle with
-`a → b`, `b → y`, `a → y` in `G`, it reverses `a → b`, and in the resulting graph it reverses
-`b → a` back.
+The argument above finds one covered undirected edge, but not a prescribed one, and repeating it
+can cycle: for the undirected triangle with `a → b`, `b → y`, `a → y` in `G`, it reverses
+`a → b`, and in the resulting graph it reverses `b → a` back. The completeness of the rules,
+`Digraph.MeekComplete V` for every finite `V`, is proved by a different route in
+`CausalInference.Discovery.PatternCompleteness` (`Digraph.meekComplete`).
 
 ## The PC output
 
@@ -331,8 +329,9 @@ theorem pcOutput_eq_iff_markovEquivalent {I I' : V → V → Finset V → Prop}
 
 /-- **The PC algorithm with a Markov and faithful law.** Under the conditional independence
 oracle of a law that is Markov and faithful to a finite acyclic graph `G`, the output of the PC
-algorithm is the pattern of `G`, given the completeness of the rules (`Digraph.MeekComplete`,
-not proved here). -/
+algorithm is the pattern of `G`, given the completeness of the rules (`Digraph.MeekComplete`).
+The completeness is proved as `Digraph.meekComplete`, and the unconditional form is
+`Digraph.pcOutput_condIndep_eq_pattern'`. -/
 theorem pcOutput_condIndep_eq_pattern {α : V → Type*} [∀ v, Fintype (α v)]
     [∀ v, DecidableEq (α v)] {p : CausalInference.FiniteDist (∀ v, α v)}
     [∀ x y S, Decidable (p.CondIndep {x} {y} S)] (hG : G.IsAcyclic) (hM : G.GlobalMarkov p)

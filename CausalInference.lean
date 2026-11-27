@@ -243,3 +243,5 @@ public import CausalInference.Estimation.DeltaMethodMultivariate
 public import CausalInference.BiasAnalysis.VarianceFormulasWitnesses
 public import CausalInference.BiasAnalysis.Tables
 public import CausalInference.BiasAnalysis.VarianceCovariance
+public import CausalInference.Discovery.PatternCompleteness
+public import CausalInference.Discovery.Simplicial

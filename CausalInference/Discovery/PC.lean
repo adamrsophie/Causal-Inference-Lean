@@ -46,8 +46,9 @@ independence oracle of any law that is Markov and faithful to `G`
 * `Digraph.pcOutput_isPartialPattern`, `Digraph.pcOutput_isCompelled`: the output has the
   skeleton of `G` and every edge it orients is compelled in `G`;
 * `Digraph.pcOutput_eq_pattern`: if the rules are complete in the sense of Meek (1995)
-  (`Digraph.MeekComplete`, a hypothesis that is not proved here), the output is the pattern of
-  `G`.
+  (`Digraph.MeekComplete`), the output is the pattern of `G`. The completeness is proved in
+  `CausalInference.Discovery.PatternCompleteness` (`Digraph.meekComplete`), which gives the
+  unconditional `Digraph.pcOutput_eq_pattern'`.
 
 Without faithfulness the algorithm can fail: with the exclusive-or law, which is Markov to the
 collider `0 → 2 ← 1` but not faithful to it, the independence oracle removes the edge `0 ∼ 2`
@@ -375,7 +376,8 @@ end Correctness
 
 /-- The completeness of the orientation rules, in the form of Meek (1995): in every partial
 pattern for a finite acyclic graph `G` to which no rule applies, every compelled edge of `G` is
-directed. This is a hypothesis of `Digraph.pcOutput_eq_pattern` and is not proved here. -/
+directed. This is a hypothesis of `Digraph.pcOutput_eq_pattern`; it holds for every finite
+vertex type (`Digraph.meekComplete` in `CausalInference.Discovery.PatternCompleteness`). -/
 def MeekComplete (V : Type*) [Fintype V] [DecidableEq V] : Prop :=
   ∀ G P : Digraph V, G.IsAcyclic → P.IsPartialPattern G → (∀ a b, ¬ MeekRule P a b) →
     ∀ u v, G.IsCompelled u v → P.IsArrow u v
@@ -462,8 +464,9 @@ theorem IsPartialPattern.eq_pattern {P G : Digraph V} (hP : P.IsPartialPattern G
 
 /-- **The PC algorithm returns the pattern, given the completeness of the rules.** Under a
 d-separation oracle of a finite acyclic graph `G`, and assuming the completeness of the
-orientation rules (`Digraph.MeekComplete`, Meek 1995, not proved here), the output of the PC
-algorithm is the pattern of `G`. -/
+orientation rules (`Digraph.MeekComplete`, Meek 1995), the output of the PC algorithm is the
+pattern of `G`. The completeness is proved as `Digraph.meekComplete`, and the unconditional form
+is `Digraph.pcOutput_eq_pattern'`. -/
 theorem pcOutput_eq_pattern {I : V → V → Finset V → Prop} [∀ x y S, Decidable (I x y S)]
     {G : Digraph V} (hI : ∀ x y S, I x y S ↔ G.DSep {x} {y} ↑S) (hG : G.IsAcyclic)
     (hMeek : MeekComplete V) : toDigraph (pcOutput I) = pattern G := by
