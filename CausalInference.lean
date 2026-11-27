@@ -132,3 +132,6 @@ public import CausalInference.SCM.Adjustment
 public import CausalInference.SCM.Plans
 public import CausalInference.BiasAnalysis.Distributions
 public import CausalInference.BiasAnalysis.Bayesian
+public import CausalInference.Designs.DifferenceInDifferences.RepeatedCrossSection
+public import CausalInference.Designs.DifferenceInDifferences.TrendAdjusted
+public import CausalInference.Designs.DifferenceInDifferences.Scale
