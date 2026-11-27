@@ -32,6 +32,15 @@ Experimental quantities are the marginals `P(Y1 = 1)` and `P(Y0 = 1)`, written `
 * `Attribution.ResponseModel.PS`: probability of sufficiency `P(Y1 = 1 | X = 0, Y = 0)`.
 * `Attribution.ResponseModel.PNS`: probability of necessity and sufficiency
   `P(Y1 = 1, Y0 = 0)`.
+* `Attribution.ResponseModel.PD`, `PE`: probabilities of disablement `P(Y0 = 0 | Y = 1)` and
+  enablement `P(Y1 = 1 | Y = 0)` (Pearl 2009, Definitions 9.2.4 and 9.2.5).
+* `Attribution.ResponseModel.ofCells`: a model from an explicit table of eight cells.
+
+`PN`, `PS`, `PD`, `PE` are total real-valued ratios (`x / 0 = 0`). Every theorem that reads one
+of them as a conditional probability assumes the positive mass of its conditioning event;
+`pn_eq_iff`, `ps_eq_iff`, `pd_eq_iff`, `pe_eq_iff` give the conditional-probability reading
+under that assumption, and the unguarded `pn_eq`, `ps_eq`, `pd_eq`, `pe_eq` are documented as
+algebraic rewrites of the total expressions.
 
 ## Main results
 
@@ -43,7 +52,7 @@ Experimental quantities are the marginals `P(Y1 = 1)` and `P(Y0 = 1)`, written `
 ## References
 
 * J. Pearl, *Causality: Models, Reasoning, and Inference*, 2nd ed., Cambridge University Press,
-  2009, Section 9.2.1 (Definitions 9.2.1 to 9.2.3, Lemma 9.2.6).
+  2009, Section 9.2.1 (Definitions 9.2.1 to 9.2.5, Lemma 9.2.6).
 * J. Pearl, M. Glymour, N. P. Jewell, *Causal Inference in Statistics: A Primer*, Wiley, 2016,
   equations (4.23) to (4.25).
 -/
@@ -94,20 +103,39 @@ def pX (a : Bool) : ℝ := m.prob fun x _ _ => x == a
 def pY : ℝ := m.prob fun x y0 y1 => obsY x y0 y1
 
 /-- The probability of necessity (Pearl 2009, Definition 9.2.1):
-`PN = P(Y0 = 0 | X = 1, Y = 1)`. It is meaningful only when `P(X = 1, Y = 1) > 0`, which every
-theorem about it assumes. -/
+`PN = P(Y0 = 0 | X = 1, Y = 1)`. It is a conditional probability only when
+`P(X = 1, Y = 1) > 0`. The real-valued definition is total (it is `0` on a null conditioning
+event, by `x / 0 = 0`); every theorem that reads it as a conditional probability assumes the
+positive mass, and the purely algebraic rewrites `pn_eq` and `pn_num_eq` say so. -/
 noncomputable def PN : ℝ :=
   m.prob (fun x y0 y1 => !y0 && x && obsY x y0 y1) / m.pXY true true
 
 /-- The probability of sufficiency (Pearl 2009, Definition 9.2.2):
-`PS = P(Y1 = 1 | X = 0, Y = 0)`. It is meaningful only when `P(X = 0, Y = 0) > 0`, which every
-theorem about it assumes. -/
+`PS = P(Y1 = 1 | X = 0, Y = 0)`. It is a conditional probability only when
+`P(X = 0, Y = 0) > 0`. The real-valued definition is total (it is `0` on a null conditioning
+event); every theorem that reads it as a conditional probability assumes the positive mass. -/
 noncomputable def PS : ℝ :=
   m.prob (fun x y0 y1 => y1 && !x && !obsY x y0 y1) / m.pXY false false
 
 /-- The probability of necessity and sufficiency (Pearl 2009, Definition 9.2.3):
 `PNS = P(Y1 = 1, Y0 = 0)`. -/
 def PNS : ℝ := m.prob fun _ y0 y1 => y1 && !y0
+
+/-- The observational quantity `P(Y = 0)`. -/
+def pYc : ℝ := m.prob fun x y0 y1 => !obsY x y0 y1
+
+/-- The probability of disablement (Pearl 2009, Definition 9.2.4, equation (9.4)):
+`PD = P(Y0 = 0 | Y = 1)`, the probability that the outcome would not have occurred without
+treatment, given that it occurred. It is a conditional probability only when `P(Y = 1) > 0`;
+the real-valued definition is total, and every theorem that reads it as a conditional
+probability assumes the positive mass. -/
+noncomputable def PD : ℝ := m.prob (fun x y0 y1 => !y0 && obsY x y0 y1) / m.pY
+
+/-- The probability of enablement (Pearl 2009, Definition 9.2.5): `PE = P(Y1 = 1 | Y = 0)`, the
+probability that the outcome would have occurred under treatment, given that it did not occur.
+It is a conditional probability only when `P(Y = 0) > 0`; the real-valued definition is total,
+and every theorem that reads it as a conditional probability assumes the positive mass. -/
+noncomputable def PE : ℝ := m.prob (fun x y0 y1 => y1 && !obsY x y0 y1) / m.pYc
 
 /-! ### Cell expansions
 
@@ -163,11 +191,67 @@ theorem ps_num_eq : m.prob (fun x y0 y1 => y1 && !x && !obsY x y0 y1) =
     m.w false false true := by
   simp [prob, obsY]
 
+/-- Algebraic rewrite of the total real-valued expression `PN`: the numerator in cells, over
+`P(X = 1, Y = 1)`. It assumes no positivity, so it does not by itself read `PN` as a conditional
+probability (on a null conditioning event both sides are `0` by convention); the guarded reading
+is `pn_eq_iff`. -/
 theorem pn_eq : m.PN = m.w true false true / m.pXY true true := by
   rw [PN, pn_num_eq]
 
+/-- Algebraic rewrite of the total real-valued expression `PS`; no positivity is assumed (see
+`pn_eq`). The guarded reading is `ps_eq_iff`. -/
 theorem ps_eq : m.PS = m.w false false true / m.pXY false false := by
   rw [PS, ps_num_eq]
+
+/-- `PN` as a conditional probability: when `P(X = 1, Y = 1) > 0`, `PN` is the unique number `p`
+with `P(Y0 = 0, X = 1, Y = 1) = p P(X = 1, Y = 1)`. Without the positive mass every `p` would
+satisfy the right side. -/
+theorem pn_eq_iff (h11 : 0 < m.pXY true true) (p : ℝ) :
+    m.PN = p ↔ m.w true false true = p * m.pXY true true := by
+  rw [pn_eq, div_eq_iff h11.ne']
+
+/-- `PS` as a conditional probability: when `P(X = 0, Y = 0) > 0`, `PS` is the unique number `p`
+with `P(Y1 = 1, X = 0, Y = 0) = p P(X = 0, Y = 0)`. -/
+theorem ps_eq_iff (h00 : 0 < m.pXY false false) (p : ℝ) :
+    m.PS = p ↔ m.w false false true = p * m.pXY false false := by
+  rw [ps_eq, div_eq_iff h00.ne']
+
+theorem pYc_eq : m.pYc = m.pXY true false + m.pXY false false := by
+  rw [pXY_true_false, pXY_false_false]
+  simp [pYc, prob, obsY]; ring
+
+theorem pYc_eq_one_sub : m.pYc = 1 - m.pY := by
+  rw [pYc_eq, pY_eq, pXY_true_true, pXY_true_false, pXY_false_true, pXY_false_false]
+  linarith [m.sum_cells]
+
+/-- The numerator of `PD` is the numerator of `PN`: by consistency, `Y0 = 0` and `Y = 1` force
+`X = 1` and `Y1 = 1`. -/
+theorem pd_num_eq : m.prob (fun x y0 y1 => !y0 && obsY x y0 y1) = m.w true false true := by
+  simp [prob, obsY]
+
+/-- The numerator of `PE` is the numerator of `PS`: by consistency, `Y1 = 1` and `Y = 0` force
+`X = 0` and `Y0 = 0`. -/
+theorem pe_num_eq : m.prob (fun x y0 y1 => y1 && !obsY x y0 y1) = m.w false false true := by
+  simp [prob, obsY]
+
+/-- Algebraic rewrite of the total real-valued expression `PD`; no positivity is assumed. -/
+theorem pd_eq : m.PD = m.w true false true / m.pY := by
+  rw [PD, pd_num_eq]
+
+/-- Algebraic rewrite of the total real-valued expression `PE`; no positivity is assumed. -/
+theorem pe_eq : m.PE = m.w false false true / (1 - m.pY) := by
+  rw [PE, pe_num_eq, pYc_eq_one_sub]
+
+/-- `PD` as a conditional probability: when `P(Y = 1) > 0`, `PD` is the unique `p` with
+`P(Y0 = 0, Y = 1) = p P(Y = 1)`. -/
+theorem pd_eq_iff (hy : 0 < m.pY) (p : ℝ) : m.PD = p ↔ m.w true false true = p * m.pY := by
+  rw [pd_eq, div_eq_iff hy.ne']
+
+/-- `PE` as a conditional probability: when `P(Y = 0) > 0`, `PE` is the unique `p` with
+`P(Y1 = 1, Y = 0) = p P(Y = 0)`. -/
+theorem pe_eq_iff (hy : m.pY < 1) (p : ℝ) :
+    m.PE = p ↔ m.w false false true = p * (1 - m.pY) := by
+  rw [pe_eq, div_eq_iff (sub_pos.2 hy).ne']
 
 /-! ### Lemma 9.2.6 -/
 
@@ -184,6 +268,30 @@ probabilities. -/
 theorem pns_eq_pXY_mul_pn_add (h11 : 0 < m.pXY true true) (h00 : 0 < m.pXY false false) :
     m.PNS = m.pXY true true * m.PN + m.pXY false false * m.PS := by
   rw [pns_eq, pn_eq, ps_eq, mul_div_cancel₀ _ h11.ne', mul_div_cancel₀ _ h00.ne']
+
+/-! ### Building models from cell tables -/
+
+/-- Build a response-type model from an explicit table of eight cell weights, given their
+nonnegativity and the fact that they sum to one. -/
+def ofCells (t : Bool → Bool → Bool → ℝ) (hnn : ∀ x y0 y1, 0 ≤ t x y0 y1)
+    (hsum : t true false false + t true false true + t true true false + t true true true +
+      t false false false + t false false true + t false true false + t false true true = 1) :
+    ResponseModel where
+  w := t
+  nonneg := hnn
+  sum_eq_one := by simp only [Fintype.sum_bool]; linarith
+
+@[simp]
+theorem ofCells_w (t : Bool → Bool → Bool → ℝ) (hnn) (hsum) :
+    (ofCells t hnn hsum).w = t := rfl
+
+/-- The cell weights of a model, as a list of nonnegativity facts for `linarith`. -/
+theorem nonneg_cells (m : ResponseModel) :
+    0 ≤ m.w true false false ∧ 0 ≤ m.w true false true ∧ 0 ≤ m.w true true false ∧
+      0 ≤ m.w true true true ∧ 0 ≤ m.w false false false ∧ 0 ≤ m.w false false true ∧
+      0 ≤ m.w false true false ∧ 0 ≤ m.w false true true :=
+  ⟨m.nonneg _ _ _, m.nonneg _ _ _, m.nonneg _ _ _, m.nonneg _ _ _, m.nonneg _ _ _,
+    m.nonneg _ _ _, m.nonneg _ _ _, m.nonneg _ _ _⟩
 
 end ResponseModel
 
