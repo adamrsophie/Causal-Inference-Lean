@@ -22,11 +22,22 @@ drive the surrogate and the final outcome.
 
 * Prentice criteria and the natural direct effect (TSD 20, Section 3.1.2: the Prentice criteria
   "do not guarantee a causal relationship").
-  - `prenticeHolds`: all four Prentice criteria hold (the observed final outcome is a function of
-    the observed surrogate), yet the natural direct effect is `1` (`prenticeHolds_nde`).
+  - `prenticeHolds`: all four Prentice criteria hold, and full capture holds in distributional
+    form too (`prenticeHolds_distFullCapture`: the observed final outcome is a function of the
+    observed surrogate), yet the natural direct effect is `1` (`prenticeHolds_nde`).
   - `noDirectEffect`: the treatment has no direct effect (`Y a m` does not depend on `a`, so
-    both natural direct effects vanish), the first three criteria hold, yet full capture fails
-    (`noDirectEffect_not_fullCapture`), because `V` confounds surrogate and outcome.
+    both natural direct effects vanish), the first three criteria and the setting hypotheses
+    hold (`noDirectEffect_isolates_fullCapture`), yet full capture fails in mean form
+    (`noDirectEffect_not_fullCapture`) and hence in distributional form
+    (`noDirectEffect_not_distFullCapture`), because `V` confounds surrogate and outcome.
+* Two forms of full capture.
+  - `meanOnly`: all four Prentice criteria hold with full capture in mean form and every cell of
+    positive probability (`meanOnly_criteria`), yet distributional full capture fails
+    (`meanOnly_not_distFullCapture`): within `S = 1` the treated outcomes spread over `0`, `1`,
+    `2` while the controls all have outcome `1`.
+  - `nullCell`: the cell `A = 0, S = 1` is null, and the mean form of full capture holds there
+    only through the value `0` of `condMean` on a null event; shifting the outcome by `1`
+    makes it fail (`nullCell_shift`). This is why `PrenticeCriteria` requires positive cells.
 * The surrogate paradox (TSD 20, Section 3.1.2: an individual-level association, "level 2"
   evidence, does not establish that treatments improving the surrogate improve the final
   outcome): in `paradox`, the surrogate has a positive causal effect on
@@ -44,7 +55,8 @@ drive the surrogate and the final outcome.
 
 ## Sources
 
-* NICE DSU Technical Support Document 20 (S. Bujkiewicz et al., 2019), Section 3.1.2.
+* NICE DSU Technical Support Document 20 (S. Bujkiewicz et al., 2019), Section 3.1.2 (which
+  mentions the Prentice criteria; the list itself is from Prentice 1989).
 * NICE DSU Technical Support Document 5 (S. Dias et al., 2011, updated 2012), Section 3.1.
 * R. L. Prentice (1989), Surrogate endpoints in clinical trials: definition and operational
   criteria, Statistics in Medicine 8 (reference [65] of TSD 20).
@@ -115,6 +127,11 @@ theorem prenticeHolds_randomized :
 /-- All four Prentice criteria hold in `prenticeHolds`: `P(S = 1 | A) = 3/4` against `1/4`,
 `E[Y | S] = 1` against `0`, `E[Y | A] = 3/4` against `1/4`, and full capture. -/
 theorem prenticeHolds_criteria : PrenticeCriteria prenticeHolds μ₀ where
+  measurable_A := measurable_of_finite _
+  measurable_S := measurable_of_finite _
+  measurable_Y := measurable_of_finite _
+  integrable_Y := Integrable.of_finite
+  cell_pos := prenticeHolds_cell_pos
   treatment_affects_surrogate := by
     simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
     simp [Set.indicator, prenticeHolds, MediationModel.Mobs]
@@ -127,12 +144,18 @@ theorem prenticeHolds_criteria : PrenticeCriteria prenticeHolds μ₀ where
     simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
     simp [Set.indicator, prenticeHolds, MediationModel.Mobs, MediationModel.Yobs]
     norm_num
-  full_capture s := by
+  full_capture := fun s => by
     simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
     cases s
     · simp [Set.indicator, prenticeHolds, MediationModel.Mobs, MediationModel.Yobs]
     · simp [Set.indicator, prenticeHolds, MediationModel.Mobs, MediationModel.Yobs]
       norm_num
+
+/-- Distributional full capture holds in `prenticeHolds`: the observed final outcome is a
+function of the observed surrogate and every cell has positive probability. -/
+theorem prenticeHolds_distFullCapture : DistFullCapture prenticeHolds μ₀ :=
+  distFullCapture_of_comp (measurable_of_finite _) (measurable_of_finite _)
+    (fun s => if s then 1 else 0) prenticeHolds_Yobs prenticeHolds_cell_pos
 
 /-- The pure natural direct effect of `prenticeHolds` is `1`, although all four Prentice
 criteria hold. -/
@@ -184,14 +207,142 @@ theorem noDirectEffect_criteria :
   simp [Set.indicator, noDirectEffect, MediationModel.Mobs, MediationModel.Yobs]
   norm_num
 
-/-- Full capture fails in `noDirectEffect`: `E[Y | A = 1, S = 0] = 0` while
+/-- Full capture in mean form fails in `noDirectEffect`: `E[Y | A = 1, S = 0] = 0` while
 `E[Y | A = 0, S = 0] = 1/2`, although the treatment has no direct effect. -/
-theorem noDirectEffect_not_fullCapture : ¬ PrenticeCriteria noDirectEffect μ₀ := by
+theorem noDirectEffect_not_fullCapture : ¬ MeanFullCapture noDirectEffect μ₀ := by
   intro h
-  have := h.full_capture false
+  have := h false
   simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool] at this
   simp [Set.indicator, noDirectEffect, MediationModel.Mobs, MediationModel.Yobs] at this
   norm_num at this
+
+/-- Distributional full capture fails in `noDirectEffect` as well. -/
+theorem noDirectEffect_not_distFullCapture : ¬ DistFullCapture noDirectEffect μ₀ :=
+  fun h => noDirectEffect_not_fullCapture (h.meanFullCapture (measurable_of_finite _))
+
+/-- All criteria of `PrenticeCriteria` except full capture hold in `noDirectEffect`, and full
+capture fails in both forms. -/
+theorem noDirectEffect_isolates_fullCapture :
+    Measurable noDirectEffect.A ∧ Measurable noDirectEffect.Mobs ∧
+      Measurable noDirectEffect.Yobs ∧ Integrable noDirectEffect.Yobs μ₀ ∧
+      (∀ a s, μ₀ (noDirectEffect.A ⁻¹' {a} ∩ noDirectEffect.Mobs ⁻¹' {s}) ≠ 0) ∧
+      ¬ MeanFullCapture noDirectEffect μ₀ ∧ ¬ DistFullCapture noDirectEffect μ₀ :=
+  ⟨measurable_of_finite _, measurable_of_finite _, measurable_of_finite _, Integrable.of_finite,
+    noDirectEffect_cell_pos, noDirectEffect_not_fullCapture, noDirectEffect_not_distFullCapture⟩
+
+/-! ### Full capture in mean form without distributional full capture -/
+
+/-- The surrogate is `S 0 = U ∧ V` and `S 1 = U ∨ V`, and the final outcome is
+`Y a m = m + a ([U] - [V])`: in the treated arm the outcome carries a noise term of mean zero
+within each surrogate value, in the control arm it does not. -/
+def meanOnly : MediationModel Ω₀ Bool where
+  A ω := ω.1
+  M a ω := if a then (ω.2.1 || ω.2.2) else (ω.2.1 && ω.2.2)
+  Y a m ω := (if m then 1 else 0) +
+    (if a then (if ω.2.1 then 1 else 0) - (if ω.2.2 then 1 else 0) else 0)
+
+/-- The treatment of `meanOnly` is randomized. -/
+theorem meanOnly_randomized :
+    IndepFun meanOnly.A (fun ω => (fun a => meanOnly.M a ω, fun a m => meanOnly.Y a m ω)) μ₀ :=
+  indepFun_prod measurable_id (measurable_of_finite fun ω : Bool × Bool =>
+    ((fun a : Bool => if a then (ω.1 || ω.2) else (ω.1 && ω.2)),
+      fun (a m : Bool) => (if m then (1 : ℝ) else 0) +
+        (if a then (if ω.1 then 1 else 0) - (if ω.2 then 1 else 0) else 0)))
+
+/-- Every cell `A = a, S = s` of `meanOnly` has positive probability. -/
+theorem meanOnly_cell_pos (a s : Bool) :
+    μ₀ (meanOnly.A ⁻¹' {a} ∩ meanOnly.Mobs ⁻¹' {s}) ≠ 0 := by
+  refine μ₀_ne_zero_of_mem (ω := (a, s, s)) ?_
+  cases a <;> cases s <;> simp [meanOnly, MediationModel.Mobs]
+
+/-- All four Prentice criteria hold in `meanOnly` in mean form: `P(S = 1 | A) = 3/4` against
+`1/4`, `E[Y | S] = 1` against `0`, `E[Y | A] = 3/4` against `1/4`, and
+`E[Y | A = a, S = s] = s` in every cell. -/
+theorem meanOnly_criteria : PrenticeCriteria meanOnly μ₀ where
+  measurable_A := measurable_of_finite _
+  measurable_S := measurable_of_finite _
+  measurable_Y := measurable_of_finite _
+  integrable_Y := Integrable.of_finite
+  cell_pos := meanOnly_cell_pos
+  treatment_affects_surrogate := by
+    simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    simp [Set.indicator, meanOnly, MediationModel.Mobs]
+    norm_num
+  surrogate_predicts_outcome := by
+    simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    simp [Set.indicator, meanOnly, MediationModel.Mobs, MediationModel.Yobs]
+    norm_num
+  treatment_affects_outcome := by
+    simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    simp [Set.indicator, meanOnly, MediationModel.Mobs, MediationModel.Yobs]
+    norm_num
+  full_capture := fun s => by
+    simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    cases s
+    · simp [Set.indicator, meanOnly, MediationModel.Mobs, MediationModel.Yobs]
+    · simp [Set.indicator, meanOnly, MediationModel.Mobs, MediationModel.Yobs]
+      norm_num
+
+/-- Distributional full capture fails in `meanOnly`: given `S = 1`, the second moment of the final
+outcome is `5/3` in the treated arm (values `0`, `1`, `2`) and `1` in the control arm (value
+`1`). So full capture in mean form does not imply distributional full capture, even with every
+cell of positive probability. -/
+theorem meanOnly_not_distFullCapture : ¬ DistFullCapture meanOnly μ₀ := by
+  intro h
+  have := h.condMean_comp_eq (measurable_of_finite _) (g := fun x => x ^ 2)
+    (measurable_id.pow_const 2) true
+  simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool] at this
+  simp [Set.indicator, meanOnly, MediationModel.Mobs, MediationModel.Yobs] at this
+  norm_num at this
+
+/-! ### A null cell decides the mean form of full capture -/
+
+/-- The surrogate is `S a = a ∧ U`, so the cell `A = 0, S = 1` is empty, and the final outcome is
+`Y = 1 - S`. -/
+def nullCell : MediationModel Ω₀ Bool where
+  A ω := ω.1
+  M a ω := a && ω.2.1
+  Y _ m _ := 1 - (if m then 1 else 0)
+
+/-- The model `nullCell` with the final outcome shifted by `1`: `Y = 2 - S`. -/
+def nullCellShift : MediationModel Ω₀ Bool where
+  A ω := ω.1
+  M a ω := a && ω.2.1
+  Y _ m _ := 2 - (if m then 1 else 0)
+
+/-- Why `PrenticeCriteria` requires positive cells. In `nullCell` the cell `A = 0, S = 1` is
+null; the first three criteria and the mean form of full capture hold there, the last one only
+through the value `0` that `condMean` assigns to the null cell. Shifting the final outcome by `1`
+(`nullCellShift`) changes nothing observable about the effect of the treatment, yet the mean
+form of full capture then fails. -/
+theorem nullCell_shift :
+    μ₀ (nullCell.A ⁻¹' {false} ∩ nullCell.Mobs ⁻¹' {true}) = 0 ∧
+      condMean μ₀ (nullCell.A ⁻¹' {true}) (fun ω => if nullCell.Mobs ω then 1 else 0) ≠
+        condMean μ₀ (nullCell.A ⁻¹' {false}) (fun ω => if nullCell.Mobs ω then 1 else 0) ∧
+      condMean μ₀ (nullCell.Mobs ⁻¹' {true}) nullCell.Yobs ≠
+        condMean μ₀ (nullCell.Mobs ⁻¹' {false}) nullCell.Yobs ∧
+      condMean μ₀ (nullCell.A ⁻¹' {true}) nullCell.Yobs ≠
+        condMean μ₀ (nullCell.A ⁻¹' {false}) nullCell.Yobs ∧
+      MeanFullCapture nullCell μ₀ ∧ ¬ MeanFullCapture nullCellShift μ₀ := by
+  refine ⟨?_, ?_, ?_, ?_, fun s => ?_, fun h => ?_⟩
+  · have : nullCell.A ⁻¹' {false} ∩ nullCell.Mobs ⁻¹' {true} = ∅ := by
+      ext ⟨a, u, v⟩
+      cases a <;> simp [nullCell, MediationModel.Mobs]
+    rw [this, measure_empty]
+  · simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    simp [Set.indicator, nullCell, MediationModel.Mobs]
+  · simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    simp [Set.indicator, nullCell, MediationModel.Mobs, MediationModel.Yobs]
+    norm_num
+  · simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    simp [Set.indicator, nullCell, MediationModel.Mobs, MediationModel.Yobs]
+    norm_num
+  · simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool]
+    cases s <;> simp [Set.indicator, nullCell, MediationModel.Mobs, MediationModel.Yobs]
+  · have := h true
+    simp only [condMean_μ₀, Fintype.sum_prod_type, Fintype.sum_bool] at this
+    simp [Set.indicator, nullCellShift, MediationModel.Mobs, MediationModel.Yobs] at this
+    norm_num at this
 
 /-! ### The surrogate paradox -/
 
