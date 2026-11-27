@@ -15,36 +15,46 @@ public import CausalInference.Graphical.Criteria.BackDoor
 * `Digraph.IsInstrument G Z X Y S`: the graphical criterion of Pearl's Definition 7.4.1 for `Z`
   to be an instrument relative to the total effect of `X` on `Y`, given the measured covariates
   `S`: no member of `S` is a descendant of `X` ("measurements unaffected by `X`"), `Z` and `Y`
-  are d-separated by `S` in the graph with the edges out of `X` removed, and `Z` and `X` are
+  are d-separated by `S` in the graph with the edges into `X` removed, and `Z` and `X` are
   d-connected given `S` in `G`.
+* `Digraph.InstrumentRoles Z X Y S`: the setting of the definition: instrument, treatment, and
+  outcome pairwise disjoint, and the covariates disjoint from all three.
+* `Digraph.IsInstrumentIn G Z X Y S`: the criterion within that setting; this is the reading of
+  Definition 7.4.1 to use for a single instrument, treatment, and outcome.
 
 ## Main results
 
-* `Digraph.not_isInstrument_of_adj`: a direct edge from `z` to `y` (outside `X ∪ S`) rules out
-  `z` as an instrument; this is the exclusion restriction.
+* `Digraph.not_isInstrument_of_adj`: a direct edge from `z` to `y`, with `y` outside `X` and
+  both endpoints outside `S`, rules out `z` as an instrument; this is the exclusion restriction.
 * `Digraph.IsInstrument.notMem`: an instrument lies outside the covariate set.
-* Decidability, and examples: graphs with the properties stated for Figure 7.8 (a) to (d), the
-  conditional instrument obtained in (d) by measuring `W`, and non-examples.
+* Decidability, and examples: graphs with the properties stated for Figure 7.8 (a) to (c), the
+  printed Figure 7.8 (d), a variant of (d) in which measuring `W` makes `Z` a conditional
+  instrument, and non-examples.
 
 ## Notes on the source
 
-The extract prints condition (i) as `(Z ⫫ Y | S)` in `G` with a lost bar over or under `X`. The
-definition uses the graph with the edges out of `X` removed (Pearl's `G` with a bar under `X`),
-which is the standard reading of Definition 7.4.1 and agrees with the counterfactual criterion
-`Z ⫫ Y_x | S`. The covariate condition follows the text: the measurements `S` are unaffected by
-`X`, that is, they are nondescendants of `X` (not of `Y`). This condition matters: without it,
-conditioning on `Y` itself would make any vertex d-connected to `X` an instrument, because an
-endpoint in the conditioning set is d-separated from everything (see the examples).
+The printed condition (i) is `(Z ⫫ Y | S)` in `G` with a bar over `X`, the graph with the edges
+into `X` removed; the sentence before the definition says the same in words: "every unblocked
+path connecting `Z` and `Y` must contain an arrow pointing into `X`". The text extract loses the
+bar, and the same graph is meant in both places.
 
-One consequence of the surgery form: a child `z` of `x` whose only other connection to `y`
-runs through `x` (edges `x → z`, `x → y`) passes the test, since removing the edges out of `x`
-isolates `z`. The heuristic sentence before Definition 7.4.1 ("every unblocked path connecting
-`Z` and `Y` must contain an arrow pointing into `X`") would reject it. The example
-`childOfTreatment` records this.
+The graphical criterion is sufficient for the counterfactual criterion `Z ⫫ Y_x | S`, not
+necessary. A child `z` of `x` whose only other connection to `y` runs through `x` (edges
+`x → z`, `x → y`) is rejected, since the fork `z ← x → y` survives the removal of the edges into
+`x`; without confounding of `x` and `y` it still satisfies the counterfactual criterion (the
+example `childOfTreatment`). The graph with the edges out of `X` removed (a bar under `X`) would
+accept that child even when `x` and `y` are confounded, and then `z` is not an instrument: the
+example `confoundedChild` records the computation.
 
-The figures are not in the extract; the examples are graphs with the properties stated in the
+The covariate condition follows the text: the measurements `S` are unaffected by `X`, that is,
+they are nondescendants of `X` (not of `Y`). It does not exclude every degenerate case: an
+endpoint in the conditioning set is d-separated from everything, so a covariate set containing
+an outcome that is not a descendant of `X` makes condition (i) automatic (the example
+`outcomeAsCovariate`). The setting `Digraph.InstrumentRoles` excludes such overlaps of roles.
+
+The drawings of Figure 7.8 (a) to (c) are recorded as graphs with the properties stated in the
 caption and in footnote 29 (`Z` is randomized in (a) but not in (b) and (c), and `Z` does not
-affect `X` in (c)).
+affect `X` in (c)). Figure 7.8 (d) is recorded with its printed edges, including `X → W`.
 
 ## References
 
@@ -62,18 +72,30 @@ variable {V : Type*}
 `Z` is an instrument relative to the total effect of `X` on `Y` given the covariates `S` when
 no member of `S` is a descendant of `X` (the measurements are unaffected by `X`; inclusive
 descendants, so also `S ∩ X = ∅`), (i) `Z` and `Y` are d-separated by `S` in the graph with the
-edges out of `X` removed, and (ii) `Z` and `X` are d-connected given `S` in `G`. -/
+edges into `X` removed (Pearl's `G` with a bar over `X`), and (ii) `Z` and `X` are d-connected
+given `S` in `G`. The roles are not required to be disjoint here; see `IsInstrumentIn`. -/
 def IsInstrument (G : Digraph V) (Z X Y S : Set V) : Prop :=
-  (∀ s ∈ S, s ∉ G.descendantsOf X) ∧ (G.deleteOutgoing X).DSep Z Y S ∧ G.DConn Z X S
+  (∀ s ∈ S, s ∉ G.descendantsOf X) ∧ (G.deleteIncoming X).DSep Z Y S ∧ G.DConn Z X S
+
+/-- The setting of Definition 7.4.1: the instrument `Z`, the treatment `X`, and the outcome `Y`
+are pairwise disjoint, and the covariates `S` are disjoint from all three. -/
+def InstrumentRoles (Z X Y S : Set V) : Prop :=
+  Disjoint Z X ∧ Disjoint Z Y ∧ Disjoint X Y ∧ Disjoint S Z ∧ Disjoint S X ∧ Disjoint S Y
+
+/-- The graphical instrument criterion within the setting of Definition 7.4.1
+(`InstrumentRoles`). Outside that setting the criterion can hold for degenerate reasons, for
+instance when the outcome is a covariate (the example `outcomeAsCovariate`). -/
+def IsInstrumentIn (G : Digraph V) (Z X Y S : Set V) : Prop :=
+  InstrumentRoles Z X Y S ∧ G.IsInstrument Z X Y S
 
 variable {G : Digraph V} {Z X Y S : Set V} {z y : V}
 
-/-- The exclusion restriction: a direct edge `z → y`, with `z ∉ X` and both endpoints outside
+/-- The exclusion restriction: a direct edge `z → y`, with `y ∉ X` and both endpoints outside
 `S`, rules out `z` as an instrument for the effect of `X` on `y`, because the edge survives the
-removal of the edges out of `X`. -/
-theorem not_isInstrument_of_adj (h : G.Adj z y) (hzX : z ∉ X) (hzS : z ∉ S) (hyS : y ∉ S) :
+removal of the edges into `X`. -/
+theorem not_isInstrument_of_adj (h : G.Adj z y) (hyX : y ∉ X) (hzS : z ∉ S) (hyS : y ∉ S) :
     ¬ G.IsInstrument {z} X {y} S :=
-  fun hI => hI.2.1 (dConn_of_adj (G := G.deleteOutgoing X) ⟨h, hzX⟩ hzS hyS)
+  fun hI => hI.2.1 (dConn_of_adj (G := G.deleteIncoming X) ⟨h, hyX⟩ hzS hyS)
 
 /-- A single instrument is never in the covariate set: a vertex of `S` is blocked as an
 endpoint, so it cannot be d-connected to `X` given `S`. -/
@@ -90,6 +112,19 @@ instance decidableIsInstrument (Z X Y S : Set V) [DecidablePred (· ∈ Z)]
     [DecidablePred (· ∈ X)] [DecidablePred (· ∈ Y)] [DecidablePred (· ∈ S)] :
     Decidable (G.IsInstrument Z X Y S) :=
   inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+
+instance decidableInstrumentRoles (Z X Y S : Set V) [DecidablePred (· ∈ Z)]
+    [DecidablePred (· ∈ X)] [DecidablePred (· ∈ Y)] [DecidablePred (· ∈ S)] :
+    Decidable (InstrumentRoles Z X Y S) :=
+  have (A B : Set V) [DecidablePred (· ∈ A)] [DecidablePred (· ∈ B)] :
+      Decidable (Disjoint A B) :=
+    decidable_of_iff _ Set.disjoint_left.symm
+  inferInstanceAs (Decidable (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _))
+
+instance decidableIsInstrumentIn (Z X Y S : Set V) [DecidablePred (· ∈ Z)]
+    [DecidablePred (· ∈ X)] [DecidablePred (· ∈ Y)] [DecidablePred (· ∈ S)] :
+    Decidable (G.IsInstrumentIn Z X Y S) :=
+  inferInstanceAs (Decidable (_ ∧ _))
 
 end Decidable
 
@@ -116,15 +151,31 @@ abbrev ivC : Digraph (Fin 5) := ofEdges [(1, 2), (3, 1), (3, 2), (4, 0), (4, 1)]
 
 example : ivC.IsInstrument {0} {1} {2} ∅ := by decide +kernel
 
-/-- Figure 7.8 (d) style: (a) together with `Z ← V → W → Y`, where `V = 4` is latent and
-`W = 5` is measured. -/
+/-- Figure 7.8 (d) as printed: (a) together with `Z ← U_W → W → Y` and `X → W`, where
+`U_W = 4` is latent and `W = 5` is measured. -/
 abbrev ivD : Digraph (Fin 6) :=
-  ofEdges [(0, 1), (1, 2), (3, 1), (3, 2), (4, 0), (4, 5), (5, 2)]
+  ofEdges [(0, 1), (1, 2), (3, 1), (3, 2), (4, 0), (4, 5), (5, 2), (1, 5)]
 
+example : ivD.IsAcyclic := by decide +kernel
 -- `Z` is not an instrument, being correlated with `W`, which influences `Y`.
 example : ¬ ivD.IsInstrument {0} {1} {2} ∅ := by decide +kernel
--- Measuring `W`, a nondescendant of `X`, makes `Z` a conditional instrument.
-example : ivD.IsInstrument {0} {1} {2} {5} := by decide +kernel
+
+/-- In the printed Figure 7.8 (d), measuring `W` does not make `Z` an instrument: `W` is a
+descendant of `X`, and conditioning on the collider `W` of `U_W → W ← X` opens the path
+`Z ← U_W → W ← X → Y`, which survives the removal of the edges into `X`. -/
+theorem ivD_not_isInstrument_W :
+    ¬ ivD.IsInstrument {0} {1} {2} {5} ∧ 5 ∈ ivD.descendantsOf {1} ∧
+      ¬ (ivD.deleteIncoming {1}).DSep {0} {2} {5} := by
+  refine ⟨by decide +kernel, ⟨1, rfl, .single (by decide)⟩, by decide +kernel⟩
+
+/-- A variant of Figure 7.8 (d) without the edge `X → W`, so that `W` is not affected by `X`. -/
+abbrev ivDNoXW : Digraph (Fin 6) :=
+  ofEdges [(0, 1), (1, 2), (3, 1), (3, 2), (4, 0), (4, 5), (5, 2)]
+
+-- Unconditionally `Z` is not an instrument; measuring `W`, a nondescendant of `X`, makes `Z` a
+-- conditional instrument.
+example : ¬ ivDNoXW.IsInstrument {0} {1} {2} ∅ := by decide +kernel
+example : ivDNoXW.IsInstrumentIn {0} {1} {2} {5} := by decide +kernel
 
 /-- Non-example: (a) with a direct edge `Z → Y`, violating the exclusion restriction. -/
 abbrev ivDirect : Digraph (Fin 4) := ofEdges [(0, 1), (1, 2), (3, 1), (3, 2), (0, 2)]
@@ -136,16 +187,40 @@ abbrev ivIrrelevant : Digraph (Fin 4) := ofEdges [(1, 2), (3, 1), (3, 2)]
 
 example : ¬ ivIrrelevant.IsInstrument {0} {1} {2} ∅ := by decide +kernel
 
--- The covariate condition is needed: conditioning on the outcome `Y` passes both d-separation
+-- The covariate condition matters: conditioning on the outcome `Y` passes both d-separation
 -- tests in (a), since an endpoint in the conditioning set is blocked, but `Y` is a descendant
 -- of `X`.
-example : (ivA.deleteOutgoing {1}).DSep {0} {2} {2} ∧ ivA.DConn {0} {1} {2} := by decide +kernel
+example : (ivA.deleteIncoming {1}).DSep {0} {2} {2} ∧ ivA.DConn {0} {1} {2} := by decide +kernel
 example : ¬ ivA.IsInstrument {0} {1} {2} {2} := by decide +kernel
 
-/-- A child of the treatment: `X → Z`, `X → Y`, with `X = 0`, `Z = 1`, `Y = 2`. The surgery form
-of the criterion accepts `Z`. -/
+/-- The outcome as a covariate when it is not a descendant of the treatment: `Z → X`, `Z → Y`,
+with `Z = 0`, `X = 1`, `Y = 2`. Here `Z` violates the exclusion restriction, yet the criterion
+holds with `S = {Y}`, because the endpoint `Y` is blocked by conditioning on it. The setting
+`InstrumentRoles` excludes this. -/
+abbrev outcomeAsCovariate : Digraph (Fin 3) := ofEdges [(0, 1), (0, 2)]
+
+example : outcomeAsCovariate.IsInstrument {0} {1} {2} {2} := by decide +kernel
+example : ¬ outcomeAsCovariate.IsInstrumentIn {0} {1} {2} {2} := by decide +kernel
+example : ¬ outcomeAsCovariate.IsInstrument {0} {1} {2} ∅ := by decide +kernel
+
+/-- A child of the treatment: `X → Z`, `X → Y`, with `X = 0`, `Z = 1`, `Y = 2`. The graphical
+criterion rejects `Z`, since the fork `Z ← X → Y` survives the removal of the edges into `X`.
+Without confounding of `X` and `Y`, `Z` satisfies the counterfactual criterion `Z ⫫ Y_x`, so the
+graphical criterion is sufficient and not necessary. -/
 abbrev childOfTreatment : Digraph (Fin 3) := ofEdges [(0, 1), (0, 2)]
 
-example : childOfTreatment.IsInstrument {1} {0} {2} ∅ := by decide +kernel
+example : ¬ childOfTreatment.IsInstrument {1} {0} {2} ∅ := by decide +kernel
+
+/-- A confounded child of the treatment: `U → X`, `U → Y`, `X → Z`, `X → Y`, with `X = 0`,
+`Z = 1`, `Y = 2`, `U = 3`. Removing the edges out of `X` (a bar under `X`) would isolate `Z` and
+accept it, but `Z` is not an instrument. In the linear model `X = U + e_X`, `Z = X + e_Z`,
+`Y = b X + U + e_Y` with independent disturbances of unit variance, `Var(X) = 2`,
+`Cov(Z, X) = 2`, and `Cov(Z, Y) = 2 b + 1`, so the instrumental ratio `Cov(Z, Y) / Cov(Z, X)`
+is `b + 1/2`, not `b`. The criterion with the edges into `X` removed rejects `Z`. -/
+abbrev confoundedChild : Digraph (Fin 4) := ofEdges [(3, 0), (3, 2), (0, 1), (0, 2)]
+
+example : (confoundedChild.deleteOutgoing {0}).DSep {1} {2} ∅ ∧
+    confoundedChild.DConn {1} {0} ∅ := by decide +kernel
+example : ¬ confoundedChild.IsInstrument {1} {0} {2} ∅ := by decide +kernel
 
 end CausalInference.InstrumentExamples

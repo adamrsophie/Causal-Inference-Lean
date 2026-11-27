@@ -24,11 +24,17 @@ nonexistence in Pearl's examples would change.
   `X_{k+1}, …, X_n`.
 * `Digraph.SeqBackDoorStep G x y Zs k`: the d-separation test (4.5) of step `k`: `y` and `x k`
   are d-separated in `G.stepGraph x k` by the earlier controls together with `Zs 0, …, Zs k`.
-* `Digraph.Admissible G C x y Zs`: Pearl's admissible sequence (Definition 4.4.2): for every
-  `k`, `Zs k` consists of observed covariates (members of `C`) that are nondescendants of
-  every control `x j` with `j ≥ k` (condition (4.4)), and the test (4.5) holds.
-* `Digraph.GIdentifiable G C x y`: some admissible sequence exists (Corollary 4.4.3 makes this
-  Pearl's G-identifiability).
+* `Digraph.Admissible G C x y Zs`: the raw step tests of Definition 4.4.2: for every `k`,
+  `Zs k` consists of observed covariates (members of `C`) that are nondescendants of every
+  control `x j` with `j ≥ k` (condition (4.4)), and the test (4.5) holds.
+* `Digraph.GIdentifiable G C x y`: some sequence passes the raw step tests.
+* `Digraph.PlanRoles G C x y`: the standing assumptions of a control problem (section 4.4.2):
+  the controls are listed in an order compatible with `G` (hence distinct), the controls, the
+  covariates, and the outcome are disjoint, and the outcome is a descendant of the last control.
+* `Digraph.AdmissiblePlan`, `Digraph.GIdentifiablePlan`: Pearl's admissible sequence and
+  G-identifiability (Definition 4.4.2, Corollary 4.4.3): the raw tests within `PlanRoles`.
+  Pearl's control problems are also acyclic; acyclicity is a hypothesis of the theorems that
+  need it.
 * `Digraph.wSet G C x y k`: the explicit covariate set `W_k` of Theorem 4.4.6: the members of
   `C` that are nondescendants of the controls `x j`, `j ≥ k`, and ancestors of `y` or `x k` in
   `G.stepGraph x k`.
@@ -40,15 +46,19 @@ nonexistence in Pearl's examples would change.
   converse, whose proof Pearl defers to Pearl and Robins (1995), is not formalized.
 * Decidability of each step test and of admissibility, and the examples of Figures 4.4, 4.6,
   4.7 and 4.8 checked by `decide`.
+* Countermodels showing that the raw tests accept plans outside Pearl's setting: controls listed
+  against the order of `G` (`controlsAgainstOrder`, `reversedChain`) and a repeated control
+  (`repeatedControl`).
 
 ## Notes on the source
 
 The printed formula (4.5) is garbled in the extract; the reading used here,
 `(Y ⫫ X_k | X_1, …, X_{k-1}, Z_1, …, Z_k)` in `G` with the arrows out of `X_k` and into
 `X_{k+1}, …, X_n` deleted, is re-derived from the two tests that the text spells out for
-Figure 4.4. The figures themselves are not in the extract: the graphs of Figures 4.4 and 4.8 are
-reconstructed from the prose (Figure 4.8 is Figure 4.4 without `X₁ → X₂` and `X₁ → Z`), and
-for Figures 4.6 and 4.7 the examples are graphs with the properties the text states.
+Figure 4.4. The graphs of Figures 4.4, 4.7 and 4.8 follow the printed drawings. Figure 4.4
+contains the edge `X₁ → U₂`. The text describes Figure 4.8 as Figure 4.4 without `X₁ → X₂` and
+`X₁ → Z`; the printed drawing of Figure 4.8 also lacks `X₁ → U₂`, and the graph here follows
+the drawing. For Figure 4.6 the example is a graph with the properties the text states.
 
 ## References
 
@@ -86,16 +96,19 @@ def SeqBackDoorStep (G : Digraph V) (x : Fin n → V) (y : V) (Zs : Fin n → Fi
     (k : Fin n) : Prop :=
   (G.stepGraph x k).DSep {y} {x k} (stepCond x Zs k)
 
-/-- Pearl's admissible sequence (Definition 4.4.2) relative to the observed covariates `C`: for
-every step `k`, `Zs k` consists of members of `C` that are nondescendants of every control
-`x j` with `j ≥ k` (condition (4.4)), and the step test (4.5) holds. -/
+/-- The raw step tests of an admissible sequence (Definition 4.4.2) relative to the observed
+covariates `C`: for every step `k`, `Zs k` consists of members of `C` that are nondescendants
+of every control `x j` with `j ≥ k` (condition (4.4)), and the step test (4.5) holds. This is
+Pearl's notion only within the standing assumptions `PlanRoles` (see `AdmissiblePlan`); without
+them it accepts controls listed against the order of `G` (the example `controlsAgainstOrder`). -/
 def Admissible (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V)
     (Zs : Fin n → Finset V) : Prop :=
   ∀ k, (∀ v ∈ Zs k, v ∈ C ∧ v ∉ G.descendantsOf (controlsFrom x k)) ∧
     G.SeqBackDoorStep x y Zs k
 
-/-- G-identifiability of the plan `x` for the outcome `y` (Definition 4.4.2 and
-Corollary 4.4.3): some sequence of covariate sets is admissible. -/
+/-- Some sequence of covariate sets passes the raw step tests `Admissible`. This is Pearl's
+G-identifiability (Definition 4.4.2 and Corollary 4.4.3) only within the standing assumptions
+`PlanRoles` (see `GIdentifiablePlan`). -/
 def GIdentifiable (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V) : Prop :=
   ∃ Zs, G.Admissible C x y Zs
 
@@ -103,6 +116,36 @@ def GIdentifiable (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V) : Pro
 later one (Pearl's standing assumption in section 4.4.2). -/
 def ControlsOrdered (G : Digraph V) (x : Fin n → V) : Prop :=
   ∀ i j, i < j → x i ∉ G.descendantsOf {x j}
+
+/-- Controls listed in an order compatible with `G` are distinct, since descendants are
+inclusive. -/
+theorem ControlsOrdered.injective {G : Digraph V} {x : Fin n → V} (h : G.ControlsOrdered x) :
+    Function.Injective x := by
+  intro i j hij
+  by_contra hne
+  rcases lt_or_gt_of_ne hne with hlt | hlt
+  · exact h i j hlt ⟨x j, rfl, by rw [hij]⟩
+  · exact h j i hlt ⟨x i, rfl, by rw [hij]⟩
+
+/-- The standing assumptions of a control problem (Pearl 2009, section 4.4.2) for the controls
+`x`, the observed covariates `C`, and the outcome `y`: the controls are listed in an order
+compatible with `G` (which makes them distinct, `ControlsOrdered.injective`), no control is the
+outcome or a covariate, the outcome is not a covariate, and the outcome is a descendant of the
+last control. Pearl also assumes `G` acyclic; that is a separate hypothesis. -/
+def PlanRoles (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V) : Prop :=
+  G.ControlsOrdered x ∧ (∀ k, x k ≠ y) ∧ (∀ k, x k ∉ C) ∧ y ∉ C ∧
+    ∀ k : Fin n, (k : ℕ) + 1 = n → y ∈ G.descendantsOf {x k}
+
+/-- Pearl's admissible sequence (Definition 4.4.2): the raw step tests within the standing
+assumptions of a control problem. -/
+def AdmissiblePlan (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V)
+    (Zs : Fin n → Finset V) : Prop :=
+  G.PlanRoles C x y ∧ G.Admissible C x y Zs
+
+/-- Pearl's G-identifiability (Definition 4.4.2 and Corollary 4.4.3): the plan satisfies the
+standing assumptions and some sequence of covariate sets passes the raw step tests. -/
+def GIdentifiablePlan (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V) : Prop :=
+  G.PlanRoles C x y ∧ G.GIdentifiable C x y
 
 section Decidable
 
@@ -136,6 +179,14 @@ instance decidableAdmissible (C : Finset V) (x : Fin n → V) (y : V) (Zs : Fin 
 instance decidableControlsOrdered (x : Fin n → V) : Decidable (G.ControlsOrdered x) := by
   unfold ControlsOrdered
   infer_instance
+
+instance decidablePlanRoles (C : Finset V) (x : Fin n → V) (y : V) :
+    Decidable (G.PlanRoles C x y) :=
+  inferInstanceAs (Decidable (_ ∧ _ ∧ _ ∧ _ ∧ _))
+
+instance decidableAdmissiblePlan (C : Finset V) (x : Fin n → V) (y : V)
+    (Zs : Fin n → Finset V) : Decidable (G.AdmissiblePlan C x y Zs) :=
+  inferInstanceAs (Decidable (_ ∧ _))
 
 /-- The covariate set `W_k` of Theorem 4.4.6: the members of `C` that are nondescendants of the
 controls `x j`, `j ≥ k`, and that have `y` or `x k` as a descendant in `G.stepGraph x k`. -/
@@ -204,12 +255,12 @@ namespace CausalInference.SequentialBackDoorExamples
 
 open Criteria Digraph
 
-/-- Pearl (2009), Figure 4.4, reconstructed from the text: `U₁ = 0`, `U₂ = 1`, `X₁ = 2`, `Z = 3`,
-`X₂ = 4`, `Y = 5`, with edges `U₁ → X₁`, `U₁ → Z`, `U₂ → Z`, `U₂ → Y`, `X₁ → Z`, `X₁ → X₂`,
+/-- Pearl (2009), Figure 4.4 as printed: `U₁ = 0`, `U₂ = 1`, `X₁ = 2`, `Z = 3`, `X₂ = 4`,
+`Y = 5`, with edges `U₁ → X₁`, `U₁ → Z`, `X₁ → U₂`, `U₂ → Z`, `U₂ → Y`, `X₁ → Z`, `X₁ → X₂`,
 `X₁ → Y`, `Z → X₂`, `X₂ → Y`. The latent `U₁`, `U₂` are not observed; the only observed
 covariate is `Z`. -/
 abbrev pearlFig44 : Digraph (Fin 6) :=
-  ofEdges [(0, 2), (0, 3), (1, 3), (1, 5), (2, 3), (2, 4), (2, 5), (3, 4), (4, 5)]
+  ofEdges [(0, 2), (0, 3), (2, 1), (1, 3), (1, 5), (2, 3), (2, 4), (2, 5), (3, 4), (4, 5)]
 
 example : pearlFig44.IsAcyclic := by decide +kernel
 example : pearlFig44.ControlsOrdered ![2, 4] := by decide +kernel
@@ -225,9 +276,11 @@ example : pearlFig44.wSet {3} ![2, 4] 5 0 = ∅ := by decide +kernel
 example : pearlFig44.wSet {3} ![2, 4] 5 1 = {3} := by decide +kernel
 example : pearlFig44.GIdentifiable {3} ![2, 4] 5 :=
   gIdentifiable_of_wSet (by decide +kernel)
+example : pearlFig44.AdmissiblePlan {3} ![2, 4] 5 ![∅, {3}] := by decide +kernel
 
-/-- Figure 4.8: Figure 4.4 without the edges `X₁ → X₂` and `X₁ → Z`, so the controls can be
-listed in either order. -/
+/-- Figure 4.8 as printed: Figure 4.4 without the edges `X₁ → X₂`, `X₁ → Z` (the two the text
+names) and `X₁ → U₂` (absent from the drawing), so the controls can be listed in either
+order. -/
 abbrev pearlFig48 : Digraph (Fin 6) :=
   ofEdges [(0, 2), (0, 3), (1, 3), (1, 5), (2, 5), (3, 4), (4, 5)]
 
@@ -262,15 +315,50 @@ example : ∀ B ∈ ({1} : Finset (Fin 6)).powerset,
     ¬ fig46Like.SeqBackDoorStep ![0, 2] 3 ![{1}, B] 1 := by decide +kernel
 example : fig46Like.Admissible {1} ![0, 2] 3 ![∅, ∅] := by decide +kernel
 
-/-- A graph with the properties stated for Pearl's Figure 4.7: `X₁ = 0`, `X₂ = 1`, `Y = 2`,
-`Z₁ = 3`, `Z₁' = 4`, with edges `Z₁' → Z₁`, `Z₁ → X₁`, `Z₁' → Y`, `X₁ → X₂`, `X₂ → Y`. -/
-abbrev fig47Like : Digraph (Fin 5) := ofEdges [(4, 3), (3, 0), (4, 2), (0, 1), (1, 2)]
+/-- Pearl (2009), Figure 4.7 as printed: `X₁ = 0`, `X₂ = 1`, `Y = 2`, `Z₁ = 3`, `Z₁' = 4`, and
+the latent `U = 5`, with edges `U → Z₁`, `Z₁ → X₁`, `U → X₂`, `U → Z₁'`, `Z₁' → Y`,
+`X₁ → X₂`, `X₂ → Y`. The observed covariates are `Z₁` and `Z₁'`. -/
+abbrev pearlFig47 : Digraph (Fin 6) :=
+  ofEdges [(5, 3), (3, 0), (5, 1), (5, 4), (4, 2), (0, 1), (1, 2)]
 
--- `{Z₁}` and `{Z₁'}` both pass the first test and are minimal: `∅` fails.
-example : fig47Like.SeqBackDoorStep ![0, 1] 2 ![{3}, ∅] 0 := by decide +kernel
-example : fig47Like.SeqBackDoorStep ![0, 1] 2 ![{4}, ∅] 0 := by decide +kernel
-example : ¬ fig47Like.SeqBackDoorStep ![0, 1] 2 ![∅, ∅] 0 := by decide +kernel
-example : fig47Like.Admissible {3, 4} ![0, 1] 2 ![{3}, ∅] := by decide +kernel
-example : fig47Like.Admissible {3, 4} ![0, 1] 2 ![{4}, ∅] := by decide +kernel
+example : pearlFig47.IsAcyclic := by decide +kernel
+-- The caption: `{Z₁}` and `{Z₁'}` both pass the first test and are minimal, since `∅` fails.
+example : pearlFig47.SeqBackDoorStep ![0, 1] 2 ![{3}, ∅] 0 := by decide +kernel
+example : pearlFig47.SeqBackDoorStep ![0, 1] 2 ![{4}, ∅] 0 := by decide +kernel
+example : ¬ pearlFig47.SeqBackDoorStep ![0, 1] 2 ![∅, ∅] 0 := by decide +kernel
+-- Starting with `{Z₁}`, the path `X₂ ← U → Z₁' → Y` forces `Z₁'` into the second set; starting
+-- with `{Z₁'}`, the empty second set suffices.
+example : ¬ pearlFig47.Admissible {3, 4} ![0, 1] 2 ![{3}, ∅] := by decide +kernel
+example : pearlFig47.AdmissiblePlan {3, 4} ![0, 1] 2 ![{3}, {4}] := by decide +kernel
+example : pearlFig47.AdmissiblePlan {3, 4} ![0, 1] 2 ![{4}, ∅] := by decide +kernel
+
+/-! ### The raw step tests outside Pearl's setting -/
+
+/-- Controls listed against the order of `G`: `L → B`, `L → Y`, `B → A`, `A → Y`, with `L = 0`,
+`B = 1`, `A = 2`, `Y = 3`, the observed covariate `L`, and the controls listed as `(A, B)`. The
+sequence `(∅, {L})` passes the raw step tests, although `A` is a descendant of the later
+control `B`. For this listing the plan formula of Theorem 4.4.1 would be
+`∑_l P(y | a, b, l) P(l | a)`, which is not the effect of the plan; `PlanRoles` excludes the
+listing. -/
+theorem controlsAgainstOrder :
+    (ofEdges (n := 4) [(0, 1), (0, 3), (1, 2), (2, 3)]).Admissible {0} ![2, 1] 3 ![∅, {0}] ∧
+      ¬ (ofEdges (n := 4) [(0, 1), (0, 3), (1, 2), (2, 3)]).ControlsOrdered ![2, 1] :=
+  ⟨by decide +kernel, by decide +kernel⟩
+
+/-- Controls listed against the order of `G` with no covariates: `b → a → y`, with `a = 0`,
+`b = 1`, `y = 2`, and the controls listed as `(a, b)`. The empty sequence passes the raw step
+tests. -/
+theorem reversedChain :
+    (ofEdges (n := 3) [(1, 0), (0, 2)]).Admissible ∅ ![0, 1] 2 ![∅, ∅] ∧
+      ¬ (ofEdges (n := 3) [(1, 0), (0, 2)]).ControlsOrdered ![0, 1] :=
+  ⟨by decide +kernel, by decide +kernel⟩
+
+/-- A repeated control: for `x → y` (`x = 0`, `y = 1`), the controls `(x, x)` with empty
+covariate sets pass the raw step tests; the second test conditions on its own treatment. The
+listing is not ordered, since a control is a descendant of itself. -/
+theorem repeatedControl :
+    (ofEdges (n := 2) [(0, 1)]).Admissible ∅ ![0, 0] 1 ![∅, ∅] ∧
+      ¬ (ofEdges (n := 2) [(0, 1)]).ControlsOrdered ![0, 0] :=
+  ⟨by decide +kernel, by decide +kernel⟩
 
 end CausalInference.SequentialBackDoorExamples

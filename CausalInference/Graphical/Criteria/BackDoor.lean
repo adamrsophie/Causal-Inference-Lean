@@ -18,6 +18,11 @@ public import CausalInference.Graphical.DSeparationDecide
   d-separated by `Z` in `G.deleteOutgoing X`, the graph with every edge out of `X` removed.
 * `Digraph.OpenBackDoorPath G Z x y`: there is a simple path from `x` to `y` in `G` that starts
   with an edge into `x` and is active given `Z`.
+* `Digraph.BackDoorPairwise G X Y Z`: Pearl's Definition 3.3.1 extended to sets pairwise, in path
+  form: no member of `Z` is a descendant of `X`, and for every `x ∈ X` and `y ∈ Y`, `Z` blocks
+  every simple path from `x` to `y` that starts with an arrow into `x`.
+* `Digraph.BackDoorAdjustment G X Y Z`: the criterion in the setting of the adjustment formula:
+  `Digraph.BackDoor G X Y Z` and `Y` disjoint from `Z`.
 
 ## Main results
 
@@ -26,8 +31,18 @@ public import CausalInference.Graphical.DSeparationDecide
   "`Z` blocks every path between `x` and `y` that contains an arrow into `x`", provided
   condition (i) holds. This is the single d-separation test of Pearl (2009), footnote 5 on
   p. 79 and equation (3.37).
+* `Digraph.BackDoorPairwise.backDoor`: for disjoint `X` and `Y`, the pairwise path form implies
+  the joint surgery form; `Digraph.backDoorPairwise_singleton_iff`: they agree for a single
+  treatment and outcome. The converse fails for several treatments
+  (`CausalInference.BackDoorExamples.backDoor_not_pairwise_fork`,
+  `CausalInference.BackDoorExamples.backDoor_not_pairwise_common_cause`).
 * `Digraph.IsAcyclic.backDoor_parents`: in a DAG the parents of `x` satisfy the criterion
-  relative to `(x, y)` for every `y ≠ x`.
+  relative to `(x, y)` for every `y ≠ x`; `Digraph.IsAcyclic.backDoorAdjustment_parents` adds
+  `y ∉ G.parents x` and gives the adjustment-facing form.
+* `Digraph.BackDoor.insert_covariate`,
+  `Digraph.BackDoor.insert_covariate_of_mem_ancestorsOf`: sufficient conditions under which
+  adding a nondescendant `w` of `X` to an admissible set keeps it admissible (the M-bias
+  example shows that some condition is needed).
 * `Digraph.backDoor_empty_of_parents_eq_empty`: if no member of `X` has a parent, the empty set
   satisfies the criterion relative to `(X, Y)` for every `Y` disjoint from `X`.
 * Decidability, and the examples: Pearl (2009) Figure 3.4, What If Figures 7.1, 7.4 (M-bias),
@@ -36,11 +51,18 @@ public import CausalInference.Graphical.DSeparationDecide
 ## The definition for sets of treatments
 
 Pearl states the criterion for a pair of vertices and extends it to sets pairwise. The
-definition here uses the single surgery test `(G.deleteOutgoing X).DSep X Y Z` for the whole
-set `X`, which is the form used by the back-door adjustment theorem for sets. It is not claimed
-to agree with the pairwise extension when `X` has several members: a back-door path of `x₁` may
-leave through an edge out of another treatment `x₂`, and the surgery removes that edge. The two
-forms agree for a single treatment (`Digraph.backDoor_singleton_iff`).
+definition `Digraph.BackDoor` is instead the joint surgery form: the single test
+`(G.deleteOutgoing X).DSep X Y Z` for the whole set `X`. For several treatments it is not
+Pearl's pairwise Definition 3.3.1: a back-door path of `x₁` may leave through an edge out of
+another treatment `x₂`, and the surgery removes that edge. Two examples: with `x₂ → x₁`,
+`x₂ → y`, the empty set passes the joint test for `X = {x₁, x₂}` while the path
+`x₁ ← x₂ → y` is open; with `a → x₁`, `a → x₂`, `x₂ → y`, the empty set passes the joint test
+while `x₁ ← a → x₂ → y` is open. In both, the joint intervention is identified by the
+adjustment formula with the empty set, `P(y | do(x₁, x₂)) = P(y | x₁, x₂)`: the joint surgery
+form is the one that licenses the adjustment formula for the joint intervention (it is the form
+of Rule 2 of the do-calculus, and the form that `SCM.effect_eq_sum_of_backDoor` consumes). The
+pairwise form `Digraph.BackDoorPairwise` implies it when `X` and `Y` are disjoint, and the two
+agree for a single treatment.
 
 Condition (i) uses the inclusive descendant closure, so it also forces `Z` and `X` to be
 disjoint, as Pearl assumes.
@@ -63,11 +85,13 @@ open Relation
 
 variable {V : Type*}
 
-/-- Pearl's back-door criterion (Definition 3.3.1) for the sets `X`, `Y`, `Z`, stated through
-graph surgery: (i) no member of `Z` is a descendant of `X` (in the inclusive sense, so `Z` and
-`X` are also disjoint), and (ii) `X` and `Y` are d-separated by `Z` in `G.deleteOutgoing X`, the
-graph in which every edge out of `X` is removed; condition (ii) says that `Z` blocks every
-back-door path. -/
+/-- The back-door criterion in joint surgery form for the sets `X`, `Y`, `Z`: (i) no member of
+`Z` is a descendant of `X` (in the inclusive sense, so `Z` and `X` are also disjoint), and
+(ii) `X` and `Y` are d-separated by `Z` in `G.deleteOutgoing X`, the graph in which every edge
+out of every member of `X` is removed. For a single treatment this is Pearl's Definition 3.3.1
+(`backDoor_singleton_iff`). For several treatments it is weaker than Pearl's pairwise extension
+(`BackDoorPairwise`), and it is the form that licenses the adjustment formula for the joint
+intervention. It allows `Y` to meet `Z`; `BackDoorAdjustment` excludes that. -/
 def BackDoor (G : Digraph V) (X Y Z : Set V) : Prop :=
   (∀ z ∈ Z, z ∉ G.descendantsOf X) ∧ (G.deleteOutgoing X).DSep X Y Z
 
@@ -78,6 +102,20 @@ the edge `v → x` leaves `v`), and the requirement that `x` followed by that tr
 vertex. -/
 def OpenBackDoorPath (G : Digraph V) (Z : Set V) (x y : V) : Prop :=
   ∃ v l, G.Adj v x ∧ x ∉ Z ∧ G.ActiveTrail Z false v y l ∧ (x :: l).Nodup
+
+/-- Pearl's back-door criterion (Definition 3.3.1) extended to sets pairwise, in path form: no
+member of `Z` is a descendant of `X`, and for every `x ∈ X` and `y ∈ Y`, every simple path from
+`x` to `y` that starts with an arrow into `x` is blocked by `Z`. -/
+def BackDoorPairwise (G : Digraph V) (X Y Z : Set V) : Prop :=
+  (∀ z ∈ Z, z ∉ G.descendantsOf X) ∧ ∀ x ∈ X, ∀ y ∈ Y, ¬ G.OpenBackDoorPath Z x y
+
+/-- The back-door criterion in the setting of the adjustment formula (Pearl 2009,
+Theorem 3.3.2): `Z` satisfies `BackDoor G X Y Z`, and the outcome `Y` is disjoint from `Z`.
+Without disjointness the criterion can hold for the degenerate reason that an outcome in the
+conditioning set is blocked as an endpoint (for `y → x`, `BackDoor {x} {y} {y}` holds). The
+treatment `X` is disjoint from `Z` and from `Y` by `BackDoor` itself. -/
+def BackDoorAdjustment (G : Digraph V) (X Y Z : Set V) : Prop :=
+  G.BackDoor X Y Z ∧ Disjoint Y Z
 
 variable {G H : Digraph V} {X Y Z : Set V} {x y u w : V} {a : Bool} {l : List V}
 
@@ -161,13 +199,37 @@ theorem backDoor_singleton_iff (hxy : x ≠ y) :
     G.BackDoor {x} {y} Z ↔ (∀ z ∈ Z, z ∉ G.descendantsOf {x}) ∧ ¬ G.OpenBackDoorPath Z x y :=
   and_congr_right fun hZ => deleteOutgoing_dSep_singleton_iff hxy hZ
 
+/-! ### The pairwise form -/
+
+/-- For disjoint `X` and `Y`, Pearl's pairwise criterion implies the joint surgery form: a path
+that is active in `G.deleteOutgoing X` and leaves its first vertex `x ∈ X` must do so through an
+edge into `x`, and it is active in `G` as well. Disjointness is needed: for `x ∈ X ∩ Y` outside
+`Z` the pairwise condition holds vacuously, while `x` is d-connected to itself. The converse
+fails for several treatments (`CausalInference.BackDoorExamples.backDoor_not_pairwise_fork`). -/
+theorem BackDoorPairwise.backDoor (h : G.BackDoorPairwise X Y Z) (hXY : Disjoint X Y) :
+    G.BackDoor X Y Z := by
+  refine ⟨h.1, fun hconn => ?_⟩
+  obtain ⟨x, hx, y, hy, l, hl, hnd⟩ := dConn_iff_dConnPath.1 hconn
+  cases hl with
+  | nil _ => exact Set.disjoint_left.1 hXY hx hy
+  | fwd hadj _ _ => exact hadj.2 hx
+  | bwd hadj hu p => exact h.2 x hx y hy ⟨_, _, hadj.1, hu, p.mono deleteOutgoing_le, hnd⟩
+
+/-- For a single treatment and outcome, the pairwise and the joint forms agree. -/
+theorem backDoorPairwise_singleton_iff (hxy : x ≠ y) :
+    G.BackDoorPairwise {x} {y} Z ↔ G.BackDoor {x} {y} Z := by
+  rw [backDoor_singleton_iff hxy, BackDoorPairwise]
+  simp only [Set.mem_singleton_iff, forall_eq]
+
 /-! ### Two admissible sets -/
 
 /-- In a DAG the parents of `x` satisfy the back-door criterion relative to `(x, y)` for every
 `y ≠ x` (Pearl 2009, Theorem 3.2.2, read graphically; the Primer notes that the parents of `X`
 always satisfy the criterion). The hypothesis `y ≠ x` cannot be dropped: a vertex outside the
-conditioning set is never d-separated from itself. A parent `y` of `x` is allowed; it lies in
-the conditioning set. -/
+conditioning set is never d-separated from itself. A parent `y` of `x` is allowed; it then lies
+in the conditioning set and the separation holds only because an endpoint is conditioned on, so
+that case is outside the setting of the adjustment formula;
+`IsAcyclic.backDoorAdjustment_parents` excludes it. -/
 theorem IsAcyclic.backDoor_parents (hG : G.IsAcyclic) (hxy : x ≠ y) :
     G.BackDoor {x} {y} (G.parents x) := by
   refine ⟨fun z hz ⟨s, hs, hsz⟩ => ?_, ?_⟩
@@ -179,6 +241,13 @@ theorem IsAcyclic.backDoor_parents (hG : G.IsAcyclic) (hxy : x ≠ y) :
     rw [descendantsOf_deleteOutgoing_of_subset subset_rfl, parents_deleteOutgoing,
       Set.sdiff_singleton_eq_self (fun hx => hG.irrefl x hx)] at h
     exact h.mono_right (Set.singleton_subset_iff.2 (Set.mem_compl_singleton_iff.2 hxy.symm))
+
+/-- The adjustment-facing form of `IsAcyclic.backDoor_parents`: in a DAG the parents of `x`
+satisfy `BackDoorAdjustment` relative to `(x, y)` for every `y ≠ x` that is not a parent
+of `x`. -/
+theorem IsAcyclic.backDoorAdjustment_parents (hG : G.IsAcyclic) (hxy : x ≠ y)
+    (hy : y ∉ G.parents x) : G.BackDoorAdjustment {x} {y} (G.parents x) :=
+  ⟨hG.backDoor_parents hxy, Set.disjoint_singleton_left.2 hy⟩
 
 /-- If no member of `X` has a parent, the empty set satisfies the back-door criterion relative
 to `(X, Y)` for every `Y` disjoint from `X`: after the edges out of `X` are removed, every
@@ -196,6 +265,56 @@ theorem backDoor_empty_of_parents_eq_empty (hX : ∀ x ∈ X, G.parents x = ∅)
       rw [hX x hx] at this
       exact this
     · exact (bayesBall_adj_true.1 hstep).1.2 hx
+
+/-! ### Adding a covariate -/
+
+/-- Shrinking the conditioning set from `insert w Z` to `Z` keeps a trail active when every
+vertex of the trail that is an ancestor of `w` is an ancestor of `Z`. -/
+theorem ActiveTrail.of_insert (p : G.ActiveTrail (insert w Z) a u x l)
+    (h : ∀ t ∈ l, t ∈ G.ancestorsOf {w} → t ∈ G.ancestorsOf Z) : G.ActiveTrail Z a u x l := by
+  induction p with
+  | nil hv => exact .nil fun h' => hv (Set.mem_insert_of_mem _ h')
+  | fwd hadj hu _ ih =>
+    exact .fwd hadj (fun h' => hu (Set.mem_insert_of_mem _ h'))
+      (ih fun t ht => h t (List.mem_cons_of_mem _ ht))
+  | bwd hadj hu _ ih =>
+    exact .bwd hadj (fun h' => hu (Set.mem_insert_of_mem _ h'))
+      (ih fun t ht => h t (List.mem_cons_of_mem _ ht))
+  | collider hadj hu _ ih =>
+    refine .collider hadj ?_ (ih fun t ht => h t (List.mem_cons_of_mem _ ht))
+    obtain ⟨s, hs, hus⟩ := hu
+    rcases hs with rfl | hs
+    · exact h _ List.mem_cons_self ⟨_, rfl, hus⟩
+    · exact ⟨s, hs, hus⟩
+
+/-- Adding a covariate `w` that is not a descendant of `X` preserves the back-door criterion,
+provided that, in `H = G.deleteOutgoing X`, every vertex of a simple path from `X` to `Y` that
+is active given `Z ∪ {w}` and is an ancestor of `w` is already an ancestor of `Z`. Then such a
+path is active given `Z` as well, so there is none. The sufficient condition of the M-bias
+discussion asks this only of the colliders of the path; the hypothesis here asks it of every
+vertex of the path, so it is stronger. -/
+theorem BackDoor.insert_covariate (h : G.BackDoor X Y Z) (hwX : w ∉ G.descendantsOf X)
+    (hw : ∀ x ∈ X, ∀ y ∈ Y, ∀ l, (G.deleteOutgoing X).ActiveTrail (insert w Z) false x y l →
+      l.Nodup → ∀ t ∈ l, t ∈ (G.deleteOutgoing X).ancestorsOf {w} →
+        t ∈ (G.deleteOutgoing X).ancestorsOf Z) :
+    G.BackDoor X Y (insert w Z) := by
+  refine ⟨fun z hz => ?_, fun hc => ?_⟩
+  · rcases hz with rfl | hz
+    · exact hwX
+    · exact h.1 z hz
+  · obtain ⟨x, hx, y, hy, l, hl, hnd⟩ := dConn_iff_dConnPath.1 hc
+    exact h.2 (dConn_iff_dConnTrail.2 ⟨x, hx, y, hy, l, hl.of_insert (hw x hx y hy l hl hnd)⟩)
+
+/-- Adding a covariate `w` that is not a descendant of `X` and is an ancestor of `Z` in
+`G.deleteOutgoing X` preserves the back-door criterion. -/
+theorem BackDoor.insert_covariate_of_mem_ancestorsOf (h : G.BackDoor X Y Z)
+    (hwX : w ∉ G.descendantsOf X) (hw : w ∈ (G.deleteOutgoing X).ancestorsOf Z) :
+    G.BackDoor X Y (insert w Z) := by
+  refine h.insert_covariate hwX fun _ _ _ _ _ _ _ t _ ⟨s, hs, hts⟩ => ?_
+  rw [Set.mem_singleton_iff] at hs
+  subst hs
+  obtain ⟨z, hz, hsz⟩ := hw
+  exact ⟨z, hz, hts.trans hsz⟩
 
 section Decidable
 
@@ -297,5 +416,39 @@ example : primerFig37.BackDoor {0} {1} {2, 3, 4} := by decide +kernel
 example : ¬ primerFig37.BackDoor {0} {1} {4} := by decide +kernel
 example : ¬ primerFig37.BackDoor {0} {1} {2, 3} := by decide +kernel
 example : ¬ primerFig37.BackDoor {0} {1} ∅ := by decide +kernel
+
+-- Adding the nondescendant `X₁` of `Xᵢ`, an ancestor of `X₃`, to `{X₃, X₄}` keeps the criterion
+-- (`Digraph.BackDoor.insert_covariate_of_mem_ancestorsOf`).
+example : pearlFig34.BackDoor {6} {7} {0, 2, 3} := by decide +kernel
+
+/-- Several treatments, joint form against pairwise form: `x₂ → x₁`, `x₂ → y`, with `x₁ = 0`,
+`x₂ = 1`, `y = 2`. The empty set passes the joint surgery test for `X = {x₁, x₂}`, while the
+back-door path `x₁ ← x₂ → y` is open, so Pearl's pairwise test fails. The adjustment formula
+`P(y | do(x₁, x₂)) = P(y | x₁, x₂)` holds here; the joint form is the one it needs. -/
+theorem backDoor_not_pairwise_fork :
+    (ofEdges (n := 3) [(1, 0), (1, 2)]).BackDoor {0, 1} {2} ∅ ∧
+      ¬ (ofEdges (n := 3) [(1, 0), (1, 2)]).BackDoorPairwise {0, 1} {2} ∅ := by
+  refine ⟨by decide +kernel, fun h => h.2 0 (by simp) 2 rfl ?_⟩
+  exact ⟨1, [1, 2], by decide, Set.notMem_empty _,
+    .fwd (by decide) (Set.notMem_empty _) (.nil (Set.notMem_empty _)), by decide⟩
+
+/-- Several treatments with a common cause: `a → x₁`, `a → x₂`, `x₂ → y`, with `x₁ = 0`,
+`x₂ = 1`, `y = 2`, `a = 3`. The empty set passes the joint surgery test for `X = {x₁, x₂}`, but
+not the test for `x₁` alone, and Pearl's pairwise test fails through the open path
+`x₁ ← a → x₂ → y`. -/
+theorem backDoor_not_pairwise_common_cause :
+    (ofEdges (n := 4) [(3, 0), (3, 1), (1, 2)]).BackDoor {0, 1} {2} ∅ ∧
+      ¬ (ofEdges (n := 4) [(3, 0), (3, 1), (1, 2)]).BackDoor {0} {2} ∅ ∧
+      ¬ (ofEdges (n := 4) [(3, 0), (3, 1), (1, 2)]).BackDoorPairwise {0, 1} {2} ∅ := by
+  refine ⟨by decide +kernel, by decide +kernel, fun h => h.2 0 (by simp) 2 rfl ?_⟩
+  exact ⟨3, [3, 1, 2], by decide, Set.notMem_empty _,
+    .fwd (by decide) (Set.notMem_empty _)
+      (.fwd (by decide) (Set.notMem_empty _) (.nil (Set.notMem_empty _))), by decide⟩
+
+/-- The outcome as a covariate: for `y → x` (`x = 0`, `y = 1`), `{y}` passes `BackDoor` because
+the endpoint `y` is conditioned on, but it is not an adjustment set. -/
+example : (ofEdges (n := 2) [(1, 0)]).BackDoor {0} {1} {1} ∧
+    ¬ (ofEdges (n := 2) [(1, 0)]).BackDoorAdjustment {0} {1} {1} :=
+  ⟨by decide +kernel, fun h => Set.disjoint_left.1 h.2 rfl rfl⟩
 
 end CausalInference.BackDoorExamples

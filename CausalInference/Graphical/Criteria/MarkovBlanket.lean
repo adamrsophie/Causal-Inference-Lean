@@ -24,6 +24,9 @@ public import CausalInference.Graphical.DSeparationExamples
 * `Digraph.IsAcyclic.notMem_markovBlanket`: in an acyclic graph `v` is not in its own blanket,
   so the theorem is not vacuous there (an endpoint in the conditioning set would be blocked
   trivially).
+* `Digraph.IsAcyclic.markovBlanket_subset_of_dSep`: minimality. In an acyclic graph, every set
+  `S` that omits `v` and d-separates `v` from the vertices outside `S` contains the blanket;
+  `Digraph.markovBlanket_subset_insert_of_dSep` is the version without acyclicity.
 * Examples by `decide`.
 
 ## References
@@ -98,6 +101,39 @@ theorem dSep_markovBlanket (G : Digraph V) (v : V) :
   · obtain ⟨rfl, -⟩ := Prod.mk.inj h
     exact hy (Set.mem_insert _ _)
   · exact hyM h
+
+/-- Minimality of the Markov blanket. If `v ∉ S` and `S` d-separates `v` from every vertex
+outside `S` and different from `v`, then every member of the blanket of `v` other than `v`
+lies in `S`. A parent or child outside `S` would be adjacent to `v`; a co-parent `u` outside `S`
+with a common child `w` would be d-connected to `v` through the collider `v → w ← u`, since
+`w` is a child and so lies in `S`. No acyclicity is needed. -/
+theorem markovBlanket_subset_insert_of_dSep {S : Set V} (hvS : v ∉ S)
+    (h : G.DSep {v} (insert v S)ᶜ S) : G.markovBlanket v ⊆ insert v S := by
+  have key : ∀ u, u ∉ insert v S → ¬ G.DConn {v} {u} S := fun u hu hc =>
+    h (hc.mono_right (Set.singleton_subset_iff.2 hu))
+  have notS : ∀ {u}, u ∉ insert v S → u ∉ S := fun hu hs => hu (Set.mem_insert_of_mem _ hs)
+  have child : ∀ w, G.Adj v w → w ∈ insert v S := fun w hw => by
+    by_contra hw'
+    exact key w hw' (dConn_of_adj hw hvS (notS hw'))
+  intro u hu
+  by_contra hu'
+  rw [mem_markovBlanket] at hu
+  rcases hu with huv | hvu | ⟨-, w, hvw, huw⟩
+  · exact key u hu' (dConn_of_adj huv (notS hu') hvS).symm
+  · exact hu' (child u hvu)
+  · rcases child w hvw with rfl | hwS
+    · exact key u hu' (dConn_of_adj huw (notS hu') hvS).symm
+    · exact key u hu' (dConn_of_collider hvw huw hvS ⟨w, hwS, .refl⟩ (notS hu'))
+
+/-- Minimality of the Markov blanket in an acyclic graph (Primer, study question 2.4.1 (d)): if
+`v ∉ S` and `S` d-separates `v` from every vertex outside `S` and different from `v`, then the
+blanket of `v` is contained in `S`. Together with `dSep_markovBlanket`, the blanket is the
+smallest such set. -/
+theorem IsAcyclic.markovBlanket_subset_of_dSep (hG : G.IsAcyclic) {S : Set V} (hvS : v ∉ S)
+    (h : G.DSep {v} (insert v S)ᶜ S) : G.markovBlanket v ⊆ S := fun u hu => by
+  rcases markovBlanket_subset_insert_of_dSep hvS h hu with rfl | huS
+  · exact absurd hu (hG.notMem_markovBlanket u)
+  · exact huS
 
 section Finset
 

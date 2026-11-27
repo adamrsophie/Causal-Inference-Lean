@@ -268,17 +268,6 @@ theorem disjoint_XY (h : G.FrontDoor X Y Z) : Disjoint X Y :=
   Set.disjoint_left.2 fun _ hx hy =>
     Set.disjoint_left.1 h.disjoint_XZ hx (h.1.inter_subset ⟨hx, hy⟩)
 
-/-- Under the front-door criterion no treatment vertex is a descendant of a mediator: a
-directed path from `Z` to `X`, cut at its first vertex in `X`, would be a back-door path from
-`X` to `Z` that is active given the empty set, against condition (ii). -/
-theorem notMem_descendantsOf_mediator (h : G.FrontDoor X Y Z) {u : V} (hu : u ∈ X) :
-    u ∉ G.descendantsOf Z := by
-  rintro ⟨s, hs, hsu⟩
-  obtain ⟨t, ht, hst⟩ := exists_reflTransGen_deleteOutgoing hsu hu
-  have hs' : s ∉ (G.deleteOutgoing X).ancestorsOf ∅ := fun ⟨_, hw, _⟩ => hw
-  obtain ⟨c, hc⟩ := exists_reflTransGen_bayesBall_of_reflTransGen hst hs' false
-  exact h.2.1 (DConn.symm ⟨s, hs, t, ht, Set.notMem_empty s, Set.notMem_empty t, c, hc⟩)
-
 /-- Under the front-door criterion no outcome vertex is a descendant of a treatment vertex once
 the edges into the mediators are removed: such a directed path would avoid `Z`, against
 condition (i). -/

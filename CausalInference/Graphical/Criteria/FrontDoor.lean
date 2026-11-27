@@ -16,10 +16,9 @@ public import CausalInference.Graphical.Criteria.BackDoor
   contains a vertex of `Z`. A path counts as intercepted when one of its endpoints is in `Z`,
   and the path of length zero at a vertex of `X ∩ Y` outside `Z` is not intercepted. This is the
   relation written `(X ↛ Y | Z)_G` in Pearl (2009), pp. 236 to 237.
-* `Digraph.FrontDoor G X Y Z`: Pearl's front-door criterion (Definition 3.3.3): `Z` intercepts
-  all directed paths from `X` to `Y`; there is no unblocked back-door path from `X` to `Z`,
-  stated as `(G.deleteOutgoing X).DSep X Z ∅`; and every back-door path from `Z` to `Y` is
-  blocked by `X`, stated as `(G.deleteOutgoing Z).DSep Z Y X`.
+* `Digraph.FrontDoor G X Y Z`: the front-door criterion (Pearl's Definition 3.3.3) in joint
+  surgery form: `Z` intercepts all directed paths from `X` to `Y`;
+  `(G.deleteOutgoing X).DSep X Z ∅`; and `(G.deleteOutgoing Z).DSep Z Y X`.
 
 ## Main results
 
@@ -37,10 +36,24 @@ public import CausalInference.Graphical.Criteria.BackDoor
 * `Digraph.Intercepts.not_reflTransGen`: if `Z` intercepts all directed paths from `X` to `Y`
   and there is no directed path from `Z` to `Y`, then there is no directed path from `X` to `Y`
   (Pearl 2009, p. 237).
+* `Digraph.notMem_descendantsOf_of_dSep`, `Digraph.FrontDoor.disjoint_descendantsOf`:
+  condition (ii) alone rules out a directed path from `Z` back to `X`.
 * `Digraph.frontDoor_singleton_iff`: for single vertices, conditions (ii) and (iii) in path
   form.
 * Decidability, the canonical front-door graph (Pearl 2009, Figure 3.5, with the latent
   confounder as an explicit vertex) as a checked example, and non-examples.
+
+## Joint surgery form
+
+Conditions (ii) and (iii) are each a single d-separation test after removing the edges out of
+the whole set `X`, respectively `Z`. Condition (iii) says that `Z` and `Y` are d-separated by
+`X` once every edge out of every mediator is removed. For one treatment and one mediator this
+is the path form of Definition 3.3.3 (`Digraph.frontDoor_singleton_iff`). For several mediators
+it is weaker than the path form quantified over each mediator: a back-door path of one mediator
+may leave through an edge out of another mediator, which the surgery removes
+(`CausalInference.FrontDoorExamples.frontDoor_joint_not_pairwise`). The same holds for
+condition (ii) with several treatments. The joint form is the one used by the front-door
+adjustment theorem `SCM.effect_eq_sum_of_frontDoor`.
 
 ## References
 
@@ -64,12 +77,18 @@ a directed path of `G.restrict Zᶜ` starting outside `Z`. -/
 def Intercepts (G : Digraph V) (Z X Y : Set V) : Prop :=
   ∀ x ∈ X, ∀ y ∈ Y, x ∉ Z → ¬ ReflTransGen (G.restrict Zᶜ).Adj x y
 
-/-- Pearl's front-door criterion (Definition 3.3.3) for `Z` relative to `(X, Y)`:
+/-- The front-door criterion (Pearl 2009, Definition 3.3.3) for `Z` relative to `(X, Y)`, in
+joint surgery form:
 (i) `Z` intercepts all directed paths from `X` to `Y`;
-(ii) there is no unblocked back-door path from `X` to `Z`: `X` and `Z` are d-separated by the
-empty set in the graph with the edges out of `X` removed;
-(iii) all back-door paths from `Z` to `Y` are blocked by `X`: `Z` and `Y` are d-separated by `X`
-in the graph with the edges out of `Z` removed. -/
+(ii) `X` and `Z` are d-separated by the empty set in the graph with the edges out of every
+member of `X` removed;
+(iii) `Z` and `Y` are d-separated by `X` in the graph with the edges out of every member of `Z`
+removed.
+For one treatment and one mediator, (ii) and (iii) say that no back-door path from `X` to `Z`
+is unblocked and that `X` blocks every back-door path from `Z` to `Y`
+(`frontDoor_singleton_iff`). For sets the surgery can remove a back-door path of one mediator
+that leaves through another mediator before it is tested, so (iii) is weaker than the path
+form quantified over each mediator. -/
 def FrontDoor (G : Digraph V) (X Y Z : Set V) : Prop :=
   G.Intercepts Z X Y ∧ (G.deleteOutgoing X).DSep X Z ∅ ∧ (G.deleteOutgoing Z).DSep Z Y X
 
@@ -262,19 +281,48 @@ theorem Intercepts.not_reflTransGen (h : G.Intercepts Z X Y)
 
 /-! ### The front-door criterion -/
 
+/-- Condition (ii) of the front-door criterion alone rules out a directed path from `Z` to a
+member of `X`: such a path, cut at its first vertex in `X`, would be a back-door path from `X`
+to `Z` that is active given the empty set. -/
+theorem notMem_descendantsOf_of_dSep (h : (G.deleteOutgoing X).DSep X Z ∅) {u : V}
+    (hu : u ∈ X) : u ∉ G.descendantsOf Z := by
+  rintro ⟨s, hs, hsu⟩
+  obtain ⟨t, ht, hst⟩ := exists_reflTransGen_deleteOutgoing hsu hu
+  have hs' : s ∉ (G.deleteOutgoing X).ancestorsOf ∅ := fun ⟨_, hw, _⟩ => hw
+  obtain ⟨c, hc⟩ := exists_reflTransGen_bayesBall_of_reflTransGen hst hs' false
+  exact h (DConn.symm ⟨s, hs, t, ht, Set.notMem_empty s, Set.notMem_empty t, c, hc⟩)
+
+/-- Under the front-door criterion no treatment vertex is a descendant of a mediator. -/
+theorem FrontDoor.notMem_descendantsOf_mediator (h : G.FrontDoor X Y Z) {u : V} (hu : u ∈ X) :
+    u ∉ G.descendantsOf Z :=
+  notMem_descendantsOf_of_dSep h.2.1 hu
+
+/-- Under the front-door criterion the treatment set is disjoint from the descendants of the
+mediators. -/
+theorem FrontDoor.disjoint_descendantsOf (h : G.FrontDoor X Y Z) :
+    Disjoint X (G.descendantsOf Z) :=
+  Set.disjoint_left.2 fun _ hu => h.notMem_descendantsOf_mediator hu
+
 /-- For single vertices, Pearl's conditions (ii) and (iii) in path form. Condition (ii): no
 simple path from `x` to `z` that starts with an arrow into `x` is active given the empty set.
 Condition (iii): every simple path from `z` to `y` that starts with an arrow into `z` is
-blocked by `x`; the path form of (iii) needs `x` not to be a descendant of `z`, which holds in
-a DAG as soon as `x` is an ancestor of `z`. -/
-theorem frontDoor_singleton_iff (hxz : x ≠ z) (hzy : z ≠ y) (hx : x ∉ G.descendantsOf {z}) :
+blocked by `x`. Either form of (ii) implies that `x` is not a descendant of `z`
+(`notMem_descendantsOf_of_dSep`), which the path form of (iii) needs. -/
+theorem frontDoor_singleton_iff (hxz : x ≠ z) (hzy : z ≠ y) :
     G.FrontDoor {x} {y} {z} ↔ G.Intercepts {z} {x} {y} ∧ ¬ G.OpenBackDoorPath ∅ x z ∧
       ¬ G.OpenBackDoorPath {x} z y := by
-  unfold FrontDoor
-  rw [deleteOutgoing_dSep_singleton_iff (Z := ∅) hxz (fun _ h => (Set.notMem_empty _ h).elim),
-    deleteOutgoing_dSep_singleton_iff hzy (fun v hv => by
+  have hii := deleteOutgoing_dSep_singleton_iff (G := G) (Z := ∅) hxz
+    (fun _ h => (Set.notMem_empty _ h).elim)
+  have hiii (h2 : (G.deleteOutgoing {x}).DSep {x} {z} ∅) :=
+    deleteOutgoing_dSep_singleton_iff (G := G) (Z := {x}) hzy (fun v hv => by
       rw [Set.mem_singleton_iff] at hv
-      exact hv ▸ hx)]
+      exact hv ▸ notMem_descendantsOf_of_dSep h2 rfl)
+  unfold FrontDoor
+  constructor
+  · rintro ⟨h1, h2, h3⟩
+    exact ⟨h1, hii.1 h2, (hiii h2).1 h3⟩
+  · rintro ⟨h1, h2, h3⟩
+    exact ⟨h1, hii.2 h2, (hiii (hii.2 h2)).2 h3⟩
 
 section Decidable
 
@@ -339,5 +387,15 @@ example : ¬ frontDoorMediatorConfounded.FrontDoor {0} {2} {1} := by decide +ker
 example : GraphExamples.chain.Intercepts {1} {0} {2} := by decide +kernel
 example : ¬ GraphExamples.chain.Intercepts ∅ {0} {2} := by decide +kernel
 example : GraphExamples.chain.Intercepts {2} {0} {2} := by decide +kernel
+
+/-- The joint form of condition (iii) differs from the path form quantified over each mediator:
+`X → m₂`, `m₂ → m₁`, `m₁ → Y`, `m₂ → Y`, with `X = 0`, `m₁ = 1`, `m₂ = 2`, `Y = 3`. The set
+`{m₁, m₂}` satisfies `FrontDoor`, yet the back-door path `m₁ ← m₂ → Y` from the mediator `m₁`
+is open given `X`: removing the edges out of both mediators deletes it. -/
+theorem frontDoor_joint_not_pairwise :
+    (ofEdges (n := 4) [(0, 2), (2, 1), (1, 3), (2, 3)]).FrontDoor {0} {3} {1, 2} ∧
+      (ofEdges (n := 4) [(0, 2), (2, 1), (1, 3), (2, 3)]).OpenBackDoorPath {0} 1 3 := by
+  refine ⟨by decide +kernel, 2, [2, 3], by decide, by simp, ?_, by decide⟩
+  exact .fwd (by decide) (by simp) (.nil (by simp))
 
 end CausalInference.FrontDoorExamples
