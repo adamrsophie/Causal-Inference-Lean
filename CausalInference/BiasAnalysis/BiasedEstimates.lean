@@ -42,8 +42,9 @@ is itself estimated by `b̂` with variance `s²`. The study effect `d` is a fixe
 * `biasModelCriterion_min` (TSD 3, Section 5.3): with two treatments and a free mean bias, the
   estimate of the effect is the pooled high-quality estimate; the lower-quality trials inform
   only the bias. `biasModelCriterion_fixed_bias_example`: fixing the bias at `0` lets them move
-  the estimate. `biasModelCriterion_shift_of_no_high`: without high-quality trials the effect is
-  not identified.
+  the estimate. `biasModelCriterion_shift_of_no_high`, `lowQualityLaw_shift`,
+  `lowQuality_not_identified`: without high-quality trials the effect is not identified, both
+  for the criterion and for the product normal law of the estimates (`hasLaw_lowQualityLaw`).
 * `wlsIntercept_unbiased` (TSD 3, Section 5.3, small-study bias): if `E yᵢ = d + γ Vᵢ`, the
   intercept formula of the regression of the estimates on the study variances is unbiased for
   `d`; `wlsRSS_le`: under `0 < Sxx` the formula is the unique weighted least squares minimizer,
@@ -396,13 +397,53 @@ theorem biasModelCriterion_min {m n : ℕ} (hm : 0 < m) (hn : 0 < n) {yh Vh : Fi
 /-- **Lower-quality trials alone do not identify the effect.** With no high-quality trial
 (`m = 0`) the criterion depends on `(d, b₀)` only through `d + b₀`: it is invariant under
 `(d, b₀) ↦ (d + t, b₀ - t)` for every `t`, so every effect `d` attains the minimum value
-together with a suitable mean bias. Only the criterion is stated here; the observed law, in
-which each lower-quality estimate has mean `d + b₀`, is not formalized. -/
+together with a suitable mean bias. The same invariance for the joint normal law of the
+estimates is `lowQualityLaw_shift`. -/
 theorem biasModelCriterion_shift_of_no_high {n : ℕ} (yh Vh : Fin 0 → ℝ) (yl Vl : Fin n → ℝ)
     (d b₀ t : ℝ) :
     biasModelCriterion yh Vh yl Vl (d + t) (b₀ - t) = biasModelCriterion yh Vh yl Vl d b₀ := by
   simp only [biasModelCriterion, Finset.univ_eq_empty, Finset.sum_empty, zero_add]
   exact Finset.sum_congr rfl fun i _ => by ring_nf
+
+/-- The joint law of `n` independent lower-quality estimates in the bias model with a free mean
+bias: `yᵢ ~ N(d + b₀, Vᵢ)`, the product of the normal laws. Here `Vᵢ` is the total variance of
+the `i`-th estimate (its sampling variance, plus the between-study bias variance `κ²` when the
+study-specific bias is random as in `adjusted_hasLaw`). -/
+noncomputable def lowQualityLaw {n : ℕ} (d b₀ : ℝ) (V : Fin n → ℝ≥0) : Measure (Fin n → ℝ) :=
+  Measure.pi fun i => gaussianReal (d + b₀) (V i)
+
+omit [IsProbabilityMeasure P] in
+/-- Independent estimates `Yᵢ ~ N(d + b₀, Vᵢ)` have joint law `lowQualityLaw d b₀ V`. -/
+theorem hasLaw_lowQualityLaw {n : ℕ} {Y : Fin n → Ω → ℝ} {d b₀ : ℝ} {V : Fin n → ℝ≥0}
+    (hind : iIndepFun Y P) (hY : ∀ i, HasLaw (Y i) (gaussianReal (d + b₀) (V i)) P) :
+    HasLaw (fun ω i => Y i ω) (lowQualityLaw d b₀ V) P where
+  aemeasurable := AEMeasurable.of_eval fun i => (hY i).aemeasurable
+  map_eq := by
+    rw [hind.map_fun_eq_pi_map fun i => (hY i).aemeasurable, lowQualityLaw]
+    congr 1
+    funext i
+    exact (hY i).map_eq
+
+/-- **Lower-quality estimates alone do not identify the effect: the observed law.** The joint law
+of independent lower-quality estimates is the same under `(d, b₀)` and `(d + t, b₀ - t)` for
+every `t`: it depends on the parameters only through `d + b₀`. -/
+theorem lowQualityLaw_shift {n : ℕ} (d b₀ t : ℝ) (V : Fin n → ℝ≥0) :
+    lowQualityLaw (d + t) (b₀ - t) V = lowQualityLaw d b₀ V := by
+  unfold lowQualityLaw
+  congr 1
+  funext i
+  congr 1
+  ring
+
+omit [IsProbabilityMeasure P] in
+/-- **Non-identification, stated for a data vector.** If the observed estimates `Y` have the
+law of the model with parameters `(d, b₀)`, they also have the law of the model with
+`(d + t, b₀ - t)`; for `t ≠ 0` the two effects differ. So no functional of the law of `Y`
+recovers `d`. -/
+theorem lowQuality_not_identified {n : ℕ} {Y : Ω → Fin n → ℝ} {d b₀ : ℝ} {V : Fin n → ℝ≥0}
+    (hY : HasLaw Y (lowQualityLaw d b₀ V) P) {t : ℝ} (ht : t ≠ 0) :
+    HasLaw Y (lowQualityLaw (d + t) (b₀ - t) V) P ∧ d + t ≠ d := by
+  refine ⟨by rwa [lowQualityLaw_shift], fun h => ht (by linarith)⟩
 
 /-- **Countermodel: ignoring the bias.** With one high-quality estimate `0` and one
 lower-quality estimate `1`, both of variance `1`, the free-bias model estimates `d̂ = 0`

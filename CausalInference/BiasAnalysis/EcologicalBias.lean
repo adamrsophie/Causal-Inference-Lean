@@ -32,6 +32,8 @@ Three ways in which between-trial comparisons in a meta-regression mislead, from
   slope `-3/2` (TSD 3, Section 1.1.2).
 * `betweenSlope_eq_of_surjective`, `betweenSlope_unused_label`: unused trial labels do not
   enter `betweenSlope`; a regression over all labels would change with them.
+  `betweenSlope_ne_sizeWeighted_example`: the equal-weight slope `1/2` and the size-weighted
+  slope `6/11` of the same data.
 * `withinSlope_add_trial`: the within-trial slope does not change when an additive trial-level
   term `g (trial)` is added to the outcome. It does change under trial-specific changes of the
   slope itself.
@@ -54,7 +56,8 @@ patient data with two covariates, the trial mean and the individual value minus 
 it does not specify intercepts. The main-effect form used here (the slope of an outcome on a
 covariate) and the common intercept of `wbRSS` are simplifications made here: a model with trial
 fixed effects and a separate term `β_B x̄_i` is not identified (the term is collinear with the
-trial intercepts). The interaction reading is covered only by the arm-wise results above.
+trial intercepts). The interaction model itself, with the two interaction columns, is in
+`BiasAnalysis/EcologicalInteraction.lean`.
 Regression to the mean is stated for population least squares slopes with uncorrelated (not
 necessarily independent) errors, using `slope` of `BiasAnalysis/MeasurementError.lean`; the
 error `e_C` enters both the regressor and the outcome, so the classical error model of that
@@ -658,6 +661,42 @@ theorem armWithinSlope_sub_add_trial (A : ι → ℝ) (x y : ι → ℝ) (g h : 
         armWithinSlope tr A 0 x (fun k => y k + g (tr k) + h (tr k) * A k) =
       armWithinSlope tr A 1 x y - armWithinSlope tr A 0 x y := by
   rw [armWithinSlope_add_trial, armWithinSlope_add_trial]
+
+/-- **Equal and size weights give different between slopes.** Four patients in three trials of
+sizes `1, 1, 2` (`tr = (0, 1, 2, 2)`), with covariates `(0, 1, 2, 2)` and outcomes
+`(0, 0, 1, 1)`, so that the trial means are `(0, 0)`, `(1, 0)` and `(2, 1)`. The equal-weight
+between slope is `1/2`, while the between coefficient of the patient-level within and between
+model (`wbRSS_min`), the size-weighted slope, is `6/11`. -/
+theorem betweenSlope_ne_sizeWeighted_example :
+    betweenSlope (![0, 1, 2, 2] : Fin 4 → Fin 3) ![0, 1, 2, 2] ![0, 0, 1, 1] = 1 / 2 ∧
+      sizeWeightedBetweenSlope (![0, 1, 2, 2] : Fin 4 → Fin 3) ![0, 1, 2, 2] ![0, 0, 1, 1] =
+        6 / 11 := by
+  set tr : Fin 4 → Fin 3 := ![0, 1, 2, 2] with htr
+  have hsurj : Function.Surjective tr := by
+    intro i; fin_cases i
+    · exact ⟨0, rfl⟩
+    · exact ⟨1, rfl⟩
+    · exact ⟨2, rfl⟩
+  have hn : ∀ i, (trialSize tr i : ℝ) = ![1, 1, 2] i := by
+    have h0 : trialSize tr 0 = 1 := by decide
+    have h1 : trialSize tr 1 = 1 := by decide
+    have h2 : trialSize tr 2 = 2 := by decide
+    intro i; fin_cases i <;> simp [h0, h1, h2]
+  have hm : ∀ (z : Fin 4 → ℝ) (i : Fin 3), trialMean tr z i =
+      (∑ j, if tr j = i then z j else 0) / ![1, 1, 2] i := by
+    intro z i; rw [trialMean, hn, Finset.sum_filter]
+  have hx : ∀ i, trialMean tr ![0, 1, 2, 2] i = ![0, 1, 2] i := by
+    intro i; rw [hm]; fin_cases i <;> simp [htr, Fin.sum_univ_four]
+  have hy : ∀ i, trialMean tr ![0, 0, 1, 1] i = ![0, 0, 1] i := by
+    intro i; rw [hm]; fin_cases i <;> simp [htr, Fin.sum_univ_four]
+  refine ⟨?_, ?_⟩
+  · rw [betweenSlope_eq_of_surjective hsurj]
+    simp only [lsSlope, hx, hy, Fin.sum_univ_three, Fintype.card_fin]
+    simp
+    norm_num
+  · simp only [sizeWeightedBetweenSlope, lsSlope, hx, hy, Fin.sum_univ_four, Fintype.card_fin]
+    simp [htr]
+    norm_num
 
 end WithinBetweenFit
 
