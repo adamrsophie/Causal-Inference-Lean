@@ -32,9 +32,6 @@ they agree at horizon `2` and translates between the two kinds of model.
   `Longitudinal.Model.ofTwoTime_nonanticipating`,
   `Longitudinal.Model.ofTwoTime_covariateConsistent_iff` and
   `Longitudinal.Model.ofTwoTime_outcomeConsistent_iff`.
-* `Longitudinal.ipw2_eq_gFormula2_static`: the two time point weighted mean `ipw2` equals
-  `gFormula2` as an identity of finite sums, with no hypothesis (a public restatement of the
-  identity behind `ipw2_static`).
 
 The dynamic regime form of the bridge is `Longitudinal.gFormula2_eq_wmass_mul_gFormulaDyn` in
 `CausalInference.Longitudinal.Dynamic`, since it needs the general-horizon dynamic g-formula.
@@ -67,7 +64,9 @@ theorem restrict_restrict (m : Ω → ℝ) (s t : Finset Ω) :
 /-- **The general-horizon g-formula at two time points is the two time point g-formula.** For
 a nonnegative mass function `m`, treatments `A 0, A 1`, covariates `L 0, L 1` and a static
 regime `a`, the unnormalized two time point functional `gFormula2` equals the total mass times
-the normalized `gFormula` at horizon `2`. For a probability mass function the two agree. -/
+the normalized `gFormula` at horizon `2`. For a probability mass function the two agree. Both
+sides are the totalized expressions (a ratio with zero denominator is read as `0`), so this is an
+identity of functionals, not a statement about conditional probabilities on null events. -/
 theorem gFormula2_eq_wmass_mul_gFormula {m : Ω → ℝ} (hm : ∀ ω, 0 ≤ m ω) (A : Fin 2 → Ω → 𝒜)
     (L : Fin 2 → Ω → 𝓛) (a : Fin 2 → 𝒜) (Y : Ω → ℝ) :
     gFormula2 m (L 0) (A 0) (L 1) (A 1) (fun _ => a 0) (fun _ _ => a 1) Y =
@@ -241,35 +240,6 @@ theorem ofTwoTime_outcomeConsistent_iff :
 end OfTwoTime
 
 end Model
-
-/-- **The two time point weighted mean equals the two time point g-formula**, as an identity of
-finite sums with no causal hypothesis and no positivity hypothesis: on a block where the final
-history event has zero mass both sides contain a zero weighted sum. This is a public restatement
-of the identity used in `Weighting.lean` to prove `ipw2_static`. -/
-theorem ipw2_eq_gFormula2_static (m : Ω → ℝ) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜)
-    (L1 : Ω → 𝓛) (A1 : Ω → 𝒜) (a0 a1 : 𝒜) (Y : Ω → ℝ) :
-    ipw2 m L0 A0 L1 A1 a0 a1 Y = gFormula2 m L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1) Y := by
-  rw [ipw2, wsum_ite_and, wsum_eq_sum_ev _ L0, gFormula2]
-  refine sum_congr rfl fun l0 _ => ?_
-  rw [wsum_eq_sum_ev _ L1]
-  refine sum_congr rfl fun l1 _ => ?_
-  have hset : ev A0 a0 ∩ ev A1 a1 ∩ ev L0 l0 ∩ ev L1 l1 =
-      ev L0 l0 ∩ ev A0 a0 ∩ ev L1 l1 ∩ ev A1 a1 := by
-    ext ω; simp only [mem_inter, mem_ev]; tauto
-  rw [hset]
-  have hc : wsum m (ev L0 l0 ∩ ev A0 a0 ∩ ev L1 l1 ∩ ev A1 a1)
-      (fun ω => Y ω / (prop0 m L0 A0 ω * prop1 m L0 A0 L1 A1 ω)) =
-      wsum m (ev L0 l0 ∩ ev A0 a0 ∩ ev L1 l1 ∩ ev A1 a1) Y /
-        (condProb m (ev L0 l0) (ev A0 a0) *
-          condProb m (ev L0 l0 ∩ ev A0 a0 ∩ ev L1 l1) (ev A1 a1)) := by
-    rw [wsum, wsum, sum_div]
-    refine sum_congr rfl fun ω hω => ?_
-    simp only [mem_inter, mem_ev] at hω
-    obtain ⟨⟨⟨hL0, hA0⟩, hL1⟩, hA1⟩ := hω
-    rw [prop0, prop1, hL0, hA0, hL1, hA1, mul_div_assoc]
-  rw [hc, condMean, condProb, condProb, condProb]
-  simp only [div_eq_mul_inv, mul_inv, inv_inv]
-  ring
 
 end Longitudinal
 

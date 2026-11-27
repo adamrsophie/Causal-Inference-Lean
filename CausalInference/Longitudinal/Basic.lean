@@ -31,8 +31,8 @@ under the missing normalization.
 * `Longitudinal.condProb m s t`: the conditional probability `P(t | s) = P(s ∩ t) / P(s)`.
 * `Longitudinal.ev X x`: the event `{X = x}`.
 * `Longitudinal.MeanIndepOn m s t f`: within the event `s`, the variable `f` is mean independent
-  of the event `t`, in the division free form `E[1_{s ∩ t} f] P(s) = E[1_s f] P(s ∩ t)`. When
-  `P(s ∩ t) > 0` this says exactly `E[f | s ∩ t] = E[f | s]`
+  of the event `t`, in the division free form `E[1_{s ∩ t} f] P(s) = E[1_s f] P(s ∩ t)`. For a
+  nonnegative `m`: when `P(s ∩ t) > 0` this says exactly `E[f | s ∩ t] = E[f | s]`
   (`Longitudinal.meanIndepOn_iff_condMean_eq`); when `P(s ∩ t) = 0` it holds trivially.
 
 ## Longitudinal models
@@ -107,9 +107,10 @@ def restrict [DecidableEq Ω] (m : Ω → ℝ) (s : Finset Ω) : Ω → ℝ :=
   fun ω => if ω ∈ s then m ω else 0
 
 /-- Within the event `s`, the variable `f` is mean independent of the event `t`, stated without
-division: `E[1_{s ∩ t} f] P(s) = E[1_s f] P(s ∩ t)`. If `P(s ∩ t) > 0` this is the equality of
-conditional means `E[f | s ∩ t] = E[f | s]` (`meanIndepOn_iff_condMean_eq`); if `P(s ∩ t) = 0`
-both sides vanish and the condition is empty. -/
+division: `E[1_{s ∩ t} f] P(s) = E[1_s f] P(s ∩ t)`. For a nonnegative mass function `m`: if
+`P(s ∩ t) > 0` this is the equality of conditional means `E[f | s ∩ t] = E[f | s]`
+(`meanIndepOn_iff_condMean_eq`); if `P(s ∩ t) = 0` both sides vanish and the condition is empty.
+For a signed `m` a zero mass does not force a zero weighted sum, and the second reading fails. -/
 def MeanIndepOn [DecidableEq Ω] (m : Ω → ℝ) (s t : Finset Ω) (f : Ω → ℝ) : Prop :=
   wsum m (s ∩ t) f * wmass m s = wsum m s f * wmass m (s ∩ t)
 
@@ -128,12 +129,21 @@ theorem wsum_eq_zero_of_wmass_eq_zero (hm : ∀ ω, 0 ≤ m ω) {s : Finset Ω} 
   have h0 := (sum_eq_zero_iff_of_nonneg fun ω _ => hm ω).1 h
   exact sum_eq_zero fun ω hω => by rw [h0 ω hω, zero_mul]
 
-/-- A conditional probability given an event of zero mass in its intersection vanishes. -/
-theorem condProb_eq_zero_of_wmass_inter_eq_zero [DecidableEq Ω] {s t : Finset Ω}
-    (h : wmass m (s ∩ t) = 0) :
-    condProb m s t = 0 := by
-  rw [condProb, h, zero_div]
+/-- Given a conditioning event `s` of positive mass, the conditional probability `P(t | s)`
+vanishes exactly when `s ∩ t` has zero mass. -/
+theorem condProb_eq_zero_iff [DecidableEq Ω] {s t : Finset Ω} (hs : 0 < wmass m s) :
+    condProb m s t = 0 ↔ wmass m (s ∩ t) = 0 := by
+  rw [condProb, div_eq_zero_iff, or_iff_left hs.ne']
 
+/-- Given a conditioning event `s` of positive mass, the conditional probability `P(t | s)`
+vanishes when `s ∩ t` has zero mass. -/
+theorem condProb_eq_zero_of_wmass_inter_eq_zero [DecidableEq Ω] {s t : Finset Ω}
+    (hs : 0 < wmass m s) (h : wmass m (s ∩ t) = 0) :
+    condProb m s t = 0 :=
+  (condProb_eq_zero_iff hs).2 h
+
+/-- Under a nonnegative mass function the ratio `condProb m s t` is nonnegative (whatever the
+mass of `s`, since the ratio is read as `0` when it vanishes). -/
 theorem condProb_nonneg [DecidableEq Ω] (hm : ∀ ω, 0 ≤ m ω) (s t : Finset Ω) :
     0 ≤ condProb m s t :=
   div_nonneg (wmass_nonneg hm _) (wmass_nonneg hm _)
@@ -169,18 +179,19 @@ theorem wmass_eq_sum_ev [Fintype Ω] [DecidableEq Ω] {α : Type*} [Fintype α] 
   have h := wsum_eq_sum_ev (m := m) s X (fun _ => 1)
   simpa [wsum_const] using h
 
-/-- The law of total expectation for a finite-valued variable `X` given an event `s`:
-`E[f | s] = Σ_x P(X = x | s) E[f | s, X = x]`. Terms whose conditioning event `s ∩ {X = x}` has
-zero mass carry the weight `P(X = x | s) = 0`, a zero numerator. The identity is meaningful when
-`P(s) > 0`; if `P(s) = 0` both sides are the conventional value `0`, and every use of this lemma
-in the library is under the hypothesis `P(s) > 0`. -/
+/-- The law of total expectation for a finite-valued variable `X` given an event `s` of positive
+mass, under a nonnegative mass function: `E[f | s] = Σ_x P(X = x | s) E[f | s, X = x]`. A term
+whose conditioning event `s ∩ {X = x}` has zero mass carries the weight `P(X = x | s) = 0`, a
+zero numerator over the positive denominator `P(s)`, so it contributes zero whatever value is
+given to the conditional mean on the null event. -/
 theorem condMean_eq_sum_condProb_mul [Fintype Ω] [DecidableEq Ω] (hm : ∀ ω, 0 ≤ m ω)
-    {α : Type*} [Fintype α] [DecidableEq α] (s : Finset Ω) (X : Ω → α) (f : Ω → ℝ) :
+    {α : Type*} [Fintype α] [DecidableEq α] {s : Finset Ω} (hs : 0 < wmass m s) (X : Ω → α)
+    (f : Ω → ℝ) :
     condMean m s f = ∑ x, condProb m s (ev X x) * condMean m (s ∩ ev X x) f := by
   rw [condMean, wsum_eq_sum_ev s X, sum_div]
   refine sum_congr rfl fun x _ => ?_
   by_cases h : wmass m (s ∩ ev X x) = 0
-  · rw [wsum_eq_zero_of_wmass_eq_zero hm h, condProb_eq_zero_of_wmass_inter_eq_zero h]
+  · rw [wsum_eq_zero_of_wmass_eq_zero hm h, condProb_eq_zero_of_wmass_inter_eq_zero hs h]
     simp
   · rw [condProb, condMean]
     field_simp

@@ -112,10 +112,10 @@ theorem gFormula2_eq {m : Ω → ℝ} (hm : ∀ ω, 0 ≤ m ω) {L0 : Ω → �
     simp
   have h1 := hpos.1 l0 h0
   rw [← wmass_mul_condMean h0.ne', ← (meanIndepOn_iff_condMean_eq hm h1).1 (hex.1 l0),
-    condMean_eq_sum_condProb_mul hm _ L1, mul_sum]
+    condMean_eq_sum_condProb_mul hm h1 L1, mul_sum]
   refine sum_congr rfl fun l1 _ => ?_
   rcases (wmass_nonneg hm (ev L0 l0 ∩ ev A0 (d0 l0) ∩ ev L1 l1)).eq_or_lt with h2 | h2
-  · rw [condProb_eq_zero_of_wmass_inter_eq_zero h2.symm]
+  · rw [condProb_eq_zero_of_wmass_inter_eq_zero h1 h2.symm]
     ring
   have h3 := hpos.2 l0 l1 h2
   rw [← (meanIndepOn_iff_condMean_eq hm h3).1 (hex.2 l0 l1)]

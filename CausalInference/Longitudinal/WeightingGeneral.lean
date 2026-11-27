@@ -17,8 +17,10 @@ for a static regime at any finite number `K` of time points, in the finite setti
 `Weighting.lean` already has, at two time points only: the identity `ipw2_static`
 (`E[Y(a0, a1)] = ipw2`), the fact `ipw2_one` that unstabilized weights restricted to the regime
 have mean one, and the fact `expect_stabilizedWeight2` that stabilized weights have mean one.
-This file adds the general-horizon versions of the first two; stabilized weights at a general
-horizon are not treated.
+This file adds the general-horizon versions of the first two, and the identification identity
+for stabilized weights whose numerator is the marginal probability of the observed treatment
+path. The mean-one property of stabilized weights at a general horizon, and the product form
+`Π_t f(A_t | Ā_{t-1})` of the numerator, are not treated.
 
 ## Main definitions
 
@@ -29,14 +31,17 @@ horizon are not treated.
 ## Main results
 
 * `Longitudinal.ipw_eq_wmass_mul_iceGFormula`, `Longitudinal.ipw_eq_wmass_mul_gFormula`,
-  `Longitudinal.ipw_eq_gFormula`: the weighted mean equals the g-formula, as an identity with no
-  causal hypothesis and no positivity hypothesis (on a block whose history event has zero mass
-  both sides vanish), proved by induction on `K`.
+  `Longitudinal.ipw_eq_gFormula`: the weighted mean equals the g-formula, as an identity of the
+  totalized expressions (each ratio read as `0` when its denominator vanishes) with no causal
+  and no positivity hypothesis, proved by induction on `K`. Their probabilistic reading is
+  `Model.expect_Ypo_eq_ipw`, under sequential positivity.
 * `Longitudinal.Model.expect_Ypo_eq_ipw`: under outcome consistency, sequential exchangeability
   and sequential positivity for `ā`, `E[Y(ā)] = ipw p A L ā Y`.
 * `Longitudinal.ipw_one`: under sequential positivity the unstabilized weights restricted to the
   regime have mean one.
 * `Longitudinal.ipw_two_eq_ipw2`: at two time points `ipw` is the `ipw2` of `Weighting.lean`.
+* `Longitudinal.Model.expect_stabilized_eq`: identification with stabilized weights,
+  `E[1{Ā = ā} · SW · Y] = P(Ā = ā) · E[Y(ā)]`, for `SW = P(Ā = Ā(ω)) / Π_t f(A_t | L̄_t, Ā_{t-1})`.
 
 ## References
 
@@ -73,8 +78,20 @@ noncomputable def ipw {K : ℕ} (m : Ω → ℝ) (A : Fin K → Ω → 𝒜) (L 
     (a : Fin K → 𝒜) (Y : Ω → ℝ) : ℝ :=
   wsum m univ fun ω => (if ∀ t, A t ω = a t then 1 else 0) * (Y ω / ∏ t, obsProp m A L ω t)
 
-/-- The recursive g-formula under a mass function of total mass zero is zero. -/
-theorem iceGFormula_eq_zero_of_wmass_univ_eq_zero {m : Ω → ℝ} (h : wmass m univ = 0) :
+omit [Fintype 𝓛] in
+/-- The stabilized weight at a general horizon: the mass `P(Ā = Ā(ω))` of the observed treatment
+path of `ω`, divided by the product `Π_t f(A_t | L̄_t, Ā_{t-1})` of the observed treatment
+probabilities (`obsProp`). The numerator is the marginal probability of the whole treatment path,
+which by the chain rule is the textbook product `Π_t f(A_t | Ā_{t-1})` wherever those
+conditional probabilities are defined; that product form is not formalized here. -/
+noncomputable def stabilizedWeight {K : ℕ} (m : Ω → ℝ) (A : Fin K → Ω → 𝒜) (L : Fin K → Ω → 𝓛)
+    (ω : Ω) : ℝ :=
+  wmass m (univ.filter fun ω' => ∀ t, A t ω' = A t ω) / ∏ t, obsProp m A L ω t
+
+/-- Under a mass function of total mass zero the totalized recursive g-formula expression is
+`0`, because every ratio in it has a zero denominator. A proof device only: it carries no
+probabilistic meaning. -/
+private theorem iceGFormula_eq_zero_of_wmass_univ_eq_zero {m : Ω → ℝ} (h : wmass m univ = 0) :
     ∀ (K : ℕ) (A : Fin K → Ω → 𝒜) (L : Fin K → Ω → 𝓛) (a : Fin K → 𝒜) (Y : Ω → ℝ),
       iceGFormula K m A L a Y = 0
   | 0, _, _, _, _ => by rw [iceGFormula, condMean, h, div_zero]
@@ -82,11 +99,14 @@ theorem iceGFormula_eq_zero_of_wmass_univ_eq_zero {m : Ω → ℝ} (h : wmass m 
     rw [iceGFormula]
     exact sum_eq_zero fun l _ => by rw [condProb, h, div_zero, zero_mul]
 
-/-- **Inverse probability weighting equals the recursive g-formula**, as an identity with no
-causal hypothesis and no positivity hypothesis: for every nonnegative mass function `m`, the
-weighted sum `ipw m A L a Y` is the total mass times `iceGFormula K m A L a Y`. On a block whose
-history event has zero mass both sides vanish. The proof is by induction on `K`, generalizing
-over the mass function: conditioning on the first time point is restriction of `m`. -/
+/-- **Inverse probability weighting equals the recursive g-formula**, as an identity of the
+totalized expressions with no causal hypothesis and no positivity hypothesis: for every
+nonnegative mass function `m`, the weighted sum `ipw m A L a Y` is the total mass times
+`iceGFormula K m A L a Y`, every ratio on either side being read as `0` when its denominator
+vanishes. On a block whose history event has zero mass both sides vanish. This is an algebraic
+identity only; its probabilistic reading is `Model.expect_Ypo_eq_ipw`. The proof is by induction
+on `K`, generalizing over the mass function: conditioning on the first time point is restriction
+of `m`. -/
 theorem ipw_eq_wmass_mul_iceGFormula : ∀ (K : ℕ) {m : Ω → ℝ} (_hm : ∀ ω, 0 ≤ m ω)
     (A : Fin K → Ω → 𝒜) (L : Fin K → Ω → 𝓛) (a : Fin K → 𝒜) (Y : Ω → ℝ),
     ipw m A L a Y = wmass m univ * iceGFormula K m A L a Y
@@ -146,14 +166,17 @@ theorem ipw_eq_wmass_mul_iceGFormula : ∀ (K : ℕ) {m : Ω → ℝ} (_hm : ∀
     field_simp
 
 /-- Inverse probability weighting equals the total mass times the sum-product g-formula, with no
-causal hypothesis and no positivity hypothesis. -/
+causal hypothesis and no positivity hypothesis, as an identity of the totalized expressions. -/
 theorem ipw_eq_wmass_mul_gFormula {K : ℕ} {m : Ω → ℝ} (hm : ∀ ω, 0 ≤ m ω) (A : Fin K → Ω → 𝒜)
     (L : Fin K → Ω → 𝓛) (a : Fin K → 𝒜) (Y : Ω → ℝ) :
     ipw m A L a Y = wmass m univ * gFormula m A L a Y := by
   rw [ipw_eq_wmass_mul_iceGFormula K hm, gFormula_eq_iceGFormula]
 
 /-- For a finite probability distribution, the weighted mean `ipw p A L a Y` equals the
-g-formula `gFormula p A L a Y`, whether or not any causal assumption holds. -/
+g-formula `gFormula p A L a Y`, whether or not any causal assumption holds, as an identity of the
+totalized expressions (each ratio read as `0` when its denominator vanishes). Without sequential
+positivity neither side need be a meaningful conditional quantity; `Model.expect_Ypo_eq_ipw` is
+the identification statement. -/
 theorem ipw_eq_gFormula {K : ℕ} (p : FiniteDist Ω) (A : Fin K → Ω → 𝒜) (L : Fin K → Ω → 𝓛)
     (a : Fin K → 𝒜) (Y : Ω → ℝ) :
     ipw p A L a Y = gFormula p A L a Y := by
@@ -199,6 +222,30 @@ theorem expect_Ypo_eq_ipw [Finite 𝓛] (a : Fin K → 𝒜) (hcons : M.OutcomeC
     M.p.expect (M.Ypo a) = ipw M.p M.A M.L a M.Y := by
   have : Fintype 𝓛 := Fintype.ofFinite 𝓛
   rw [ipw_eq_gFormula, (M.expect_Ypo_eq_gFormula a hcons hex hpos).1]
+
+omit [Fintype 𝓛] in
+/-- **Identification with stabilized weights at a general finite horizon.** In a longitudinal
+model, under outcome consistency, sequential exchangeability (mean independence form) and
+sequential positivity for the static regime `ā`,
+`E[1{Ā = ā} · SW · Y] = P(Ā = ā) · E[Y(ā)]` for the stabilized weight
+`SW = P(Ā = Ā(ω)) / Π_{t < K} f(A_t | L̄_t, Ā_{t-1})` (`stabilizedWeight`). On the regime the
+numerator is the constant `P(Ā = ā)`, so this is `expect_Ypo_eq_ipw` scaled by that constant. -/
+theorem expect_stabilized_eq [Finite 𝓛] (a : Fin K → 𝒜) (hcons : M.OutcomeConsistent a)
+    (hex : M.SeqExchangeable a) (hpos : M.SeqPositive a) :
+    M.p.expect (fun ω => (if ∀ t, M.A t ω = a t then 1 else 0) *
+      (stabilizedWeight M.p M.A M.L ω * M.Y ω)) =
+      M.p.prob (univ.filter fun ω => ∀ t, M.A t ω = a t) * M.p.expect (M.Ypo a) := by
+  rw [M.expect_Ypo_eq_ipw a hcons hex hpos, ipw, wsum, FiniteDist.expect, FiniteDist.prob,
+    mul_sum]
+  refine sum_congr rfl fun ω _ => ?_
+  by_cases h : ∀ t, M.A t ω = a t
+  · have hf : (univ.filter fun ω' => ∀ t, M.A t ω' = M.A t ω) =
+        univ.filter fun ω' => ∀ t, M.A t ω' = a t := by
+      simp only [h]
+    rw [stabilizedWeight, hf]
+    simp only [h, implies_true, ↓reduceIte, wmass, div_eq_mul_inv]
+    ring
+  · simp [h]
 
 end Model
 

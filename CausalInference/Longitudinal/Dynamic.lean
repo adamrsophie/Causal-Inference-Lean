@@ -191,8 +191,10 @@ variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] {𝒜 𝓛 : Type*} [Decidab
 /-- The sum-product form of the g-formula for the deterministic dynamic regime `g` under the
 mass function `m` (Hernán and Robins, Technical Point 21.1): the static formula with the
 treatment `a_t` replaced by the prescribed `a^g_t`,
-`Σ_{l̄} E[Y | L̄_K = l̄, Ā_K = ā^g(l̄)]
-  · Π_{t < K} P(L_t = l_t | L̄_{t-1} = l̄_{t-1}, Ā_{t-1} = ā^g_{t-1}(l̄))`. -/
+`Σ_{l̄} E[Y | L_s = l_s, A_s = a^g_s(l̄) for all s < K]
+  · Π_{t < K} P(L_t = l_t | L_s = l_s, A_s = a^g_s(l̄) for all s < t)`.
+The visits are indexed from `0`, so the terminal event fixes the visits `t < K`. A ratio with
+zero denominator is read as `0`; the identification theorem carries sequential positivity. -/
 noncomputable def gFormulaDyn {K : ℕ} (m : Ω → ℝ) (A : Fin K → Ω → 𝒜) (L : Fin K → Ω → 𝓛)
     (g : DynamicRegime K 𝒜 𝓛) (Y : Ω → ℝ) : ℝ :=
   ∑ l : Fin K → 𝓛, condMean m (hist A L (g.path l) l K) Y *
@@ -210,7 +212,9 @@ noncomputable def iceGFormulaDyn : (K : ℕ) → (Ω → ℝ) → (Fin K → Ω 
         (Fin.tail L) (g.tailRegime l) Y
 
 /-- The sum-product and the recursive forms of the dynamic g-formula are equal, for every mass
-function and with no hypotheses. -/
+function and with no hypotheses, as an identity of the totalized expressions (each ratio is read
+as `0` when its denominator vanishes). It is an algebraic identity only; its probabilistic
+reading is `expect_eq_gFormulaDyn`, under sequential positivity. -/
 theorem gFormulaDyn_eq_iceGFormulaDyn : ∀ (K : ℕ) (m : Ω → ℝ) (A : Fin K → Ω → 𝒜)
     (L : Fin K → Ω → 𝓛) (g : DynamicRegime K 𝒜 𝓛) (Y : Ω → ℝ),
     gFormulaDyn m A L g Y = iceGFormulaDyn K m A L g Y
@@ -254,12 +258,12 @@ theorem condMean_eq_iceGFormulaDyn : ∀ (K : ℕ) {m : Ω → ℝ} (_hm : ∀ �
     (_hpos : SeqPositiveDyn m A L g),
     condMean m univ Z = iceGFormulaDyn K m A L g Z
   | 0, _, _, _, _, _, _, _, _, _ => rfl
-  | K + 1, m, hm, _, A, L, g, Z, hex, hpos => by
-    rw [condMean_eq_sum_condProb_mul hm univ (L 0), iceGFormulaDyn]
+  | K + 1, m, hm, hm0, A, L, g, Z, hex, hpos => by
+    rw [condMean_eq_sum_condProb_mul hm hm0 (L 0), iceGFormulaDyn]
     refine sum_congr rfl fun l0 _ => ?_
     rw [univ_inter]
     rcases (wmass_nonneg hm (ev (L 0) l0)).eq_or_lt with h0 | h0
-    · rw [condProb_eq_zero_of_wmass_inter_eq_zero (by rw [univ_inter]; exact h0.symm)]
+    · rw [condProb_eq_zero_of_wmass_inter_eq_zero hm0 (by rw [univ_inter]; exact h0.symm)]
       simp
     congr 1
     have hL0 : histL A L (g.path fun _ => l0) (fun _ => l0) 0 = ev (L 0) l0 := by
@@ -398,7 +402,9 @@ variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] {𝒜 𝓛 : Type*} [Decidab
 /-- **The general-horizon dynamic g-formula at two time points is the two time point dynamic
 g-formula.** For a nonnegative mass function and a dynamic regime `g` with two time points, the
 unnormalized `gFormula2` with the treatment values prescribed by `g` equals the total mass times
-`gFormulaDyn`. -/
+`gFormulaDyn`. Both sides are the totalized expressions (a ratio with zero denominator is read
+as `0`), so this is an identity of functionals, not a statement about conditional probabilities
+on null events. -/
 theorem gFormula2_eq_wmass_mul_gFormulaDyn {m : Ω → ℝ} (hm : ∀ ω, 0 ≤ m ω)
     (A : Fin 2 → Ω → 𝒜) (L : Fin 2 → Ω → 𝓛) (g : DynamicRegime 2 𝒜 𝓛) (Y : Ω → ℝ) :
     gFormula2 m (L 0) (A 0) (L 1) (A 1) g.first (fun l0 l1 => g.second l0 l1 (g.first l0)) Y =

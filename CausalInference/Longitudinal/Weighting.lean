@@ -31,6 +31,10 @@ for a static regime at two time points, in the finite setting of
   the regime have mean one.
 * `Longitudinal.expect_stabilizedWeight2`: if sequential positivity holds for every regime that
   occurs with positive probability, the stabilized weights have mean one.
+* `Longitudinal.ipw2_stabilized_static`: identification with stabilized weights, under the
+  hypotheses of `ipw2_static`, `E[1{A0 = a0, A1 = a1} · SW · Y] = P(A0 = a0, A1 = a1) E[Y(a0, a1)]`.
+* `Longitudinal.ipw2_eq_gFormula2_static`: `ipw2` equals `gFormula2` as an identity of the
+  totalized finite sums, with no hypothesis; `ipw2_static` is its probabilistic reading.
 
 The weighting theorems are derived from the g-formula; their proofs do not use positivity of
 the denominators `prop0(ω) · prop1(ω)` beyond the sequential positivity hypothesis.
@@ -80,9 +84,13 @@ theorem wsum_ite_and {m : Ω → ℝ} (A0 A1 : Ω → 𝒜) (a0 a1 : 𝒜) (g : 
   refine sum_congr rfl fun ω _ => ?_
   by_cases h : A0 ω = a0 ∧ A1 ω = a1 <;> simp [h]
 
-/-- The weighted mean equals the g-formula as an identity of finite sums. On a block where the
-final history event has zero mass both sides contain a zero weighted sum. -/
-private theorem ipw2_eq_gFormula2 [Fintype 𝓛] (m : Ω → ℝ) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) (L1 : Ω → 𝓛)
+/-- **The two time point weighted mean equals the two time point g-formula**, for every mass
+function and with no causal and no positivity hypothesis, as an identity of the totalized
+expressions: every ratio on either side, conditional means, conditional probabilities and
+inverse weights, is read as `0` when its denominator vanishes. On a null conditioning event
+neither side is a conditional quantity, so this is an algebraic identity only. Its probabilistic
+reading is `ipw2_static`, under sequential positivity and a probability mass function. -/
+theorem ipw2_eq_gFormula2_static [Fintype 𝓛] (m : Ω → ℝ) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) (L1 : Ω → 𝓛)
     (A1 : Ω → 𝒜) (a0 a1 : 𝒜) (Y : Ω → ℝ) :
     ipw2 m L0 A0 L1 A1 a0 a1 Y = gFormula2 m L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1) Y := by
   rw [ipw2, wsum_ite_and, wsum_eq_sum_ev _ L0, gFormula2]
@@ -118,7 +126,7 @@ theorem ipw2_static [Finite 𝓛] (p : FiniteDist Ω) {L0 : Ω → 𝓛} {A0 : �
     (hpos : SeqPositive2 p L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1)) :
     p.expect (Ypo a0 a1) = ipw2 p L0 A0 L1 A1 a0 a1 Y := by
   have : Fintype 𝓛 := Fintype.ofFinite 𝓛
-  rw [ipw2_eq_gFormula2]
+  rw [ipw2_eq_gFormula2_static]
   exact gFormula2_eq p.nonneg hcons hex hpos
 
 omit [Fintype Ω] in
@@ -175,6 +183,37 @@ theorem expect_stabilizedWeight2 [Finite 𝒜] [Finite 𝓛] (p : FiniteDist Ω)
     rw [stabilizedWeight2, hω.1, hω.2, condProb, condProb, univ_inter, h1]
     field_simp
   rw [hsw, hone, mul_one]
+
+
+/-- **Identification with stabilized weights at two time points.** Under consistency, sequential
+exchangeability for `Y(a0, a1)` and sequential positivity for the static regime `(a0, a1)`,
+`E[1{A0 = a0, A1 = a1} · SW · Y] = P(A0 = a0, A1 = a1) · E[Y(a0, a1)]` for the stabilized weight
+`SW = P(A0) P(A1 | A0) / (P(A0 | L0) P(A1 | L0, A0, L1))`. On the regime the numerator of `SW` is
+the constant `P(A0 = a0, A1 = a1)`, so this is `ipw2_static` scaled by that constant; when the
+regime has probability zero both sides are `0` because the indicator vanishes almost surely. -/
+theorem ipw2_stabilized_static [Finite 𝓛] (p : FiniteDist Ω) {L0 : Ω → 𝓛} {A0 : Ω → 𝒜}
+    {L1 : Ω → 𝓛} {A1 : Ω → 𝒜} {Y : Ω → ℝ} {Ypo : 𝒜 → 𝒜 → Ω → ℝ} {a0 a1 : 𝒜}
+    (hcons : ∀ ω, A0 ω = a0 → A1 ω = a1 → Y ω = Ypo a0 a1 ω)
+    (hex : SeqExchangeable2 p L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1) (Ypo a0 a1))
+    (hpos : SeqPositive2 p L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1)) :
+    p.expect (fun ω => (if A0 ω = a0 ∧ A1 ω = a1 then 1 else 0) *
+      (stabilizedWeight2 p L0 A0 L1 A1 ω * Y ω)) =
+      p.prob (ev A0 a0 ∩ ev A1 a1) * p.expect (Ypo a0 a1) := by
+  have h1 : wmass p univ = 1 := p.sum_eq_one
+  have hexp : p.expect (fun ω => (if A0 ω = a0 ∧ A1 ω = a1 then 1 else 0) *
+      (stabilizedWeight2 p L0 A0 L1 A1 ω * Y ω)) = wsum p univ (fun ω =>
+        (if A0 ω = a0 ∧ A1 ω = a1 then 1 else 0) * (stabilizedWeight2 p L0 A0 L1 A1 ω * Y ω)) :=
+    rfl
+  have hprob : p.prob (ev A0 a0 ∩ ev A1 a1) = wmass p (ev A0 a0 ∩ ev A1 a1) := rfl
+  rw [hexp, wsum_ite_and, ipw2_static p hcons hex hpos, ipw2, wsum_ite_and, hprob]
+  rcases (wmass_nonneg p.nonneg (ev A0 a0 ∩ ev A1 a1)).eq_or_lt with h0 | h0
+  · rw [wsum_eq_zero_of_wmass_eq_zero p.nonneg h0.symm, ← h0, zero_mul]
+  have hA0 : 0 < wmass p (ev A0 a0) := h0.trans_le (wmass_mono p.nonneg inter_subset_left)
+  rw [wsum, wsum, mul_sum]
+  refine sum_congr rfl fun ω hω => ?_
+  simp only [mem_inter, mem_ev] at hω
+  rw [stabilizedWeight2, hω.1, hω.2, condProb, condProb, univ_inter, h1]
+  field_simp
 
 end Longitudinal
 

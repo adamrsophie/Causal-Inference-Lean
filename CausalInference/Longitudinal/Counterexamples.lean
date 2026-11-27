@@ -10,12 +10,18 @@ public import CausalInference.Longitudinal.Weighting
 /-!
 # Treatment-confounder feedback: the g-formula is right, regression adjustment is wrong
 
-A concrete finite model with two time points in which the time-varying covariate `L1` is
-affected by the first treatment `A0` and affects both the second treatment `A1` and (through an
-unmeasured common cause `U`) the outcome. Sequential exchangeability and sequential positivity
-hold, so the g-formula and inverse probability weighting recover the true mean of every
-potential outcome; but the naive contrast that adjusts for `L1` by stratification and the
+A concrete finite model with two time points and causal structure `A0 → L1 ← U → Y`,
+`L1 → A1`: the time-varying covariate `L1` is affected by the first treatment `A0` and by an
+unmeasured cause `U` of the outcome, and it affects the second treatment `A1`. The outcome is
+`Y = 1{U}`: neither treatment nor `L1` affects it. Sequential exchangeability and sequential
+positivity hold, so the g-formula and inverse probability weighting recover the true mean of
+every potential outcome; but the naive contrast that adjusts for `L1` by stratification and the
 unadjusted contrast both give a nonzero effect, while the true effect is zero.
+
+The two biases have different sources. `L1` is a collider on the path `A0 → L1 ← U → Y`, so
+stratifying on `L1` opens that path: within a stratum of `L1` the first treatment is associated
+with `U`, hence with `Y`. Not stratifying on `L1` leaves the second treatment confounded along
+`A1 ← L1 ← U → Y`.
 
 This is the phenomenon that motivated Robins (1986): when a covariate is both a confounder for
 later treatment and affected by earlier treatment, conditioning on it is biased, and so is not
@@ -41,6 +47,13 @@ The baseline covariate `L0` is constant. The potential covariate is
 * `FeedbackExample.gFormula_eq`: the g-formula equals `1/2 = E[Y(a0, a1)]` for every regime
   (obtained from `gFormula2_static`, and `E[Y(a0, a1)] = 1/2` by direct computation); likewise
   inverse probability weighting (`FeedbackExample.ipw_eq`).
+* `FeedbackExample.gFormula_eq_direct`: the same value `1/2` evaluated directly from the
+  observational cells, without the identification theorem. The term `L1 = false` vanishes,
+  since `L1 = false` forces `U = false` and the cell mean of `Y` is `0`; the term `L1 = true` is
+  `1 · 1/2` for `a0 = false` and `2/3 · 3/4` for `a0 = true`, for either `a1`.
+* `FeedbackExample.model_seqExchangeable`, `FeedbackExample.model_seqPositive` in
+  `CausalInference.Longitudinal.GNull`: the example as a `Model` with two time points satisfies
+  `Model.SeqExchangeable` and `Model.SeqPositive` for every static regime.
 * `FeedbackExample.feedback`: `L1(true) ≠ L1(false)` at some sample point.
 * `FeedbackExample.naiveAdjusted_eq`: the contrast
   `Σ_l P(L1 = l) (E[Y | A0 = 1, A1 = 1, L1 = l] - E[Y | A0 = 0, A1 = 0, L1 = l])` is `-5/24`.
@@ -139,6 +152,17 @@ theorem gFormula_eq (a0 a1 : Bool) :
     gFormula2 p L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1) Y = 1 / 2 := by
   rw [← expect_Ypo a0 a1]
   exact (gFormula2_static p (fun _ _ _ => rfl) (seqExchangeable a0 a1) (seqPositive a0 a1)).symm
+
+/-- **Direct evaluation of the g-formula from the observational cells.** For every static regime
+the two time point g-formula, computed from the observed distribution alone, is `1/2`. In each
+sum the term `L0 = true` has weight `P(L0 = true) = 0`, the term `L1 = false` has cell mean
+`E[Y | …, L1 = false, …] = 0`, and the term `L1 = true` is `1 · 1/2` for `a0 = false` and
+`2/3 · 3/4` for `a0 = true`. -/
+theorem gFormula_eq_direct (a0 a1 : Bool) :
+    gFormula2 p L0 A0 L1 A1 (fun _ => a0) (fun _ _ => a1) Y = 1 / 2 := by
+  simp only [gFormula2, condMean, condProb, wsum, wmass, ev, filter_inter, inter_filter,
+    univ_inter, filter_filter, sum_filter, Fintype.sum_prod_type, Fintype.sum_bool]
+  cases a0 <;> cases a1 <;> norm_num [p, mass, A0, A1, L0, L1, L1po, Y]
 
 /-- Inverse probability of treatment weighting recovers the true mean `1/2`. -/
 theorem ipw_eq (a0 a1 : Bool) : ipw2 p L0 A0 L1 A1 a0 a1 Y = 1 / 2 := by
