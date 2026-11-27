@@ -31,12 +31,18 @@ The setting is a finite sample space with a `FiniteDist`
   of the potential outcomes `Y` and of `I`, then `S` is conditionally independent of `Y` given
   `I`. Missing values are covered by letting `I` take values in `Option`, `none` meaning that
   the value was not known.
-* `SwitchDecision.condIndepFun_of_decision_comp`: it suffices that the recorded data `D`
-  determine the information, `I = h(D)`: then `S` is conditionally independent of `Y` given the
-  recorded data. Variables that the decision maker did not know need not be recorded.
+* `SwitchDecision.condIndepFun_of_decision_condIndep`: for recorded data `D` that determine the
+  information, `I = h(D)`, the switch is conditionally independent of `Y` given `D` as soon as
+  the noise is: `ε ⫫ Y | D`. Variables that the decision maker did not know need not be
+  recorded, provided this condition holds for the record.
+* `SwitchDecision.condIndepFun_of_decision_comp`: the special case in which `ε` is jointly
+  independent of `(Y, D)`, which implies `ε ⫫ Y | D` (`NoiseIndep.condIndepFun`).
 
-The hypothesis must be joint independence of `ε` from `(Y, I)`; independence of `ε` from `Y`
-and from `I` separately is not enough (`SwitchDecision.XorExample`). And if the decision uses
+That `D` determines `I` does not suffice on its own: with the noise jointly independent of
+`(Y, I)`, a record `D` that determines `I` but also carries information on `ε` and `Y` can make
+the switch dependent on `Y` given `D` (`SwitchDecision.RecordXorExample`). The noise
+hypothesis must be joint independence of `ε` from `(Y, I)`; independence of `ε` from `Y` and
+from `I` separately is not enough (`SwitchDecision.XorExample`). And if the decision uses
 information that is not recorded, the conclusion fails (`SwitchDecision.HiddenExample`).
 
 ## Figure 1 of TSD 24
@@ -114,17 +120,33 @@ theorem condIndepFun_of_decision (Y : Ω → β) (I : Ω → γ) (ε : Ω → δ
   rw [h1, h2]
   ring
 
+omit [DecidableEq σ] in
+/-- Joint independence of the noise from `(Y, I)` implies its conditional independence from
+`Y` given `I`. -/
+theorem NoiseIndep.condIndepFun {Y : Ω → β} {I : Ω → γ} {ε : Ω → δ}
+    (h : NoiseIndep p Y I ε) : p.CondIndepFun ε Y I :=
+  condIndepFun_of_decision Y I ε (fun _ e => e) h
+
 omit [DecidableEq γ] in
-/-- The recorded data suffice when they determine the decision maker's information. If the
-switch is `S = f(I, ε)`, the information is a function `I = h(D)` of the recorded data `D`,
-and `ε` is jointly independent of `Y` and `D`, then `S` is conditionally independent of the
-potential outcomes `Y` given `D`. A variable that the decision maker did not know does not
-enter `I`, so it need not be part of `D`. -/
+/-- The recorded data suffice when they determine the decision maker's information and the
+noise is conditionally independent of the potential outcomes given them. If the switch is
+`S = f(I, ε)`, the information is a function `I = h(D)` of the recorded data `D`, and
+`ε ⫫ Y | D`, then `S ⫫ Y | D`. A variable that the decision maker did not know does not enter
+`I`, so it need not be part of `D`. The condition `ε ⫫ Y | D` is about the record: it does not
+follow from joint independence of `ε` and `(Y, I)` (`RecordXorExample`). -/
+theorem condIndepFun_of_decision_condIndep {ρ : Type*} [DecidableEq ρ] (Y : Ω → β)
+    (D : Ω → ρ) (h : ρ → γ) (ε : Ω → δ) (f : γ → δ → σ) (hε : p.CondIndepFun ε Y D) :
+    p.CondIndepFun (fun ω => f (h (D ω)) (ε ω)) Y D :=
+  hε.of_left_cond (fun e d => f (h d) e) fun _ => rfl
+
+omit [DecidableEq γ] in
+/-- The special case of `condIndepFun_of_decision_condIndep` in which `ε` is jointly
+independent of `Y` and the recorded data `D`: if the switch is `S = f(I, ε)` with `I = h(D)`,
+then `S` is conditionally independent of the potential outcomes `Y` given `D`. -/
 theorem condIndepFun_of_decision_comp {ρ : Type*} [DecidableEq ρ] (Y : Ω → β) (D : Ω → ρ)
     (h : ρ → γ) (ε : Ω → δ) (f : γ → δ → σ) (hε : NoiseIndep p Y D ε) :
-    p.CondIndepFun (fun ω => f (h (D ω)) (ε ω)) Y D := by
-  classical
-  exact condIndepFun_of_decision Y D ε (fun d e => f (h d) e) hε
+    p.CondIndepFun (fun ω => f (h (D ω)) (ε ω)) Y D :=
+  condIndepFun_of_decision_condIndep Y D h ε f hε.condIndepFun
 
 end Lemma
 
@@ -175,6 +197,57 @@ theorem not_noiseIndep : ¬ NoiseIndep p Y I ε := fun h =>
   not_condIndepFun (condIndepFun_of_decision Y I ε (fun _ e => e) h)
 
 end XorExample
+
+/-! ### A record that determines the information is not enough -/
+
+namespace RecordXorExample
+
+/-- The sample space: a point is `(y, e)`, the potential outcome and the noise. -/
+abbrev Ω := Bool × Bool
+
+/-- `Y` and `ε` are independent fair bits. -/
+noncomputable def p : FiniteDist Ω := FiniteDist.uniform
+
+/-- The potential outcome. -/
+def Y (ω : Ω) : Bool := ω.1
+
+/-- The information available to the decision maker: nothing. -/
+def I (_ : Ω) : Unit := ()
+
+/-- The noise of the decision. -/
+def ε (ω : Ω) : Bool := ω.2
+
+/-- The recorded data: the exclusive or of the potential outcome and the noise. -/
+def D (ω : Ω) : Bool := xor ω.1 ω.2
+
+/-- The switch `S = f(I, ε) = ε`. -/
+def S (ω : Ω) : Bool := ε ω
+
+/-- The original noise hypothesis holds: `ε` is jointly independent of `(Y, I)`. -/
+theorem noiseIndep : NoiseIndep p Y I ε := by
+  intro y i e
+  simp only [FiniteDist.probOf, FiniteDist.prob, Finset.sum_filter]
+  simp only [Fintype.sum_prod_type, Fintype.sum_bool, p, FiniteDist.uniform_apply, Y, ε]
+  cases y <;> cases e <;> norm_num
+
+/-- The recorded data `D` determine the information `I` (trivially, since `I` is constant) and
+the switch is a function of `I` and `ε`, yet the switch is not conditionally independent of
+the potential outcome given `D`: on `D = false` the switch equals `Y`. So the recorded-data
+version of `condIndepFun_of_decision` needs a hypothesis on the record, such as `ε ⫫ Y | D`
+(`condIndepFun_of_decision_condIndep`), which fails here. -/
+theorem not_condIndepFun :
+    (∀ ω, I ω = (fun _ => ()) (D ω)) ∧ (∀ ω, S ω = (fun _ e => e) (I ω) (ε ω)) ∧
+      ¬ p.CondIndepFun S Y D ∧ ¬ p.CondIndepFun ε Y D := by
+  have key : ¬ p.CondIndepFun ε Y D := by
+    intro h
+    have := h true true false
+    simp only [FiniteDist.probOf, FiniteDist.prob, Finset.sum_filter] at this
+    simp only [Fintype.sum_prod_type, Fintype.sum_bool, p, FiniteDist.uniform_apply, Y, D, ε]
+      at this
+    norm_num at this
+  exact ⟨fun _ => rfl, fun _ => rfl, key, key⟩
+
+end RecordXorExample
 
 /-! ### Information used by the decision maker but not recorded -/
 
