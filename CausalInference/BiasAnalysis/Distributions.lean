@@ -72,9 +72,10 @@ law and the distribution function `cdf`; this file adds what the chapter uses on
   `betaPDFReal_lt_betaContPDF_one` (at a boundary mode the supremum of Mathlib's density is
   approached at the endpoint, not attained) and `betaContPDF_zero_zero` (uniform case).
 
-The size of the correlation induced by the NORTA construction is not formalized. The bivariate
-normal law, the Gaussian copula, certified values of `Φ` and the percentiles at the exact levels
-`0.025`, `0.5`, `0.975` are in `BiasAnalysis/DistributionsExamples.lean`.
+The bivariate normal law, the Gaussian copula, certified values of `Φ`, the percentiles at the
+exact levels `0.025`, `0.5`, `0.975`, and `norta_correlation_ne_example` (the NORTA construction
+does not preserve correlation: an underlying correlation `1` becomes `√3/2`) are in
+`BiasAnalysis/DistributionsExamples.lean`.
 -/
 
 @[expose] public section
@@ -637,7 +638,9 @@ Equation 7.7): if `Z` has a law `ν` with continuous distribution function `G` (
 coordinate of a bivariate normal vector, whose marginal is standard normal), then
 `X = Q_μ(G(Z))` has law `μ`. Applied to each coordinate of a correlated pair, it shows that the
 transformed pair has the target marginals whatever the dependence of `(Z₁, Z₂)`; the joint law is
-`measure_quantile_cdf_pair_le`. The size of the induced correlation is not a theorem here. -/
+`measure_quantile_cdf_pair_le`. The induced correlation is in general not that of `(Z₁, Z₂)`:
+`norta_correlation_ne_example` in `BiasAnalysis/DistributionsExamples.lean` gives correlation
+`√3/2` from an underlying correlation `1`. -/
 theorem hasLaw_quantile_cdf {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω} {Z : Ω → ℝ}
     {ν : Measure ℝ} [IsProbabilityMeasure ν] (hZ : HasLaw Z ν P) (hG : Continuous (cdf ν))
     (μ : Measure ℝ) [IsProbabilityMeasure μ] :

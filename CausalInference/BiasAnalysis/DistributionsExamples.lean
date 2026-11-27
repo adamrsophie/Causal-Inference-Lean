@@ -34,7 +34,8 @@ Data*, second edition.
   Equation 7.7 has joint distribution function `C_ρ(F₁(x), F₂(y))`.
 
 The correlation of the transformed pair is in general not `ρ`: it depends on the target laws
-through the quantile transformations, and it is not formalized here.
+through the quantile transformations. `norta_correlation_ne_example` shows this for `ρ = 1`: with
+a fair coin and a uniform target the transformed pair has correlation `√3/2 < 1`.
 -/
 
 @[expose] public section
@@ -503,6 +504,179 @@ theorem measureReal_norta_zero {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω
     gaussianCopula_zero ⟨cdf_nonneg _ _, cdf_le_one _ _⟩ ⟨cdf_nonneg _ _, cdf_le_one _ _⟩]
 
 end GaussianCopula
+
+section CorrelationExample
+
+open scoped ENNReal
+
+/-- The fair coin: the law on `ℝ` with mass `1/2` at `0` and mass `1/2` at `1`. -/
+noncomputable def fairCoin : Measure ℝ := (2⁻¹ : ℝ≥0∞) • (Measure.dirac 0 + Measure.dirac 1)
+
+instance : IsProbabilityMeasure fairCoin :=
+  ⟨by rw [fairCoin, smul_apply, add_apply, measure_univ, measure_univ, one_add_one_eq_two,
+    smul_eq_mul, ENNReal.inv_mul_cancel two_ne_zero ENNReal.ofNat_ne_top]⟩
+
+/-- The uniform law on `(0, 1)` is a probability measure. -/
+instance : IsProbabilityMeasure (volume.restrict (Ioo (0 : ℝ) 1)) :=
+  ⟨by rw [Measure.restrict_apply MeasurableSet.univ, univ_inter, Real.volume_Ioo, sub_zero,
+    ENNReal.ofReal_one]⟩
+
+lemma cdf_fairCoin (x : ℝ) :
+    cdf fairCoin x = (if 0 ≤ x then 2⁻¹ else 0) + (if 1 ≤ x then 2⁻¹ else 0) := by
+  rw [cdf_eq_real, measureReal_def, fairCoin]
+  simp only [smul_apply, add_apply,
+    Measure.dirac_apply' _ measurableSet_Iic, indicator, mem_Iic, Pi.one_apply, smul_eq_mul]
+  split_ifs <;> norm_num
+
+/-- The quantile function of the fair coin: for `u ∈ (0, 1)`, `Q(u) = 1` if `u > 1/2` and
+`Q(u) = 0` otherwise; the level `u = 1/2` goes to `0`. -/
+theorem quantile_fairCoin {u : ℝ} (hu : u ∈ Ioo (0 : ℝ) 1) :
+    quantile fairCoin u = if 1 / 2 < u then 1 else 0 := by
+  have hq := le_cdf_quantile (μ := fairCoin) hu
+  rw [cdf_fairCoin] at hq
+  split_ifs with h
+  · refine le_antisymm ((quantile_le_iff hu 1).2 ?_) (not_lt.1 fun hlt => ?_)
+    · rw [cdf_fairCoin]; norm_num; linarith [hu.2]
+    · split_ifs at hq with h1 h2 <;> linarith
+  · refine le_antisymm ((quantile_le_iff hu 0).2 ?_) (not_lt.1 fun hlt => ?_)
+    · rw [cdf_fairCoin]; norm_num; linarith
+    · split_ifs at hq with h1 h2 <;> linarith [hu.1]
+
+lemma cdf_uniform_le (x : ℝ) : cdf (volume.restrict (Ioo (0 : ℝ) 1)) x ≤ max x 0 := by
+  rw [cdf_eq_real, measureReal_restrict_apply measurableSet_Iic,
+    show max x 0 = volume.real (Ioc 0 x) by rw [Real.volume_real_Ioc, sub_zero]]
+  exact measureReal_mono (fun u (hu : u ∈ Iic x ∩ Ioo 0 1) => (⟨hu.2.1, hu.1⟩ : u ∈ Ioc 0 x))
+    measure_Ioc_lt_top.ne
+
+lemma le_cdf_uniform {x : ℝ} (hx : x ∈ Ioo (0 : ℝ) 1) :
+    x ≤ cdf (volume.restrict (Ioo (0 : ℝ) 1)) x := by
+  rw [cdf_eq_real, measureReal_restrict_apply measurableSet_Iic]
+  calc x = volume.real (Ioc 0 x) := by rw [Real.volume_real_Ioc_of_le hx.1.le, sub_zero]
+    _ ≤ _ := measureReal_mono (fun u (hu : u ∈ Ioc 0 x) =>
+        (⟨hu.2, hu.1, lt_of_le_of_lt hu.2 hx.2⟩ : u ∈ Iic x ∩ Ioo 0 1))
+      ((measure_mono inter_subset_right).trans_lt measure_Ioo_lt_top).ne
+
+/-- The quantile function of the uniform law on `(0, 1)` is the identity on `(0, 1)`. -/
+theorem quantile_uniform {u : ℝ} (hu : u ∈ Ioo (0 : ℝ) 1) :
+    quantile (volume.restrict (Ioo (0 : ℝ) 1)) u = u := by
+  refine le_antisymm ((quantile_le_iff hu u).2 (le_cdf_uniform hu)) (not_lt.1 fun hlt => ?_)
+  have h1 := le_cdf_quantile (μ := volume.restrict (Ioo (0 : ℝ) 1)) hu
+  have h2 := cdf_uniform_le (quantile (volume.restrict (Ioo (0 : ℝ) 1)) u)
+  rcases le_total (quantile (volume.restrict (Ioo (0 : ℝ) 1)) u) 0 with h | h
+  · rw [max_eq_right h] at h2; linarith [hu.1]
+  · rw [max_eq_left h] at h2; linarith
+
+lemma setIntegral_Ioo_eq_intervalIntegral {a b : ℝ} (hab : a ≤ b) (f : ℝ → ℝ) :
+    ∫ x in Ioo a b, f x = ∫ x in a..b, f x := by
+  rw [intervalIntegral.integral_of_le hab, integral_Ioc_eq_integral_Ioo]
+
+
+/-- Correlation is not preserved by the NORTA construction (Chapter 7, "Correlated
+Distributions", Equation 7.7). Take the underlying normal pair `(Z, Z)` with `Z ~ N(0, 1)`: this is
+the case `ρ = 1` of `bivariateNormal ρ`, and its correlation is `1`. Transform the first
+coordinate to a fair coin and the second to the uniform law on `(0, 1)`. The transformed pair is
+`X = Q_coin(Φ(Z)) = 1{Φ(Z) > 1/2}` and `Y = Q_unif(Φ(Z)) = Φ(Z)`; it has the two target
+marginals, `Cov(X, Y) = 1/8`, `Var(X) = 1/4`, `Var(Y) = 1/12`, so its Pearson correlation is
+`(1/8) / ((1/2)(1/√12)) = √3/2 < 1`. -/
+theorem norta_correlation_ne_example {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω}
+    [IsProbabilityMeasure P] {Z : Ω → ℝ} (hZ : HasLaw Z (gaussianReal 0 1) P) :
+    let X := fun ω => quantile fairCoin (cdf (gaussianReal 0 1) (Z ω))
+    let Y := fun ω => quantile (volume.restrict (Ioo (0 : ℝ) 1)) (cdf (gaussianReal 0 1) (Z ω))
+    HasLaw X fairCoin P ∧ HasLaw Y (volume.restrict (Ioo (0 : ℝ) 1)) P ∧
+      cov[Z, Z; P] / (√Var[Z; P] * √Var[Z; P]) = 1 ∧
+      (∀ ω, X ω = if 1 / 2 < cdf (gaussianReal 0 1) (Z ω) then 1 else 0) ∧
+      (∀ ω, Y ω = cdf (gaussianReal 0 1) (Z ω)) ∧
+      cov[X, Y; P] = 1 / 8 ∧ Var[X; P] = 1 / 4 ∧ Var[Y; P] = 1 / 12 ∧
+      cov[X, Y; P] / (√Var[X; P] * √Var[Y; P]) = √3 / 2 ∧ √3 / 2 < 1 := by
+  set Φ := cdf (gaussianReal 0 1) with hΦdef
+  intro X Y
+  have hΦ : ∀ z, Φ z ∈ Ioo (0 : ℝ) 1 :=
+    cdf_mem_Ioo_of_absolutelyContinuous (gaussianReal_absolutelyContinuous' 0 one_ne_zero)
+  set f : ℝ → ℝ := (Ioi (1 / 2 : ℝ)).indicator 1 with hfdef
+  have hfm : Measurable f := measurable_one.indicator measurableSet_Ioi
+  have hX : X = fun ω => f (Φ (Z ω)) := funext fun ω => by
+    simp only [X, quantile_fairCoin (hΦ _), f, indicator_apply, mem_Ioi, Pi.one_apply]
+  have hY : Y = fun ω => id (Φ (Z ω)) := funext fun ω => quantile_uniform (hΦ _)
+  have hU : HasLaw (fun ω => Φ (Z ω)) (volume.restrict (Ioo (0 : ℝ) 1)) P :=
+    hasLaw_cdf_uniform hZ continuous_cdf_gaussianReal_zero_one
+  have hfL : MemLp f 2 (volume.restrict (Ioo (0 : ℝ) 1)) :=
+    (memLp_const 1).indicator measurableSet_Ioi.nullMeasurableSet
+  have hidL : MemLp id 2 (volume.restrict (Ioo (0 : ℝ) 1)) :=
+    MemLp.of_bound aestronglyMeasurable_id 1 ((ae_restrict_iff' measurableSet_Ioo).2
+      (ae_of_all _ fun u hu => by
+        rw [id, Real.norm_eq_abs, abs_le]; constructor <;> linarith [hu.1, hu.2]))
+  have hset : Ioi (1 / 2 : ℝ) ∩ Ioo 0 1 = Ioo (1 / 2) 1 := by
+    ext u
+    simp only [mem_inter_iff, mem_Ioi, mem_Ioo]
+    constructor
+    · rintro ⟨h1, -, h3⟩; exact ⟨h1, h3⟩
+    · rintro ⟨h1, h2⟩; exact ⟨h1, by linarith, h2⟩
+  have I_f : ∫ u, f u ∂(volume.restrict (Ioo (0 : ℝ) 1)) = 1 / 2 := by
+    rw [integral_indicator_one measurableSet_Ioi, measureReal_restrict_apply measurableSet_Ioi,
+      hset, Real.volume_real_Ioo_of_le (by norm_num)]
+    norm_num
+  have I_ff : ∫ u, (f ^ 2) u ∂(volume.restrict (Ioo (0 : ℝ) 1)) = 1 / 2 := by
+    have : f ^ 2 = f := funext fun u => by
+      simp only [Pi.pow_apply, f, indicator_apply, Pi.one_apply]
+      split_ifs <;> norm_num
+    rw [this, I_f]
+  have I_id : ∫ u, id u ∂(volume.restrict (Ioo (0 : ℝ) 1)) = 1 / 2 := by
+    simp only [id]
+    rw [setIntegral_Ioo_eq_intervalIntegral zero_le_one, integral_id]
+    norm_num
+  have I_idd : ∫ u, (id ^ 2) u ∂(volume.restrict (Ioo (0 : ℝ) 1)) = 1 / 3 := by
+    simp only [Pi.pow_apply, id]
+    rw [setIntegral_Ioo_eq_intervalIntegral zero_le_one, integral_pow]
+    norm_num
+  have I_fid : ∫ u, (f * (id : ℝ → ℝ)) u ∂(volume.restrict (Ioo (0 : ℝ) 1)) = 3 / 8 := by
+    have : f * (id : ℝ → ℝ) = (Ioi (1 / 2 : ℝ)).indicator id := funext fun u => by
+      simp only [Pi.mul_apply, f, indicator_apply, Pi.one_apply, id]
+      split_ifs <;> simp
+    rw [this, integral_indicator measurableSet_Ioi, Measure.restrict_restrict measurableSet_Ioi,
+      hset]
+    simp only [id]
+    rw [setIntegral_Ioo_eq_intervalIntegral (by norm_num), integral_id]
+    norm_num
+  have hcov : cov[X, Y; P] = 1 / 8 := by
+    rw [hX, hY, hU.covariance_fun_comp hfm.aemeasurable aemeasurable_id,
+      covariance_eq_sub hfL hidL, I_fid, I_f, I_id]
+    norm_num
+  have hvX : Var[X; P] = 1 / 4 := by
+    rw [hX, show (fun ω => f (Φ (Z ω))) = f ∘ (fun ω => Φ (Z ω)) from rfl,
+      ← variance_map (by rw [hU.map_eq]; exact hfm.aemeasurable) hU.aemeasurable, hU.map_eq,
+      variance_eq_sub hfL, I_ff, I_f]
+    norm_num
+  have hvY : Var[Y; P] = 1 / 12 := by
+    rw [hY, show (fun ω => id (Φ (Z ω))) = id ∘ (fun ω => Φ (Z ω)) from rfl,
+      ← variance_map (by rw [hU.map_eq]; exact aemeasurable_id) hU.aemeasurable, hU.map_eq,
+      variance_eq_sub hidL, I_idd, I_id]
+    norm_num
+  have hvZ : Var[Z; P] = 1 := by
+    rw [hZ.variance_eq, variance_id_gaussianReal]
+    simp
+  have h3 : (0 : ℝ) < √3 := by positivity
+  have h4 : √(1 / 4 : ℝ) = 1 / 2 := by
+    rw [show (1 / 4 : ℝ) = (1 / 2) ^ 2 by norm_num]
+    exact Real.sqrt_sq (by norm_num)
+  have h12 : √(1 / 12 : ℝ) = √3 / 6 := by
+    rw [show (1 / 12 : ℝ) = (√3 / 6) ^ 2 by rw [div_pow, Real.sq_sqrt (by norm_num)]; norm_num]
+    exact Real.sqrt_sq (by positivity)
+  have hlt : √3 < 2 := by
+    rw [show (2 : ℝ) = √4 by
+      rw [show (4 : ℝ) = 2 ^ 2 by norm_num, Real.sqrt_sq (by norm_num)]]
+    exact Real.sqrt_lt_sqrt (by norm_num) (by norm_num)
+  refine ⟨?_, ?_, ?_, fun ω => ?_, fun ω => quantile_uniform (hΦ _), hcov, hvX, hvY, ?_, ?_⟩
+  · exact hasLaw_quantile_cdf_gaussian hZ fairCoin
+  · exact hasLaw_quantile_cdf_gaussian hZ _
+  · rw [covariance_self hZ.aemeasurable, hvZ]
+    simp
+  · simp only [X, quantile_fairCoin (hΦ _)]
+  · rw [hcov, hvX, hvY, h4, h12]
+    field_simp
+    nlinarith [Real.sq_sqrt (show (0 : ℝ) ≤ 3 by norm_num)]
+  · linarith
+
+end CorrelationExample
 
 end Distributions
 
