@@ -22,26 +22,41 @@ cells.
 
 ## Main results
 
-* `sum_mulVec`, `inv_mulVec_mulVec`, `mulVec_inv_mulVec`, `not_identified_of_det_eq_zero`:
-  classification keeps the total, the correction recovers the true counts when `P` is
-  invertible, and the true counts are not identified when it is singular.
-* `binaryMatrix_eq_reindex`, `binaryMatrix_det`: the book's 2 by 2 matrix is the transpose of
-  `Bias.misclassMatrix`, with determinant `SE + SP - 1`.
+* `sum_mulVec`, `inv_mulVec_mulVec`, `mulVec_inv_mulVec`: classification keeps the total and the
+  correction recovers the true counts when `P` is invertible. `exists_nonneg_preimage_iff`: a
+  nonnegative true table compatible with the observed counts exists exactly when `P⁻¹ F*` is
+  componentwise nonnegative; `binary_inverse_negative` is an invertible case where it is not.
+* `not_identified_of_det_eq_zero`, `not_identified_nonneg`: when `P` is singular, the map is not
+  injective, and every positive true table has a second nonnegative table with the same total
+  and the same expected observed counts. `singular_unique_nonneg_preimage`: singularity does not
+  prevent a particular observed table from determining the nonnegative true table.
+* `IsClassificationMatrix.mul`, `jointMatrix_isClassificationMatrix`: closure properties.
+* `binaryMatrix_eq_reindex`, `binaryMatrix_det`, `binaryMatrix_det_eq_zero`: the book's 2 by 2
+  matrix is the transpose of `Bias.misclassMatrix`, with determinant `SE + SP - 1`, singular
+  when `SE + SP = 1`.
 * `jointMatrix`: the 4 by 4 matrix of independent exposure and disease errors, exposure
   classification possibly differential. `jointMatrix_const` (Kronecker product in the
   nondifferential case), `jointMatrix_factor`, `jointMatrix_det`, `jointMatrix_binary_det`
   (determinant `(SE_D + SP_D - 1)² (SE_{E,1} + SP_{E,1} - 1)(SE_{E,0} + SP_{E,0} - 1)`),
   `jointMatrix_mulVec_eq_observedTable` (agreement with `Bias.observedTable`).
 * `exposure_inv_mulVec`, `outcome_inv_mulVec`: the matrix method reduces to the closed forms of
-  Tables 6.8 and 6.19. `joint_inv_mulVec`: for independent errors the joint correction equals the
-  disease correction followed by the exposure correction (sequential correction is valid).
-* Polytomous exposure (Tables 6.16, 6.17): `bmi_values`, nondifferential misclassification of a
-  three-level exposure biasing one odds ratio away from the null, under the matrix of the stated
-  assumptions. The printed Table 6.17 is reproduced by a different matrix (`bmiPrinted_values`),
-  which classifies `2.862%` of the truly obese as healthy, contrary to the text.
+  Tables 6.8 and 6.19. `joint_inv_mulVec`: for independent errors with disease classification
+  not depending on the true exposure, the joint correction equals the disease correction
+  followed by the exposure correction; `kronecker_inv_mulVec_totalized` is the general
+  Kronecker form. `xorJoint_countermodel`: without the second condition, independence of the
+  errors given the true cell does not make the joint matrix invertible.
+* Polytomous exposure (Tables 6.16, 6.17): the assumptions printed on page 169 send `68.2%` of
+  the truly obese to overweight; `bmiStated_infeasible` shows that no nonnegative true table is
+  compatible with Table 6.16 under them. `bmiRepaired_values`, under the repaired matrix
+  `bmiMatrixRepaired` (`68.2%` of the obese kept obese), shows nondifferential misclassification
+  of a three-level exposure biasing one odds ratio away from the null. The printed Table 6.17 is
+  reproduced, except one cell that differs in the last printed digit, by a third matrix
+  (`bmiPrinted_values`), which classifies `2.862%` of the truly obese as healthy.
 * Dependent errors (Table 6.27): `table627_nondifferential`, `table627_dependent`,
   `table627_null_association` (association under the null), `table627_mul_inv` (the matrix is
-  invertible). `table628_values` checks Table 6.28.
+  invertible). `table628_values` is arithmetic on the printed Table 6.28, and `table628_totals`
+  shows that its two tables (totals 839 and 839.5) are not related by any classification
+  matrix.
 * Worked examples (namespace `Examples`): Table 6.9 and Table 6.20 by the matrix method and the
   4 by 4 example with exposure and disease misclassification, recomputed with the exact
   sensitivities and specificities.
@@ -89,8 +104,10 @@ theorem inv_mulVec_mulVec (P : Matrix ι ι ℝ) (hP : P.det ≠ 0) (F : ι → 
     P⁻¹ *ᵥ (P *ᵥ F) = F := by
   rw [mulVec_mulVec, nonsing_inv_mul _ (isUnit_iff_ne_zero.mpr hP), one_mulVec]
 
-/-- The corrected counts `P⁻¹ F*` are mapped back to `F*`: they are the unique true counts
-compatible with the observed counts. -/
+/-- The corrected vector `P⁻¹ F*` is mapped back to `F*`: it is the unique real vector `F` with
+`P F = F*`. It need not be a vector of counts: some entries can be negative
+(`binary_inverse_negative`), and then no table of nonnegative counts is compatible with `F*`
+(`exists_nonneg_preimage_iff`). -/
 theorem mulVec_inv_mulVec (P : Matrix ι ι ℝ) (hP : P.det ≠ 0) (Fs : ι → ℝ) :
     P *ᵥ (P⁻¹ *ᵥ Fs) = Fs := by
   rw [mulVec_mulVec, mul_nonsing_inv _ (isUnit_iff_ne_zero.mpr hP), one_mulVec]
@@ -100,12 +117,90 @@ theorem inv_mulVec_eq_of_mulVec_eq (P : Matrix ι ι ℝ) (hP : P.det ≠ 0) (F 
     (h : P *ᵥ F = Fs) : P⁻¹ *ᵥ Fs = F := by
   rw [← h, inv_mulVec_mulVec P hP]
 
-/-- When `P` is singular the true counts are not identified: some nonzero `v` has `P v = 0`, so
-`F` and `F + v` give the same expected observed counts. -/
+/-- Feasibility of the correction: when `P` is invertible, a vector of nonnegative true counts
+compatible with the observed counts `F*` exists exactly when every entry of `P⁻¹ F*` is
+nonnegative. -/
+theorem exists_nonneg_preimage_iff (P : Matrix ι ι ℝ) (hP : P.det ≠ 0) (Fs : ι → ℝ) :
+    (∃ F : ι → ℝ, 0 ≤ F ∧ P *ᵥ F = Fs) ↔ 0 ≤ P⁻¹ *ᵥ Fs := by
+  constructor
+  · rintro ⟨F, hF, rfl⟩
+    rwa [inv_mulVec_mulVec P hP]
+  · exact fun h ↦ ⟨_, h, mulVec_inv_mulVec P hP Fs⟩
+
+/-- When `P` is singular the map `F ↦ P F` is not injective on real vectors: some nonzero `v` has
+`P v = 0`, so `F` and `F + v` give the same expected observed counts. This is a statement about
+real vectors; `not_identified_nonneg` gives two tables of nonnegative counts, and
+`singular_unique_nonneg_preimage` shows that a particular observed table can still determine the
+nonnegative true table uniquely. -/
 theorem not_identified_of_det_eq_zero (P : Matrix ι ι ℝ) (hP : P.det = 0) :
     ∃ v : ι → ℝ, v ≠ 0 ∧ ∀ F, P *ᵥ (F + v) = P *ᵥ F := by
   obtain ⟨v, hv, hPv⟩ := exists_mulVec_eq_zero_iff.mpr hP
   exact ⟨v, hv, fun F ↦ by rw [mulVec_add, hPv, add_zero]⟩
+
+/-- Nonidentification for counts: when the classification matrix `P` is singular, every true
+table `F` with all cells positive has a second table `F'` of nonnegative counts, with the same
+total, that gives the same expected observed counts. -/
+theorem not_identified_nonneg (P : Matrix ι ι ℝ) (hP : IsClassificationMatrix P)
+    (hdet : P.det = 0) (F : ι → ℝ) (hF : ∀ t, 0 < F t) :
+    ∃ F' : ι → ℝ, 0 ≤ F' ∧ F' ≠ F ∧ P *ᵥ F' = P *ᵥ F ∧ ∑ t, F' t = ∑ t, F t := by
+  obtain ⟨v, hv, hPv⟩ := exists_mulVec_eq_zero_iff.mpr hdet
+  obtain ⟨t₀, ht₀⟩ := Function.ne_iff.mp hv
+  set S := ∑ s, |v s| / F s with hS
+  have hterm : ∀ s, 0 ≤ |v s| / F s := fun s ↦ div_nonneg (abs_nonneg _) (hF s).le
+  have hle : ∀ t, |v t| / F t ≤ S := fun t ↦
+    Finset.single_le_sum (fun s _ ↦ hterm s) (Finset.mem_univ t)
+  have hSpos : 0 < S :=
+    lt_of_lt_of_le (div_pos (abs_pos.mpr ht₀) (hF t₀)) (hle t₀)
+  have hPF' : P *ᵥ (F + S⁻¹ • v) = P *ᵥ F := by
+    rw [mulVec_add, mulVec_smul, hPv, smul_zero, add_zero]
+  refine ⟨F + S⁻¹ • v, fun t ↦ ?_, fun h ↦ ?_, hPF', ?_⟩
+  · have h1 : |v t| ≤ S * F t := by
+      have := hle t
+      rwa [div_le_iff₀ (hF t)] at this
+    have h2 : |S⁻¹ * v t| ≤ F t := by
+      rw [abs_mul, abs_of_pos (inv_pos.mpr hSpos), inv_mul_le_iff₀ hSpos]
+      exact h1
+    simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul, Pi.zero_apply]
+    linarith [neg_abs_le (S⁻¹ * v t)]
+  · have h0 : S⁻¹ • v = 0 := by
+      have := congrArg (· - F) h
+      simpa using this
+    exact hv ((smul_eq_zero.mp h0).resolve_left (inv_ne_zero hSpos.ne'))
+  · rw [← sum_mulVec P hP, hPF', sum_mulVec P hP]
+
+/-- What singularity does not imply: the classification matrix with columns `e₀, e₁, e₁`
+(categories `1` and `2` are both classified `1`) is singular, yet the observed table `e₀` has
+exactly one nonnegative true table, `e₀` itself. Singularity rules out identification for every
+positive true table (`not_identified_nonneg`), not for every observed table. -/
+theorem singular_unique_nonneg_preimage :
+    IsClassificationMatrix !![(1 : ℝ), 0, 0; 0, 1, 1; 0, 0, 0] ∧
+      (!![(1 : ℝ), 0, 0; 0, 1, 1; 0, 0, 0]).det = 0 ∧
+      ∀ F : Fin 3 → ℝ, 0 ≤ F → !![(1 : ℝ), 0, 0; 0, 1, 1; 0, 0, 0] *ᵥ F = ![1, 0, 0] →
+        F = ![1, 0, 0] := by
+  refine ⟨⟨fun m t ↦ ?_, fun t ↦ ?_⟩, ?_, fun F hF h ↦ ?_⟩
+  · fin_cases m <;> fin_cases t <;> norm_num
+  · fin_cases t <;> norm_num [Fin.sum_univ_three]
+  · rw [det_fin_three]
+    norm_num
+  · have h0 := congrFun h 0
+    have h1 := congrFun h 1
+    have g1 : 0 ≤ F 1 := hF 1
+    have g2 : 0 ≤ F 2 := hF 2
+    simp [mulVec, dotProduct, Fin.sum_univ_three] at h0 h1
+    funext i
+    fin_cases i <;> simp <;> linarith
+
+omit [DecidableEq ι] in
+/-- Classification in two stages is classification: the product of two classification matrices
+is a classification matrix. -/
+theorem IsClassificationMatrix.mul {P Q : Matrix ι ι ℝ} (hP : IsClassificationMatrix P)
+    (hQ : IsClassificationMatrix Q) : IsClassificationMatrix (P * Q) := by
+  refine ⟨fun m t ↦ Finset.sum_nonneg fun k _ ↦ mul_nonneg (hP.1 m k) (hQ.1 k t), fun t ↦ ?_⟩
+  have h : ∑ m, (P * Q) m t = ∑ k, (∑ m, P m k) * Q k t := by
+    simp only [Matrix.mul_apply, Finset.sum_mul]
+    exact Finset.sum_comm
+  rw [h]
+  simp only [hP.2, one_mul, hQ.2 t]
 
 end General
 
@@ -132,6 +227,34 @@ theorem binaryMatrix_eq_reindex (se sp : ℝ) :
 (`Bias.misclassMatrix_det`). -/
 theorem binaryMatrix_det (se sp : ℝ) : (binaryMatrix se sp).det = se + sp - 1 := by
   rw [binaryMatrix_eq_reindex, det_reindex_self, det_transpose, misclassMatrix_det]
+
+/-- A concrete singular classification matrix: when `SP = 1 - SE` the classified value is
+independent of the true value and the determinant vanishes. -/
+theorem binaryMatrix_det_eq_zero (se : ℝ) : (binaryMatrix se (1 - se)).det = 0 := by
+  rw [binaryMatrix_det]
+  ring
+
+/-- An invertible classification matrix whose inverse produces a negative cell: with
+`SE = SP = 0.9`, the observed proportions `(1/20, 19/20)` (classified positive, negative) are
+mapped by the inverse to `(-1/16, 17/16)`, so no nonnegative true distribution is compatible with
+them. -/
+theorem binary_inverse_negative :
+    (binaryMatrix 0.9 0.9)⁻¹ *ᵥ (fun e ↦ if e then 1 / 20 else 19 / 20) =
+        (fun e ↦ if e then -1 / 16 else 17 / 16) ∧
+      ¬ ∃ F : Bool → ℝ, 0 ≤ F ∧
+        binaryMatrix 0.9 0.9 *ᵥ F = (fun e ↦ if e then 1 / 20 else 19 / 20) := by
+  have hdet : (binaryMatrix 0.9 0.9).det ≠ 0 := by
+    rw [binaryMatrix_det]
+    norm_num
+  have hinv : (binaryMatrix 0.9 0.9)⁻¹ *ᵥ (fun e ↦ if e then (1 : ℝ) / 20 else 19 / 20) =
+      (fun e ↦ if e then -1 / 16 else 17 / 16) := by
+    apply inv_mulVec_eq_of_mulVec_eq _ hdet
+    funext e
+    cases e <;> norm_num [mulVec, dotProduct, binaryMatrix, binaryKernel, Fintype.sum_bool]
+  refine ⟨hinv, fun h ↦ ?_⟩
+  have h1 := (exists_nonneg_preimage_iff _ hdet _).mp h true
+  rw [hinv] at h1
+  norm_num at h1
 
 end Binary
 
@@ -258,9 +381,15 @@ theorem outcome_inv_mulVec (se sp : ℝ) (h : se + sp ≠ 1) (G : Bool × Bool �
       Fintype.sum_prod_type, Fintype.sum_bool, binaryKernel]
     cases e' <;> cases d' <;> simp <;> field_simp <;> ring
 
-/-- Sequential correction is valid for independent errors (end of the section "Matrix Method for
-Misclassification Adjustment"): the joint matrix correction equals the disease correction of
-Table 6.19 followed by the exposure correction of Table 6.8 within each true disease level. -/
+/-- Sequential correction (end of the section "Matrix Method for Misclassification Adjustment"):
+the joint matrix correction equals the disease correction of Table 6.19 followed by the exposure
+correction of Table 6.8 within each true disease level. The hypotheses are more than
+independence of the errors given the true cell: the matrix `jointMatrix PE PD` also requires the
+disease classification `PD` not to depend on the true exposure (exposure classification may
+depend on the true disease). The order of inversion is fixed by the factorization
+`jointMatrix_factor`: the disease correction is applied first. Without the extra condition
+sequential correction can fail even when every one-axis correction exists
+(`xorJoint_countermodel`). -/
 theorem joint_inv_mulVec (seE spE : Bool → ℝ) (seD spD : ℝ) (hE : ∀ d, seE d + spE d ≠ 1)
     (hD : seD + spD ≠ 1) (Fs : Bool × Bool → ℝ) :
     (jointMatrix (fun d ↦ binaryMatrix (seE d) (spE d)) (binaryMatrix seD spD))⁻¹ *ᵥ Fs =
@@ -268,39 +397,80 @@ theorem joint_inv_mulVec (seE spE : Bool → ℝ) (seD spD : ℝ) (hE : ∀ d, s
   rw [jointMatrix_factor, Matrix.mul_inv_rev, ← mulVec_mulVec, outcome_inv_mulVec seD spD hD,
     exposure_inv_mulVec seE spE hE]
 
+/-- The joint matrix of classification matrices is a classification matrix. -/
+theorem jointMatrix_isClassificationMatrix (PE : Bool → Matrix Bool Bool ℝ)
+    (PD : Matrix Bool Bool ℝ) (hE : ∀ d, IsClassificationMatrix (PE d))
+    (hD : IsClassificationMatrix PD) : IsClassificationMatrix (jointMatrix PE PD) := by
+  refine ⟨fun i j ↦ mul_nonneg ((hE _).1 _ _) (hD.1 _ _), fun ⟨e, d⟩ ↦ ?_⟩
+  rw [Fintype.sum_prod_type]
+  simp only [jointMatrix_apply, ← Finset.mul_sum, hD.2 d, mul_one, (hE d).2 e]
+
+/-- The Kronecker product of classification matrices on any finite index types is a
+classification matrix. -/
+theorem isClassificationMatrix_kronecker {κ μ : Type*} [Fintype κ] [Fintype μ]
+    (A : Matrix κ κ ℝ) (B : Matrix μ μ ℝ) (hA : IsClassificationMatrix A)
+    (hB : IsClassificationMatrix B) : IsClassificationMatrix (A ⊗ₖ B) := by
+  refine ⟨fun i j ↦ mul_nonneg (hA.1 _ _) (hB.1 _ _), fun ⟨a, b⟩ ↦ ?_⟩
+  rw [Fintype.sum_prod_type]
+  simp only [kronecker_apply, ← Finset.mul_sum, hB.2 b, mul_one, hA.2 a]
+
+/-- Sequential correction for a Kronecker product on any finite index types: `(PE ⊗ PD)⁻¹ F*` is
+the correction of the second variable by `1 ⊗ PD⁻¹` followed by the correction of the first by
+`PE⁻¹ ⊗ 1`. This is an identity of Lean's totalized inverses; when `PE` and `PD` are invertible
+these are the true inverses (`inv_mulVec_mulVec`). -/
+theorem kronecker_inv_mulVec_totalized {κ μ : Type*} [Fintype κ] [DecidableEq κ] [Fintype μ]
+    [DecidableEq μ] (PE : Matrix κ κ ℝ) (PD : Matrix μ μ ℝ) (Fs : κ × μ → ℝ) :
+    (PE ⊗ₖ PD)⁻¹ *ᵥ Fs = (PE⁻¹ ⊗ₖ (1 : Matrix μ μ ℝ)) *ᵥ (((1 : Matrix κ κ ℝ) ⊗ₖ PD⁻¹) *ᵥ Fs) := by
+  rw [mulVec_mulVec, ← mul_kronecker_mul, Matrix.mul_one, Matrix.one_mul, inv_kronecker]
+
+/-- The deterministic classification `x* = x xor b` of one binary variable when the other true
+variable equals `b`: the identity for `b = false` and the swap for `b = true`. -/
+def xorAxis (b : Bool) : Matrix Bool Bool ℝ := fun x' x ↦ if x' = xor x b then 1 else 0
+
+/-- The joint classification `E* = D* = E xor D`: exposure is classified by `xorAxis D` and
+disease by `xorAxis E`, independently given the true cell (both are deterministic). -/
+def xorJoint : Matrix (Bool × Bool) (Bool × Bool) ℝ :=
+  fun i j ↦ xorAxis j.2 i.1 j.1 * xorAxis j.1 i.2 j.2
+
+/-- Independence of the errors given the true cell is not enough for sequential correction.
+Under `xorJoint` the classified exposure and disease are independent given the true cell (the
+joint kernel is the product of the two one-axis kernels), and every one-axis matrix is a
+permutation, so each one-axis correction exists. Yet the joint matrix is singular: the true cells
+`(1, 1)` and `(0, 0)` are both classified `(0, 0)`. Disease classification here depends on the
+true exposure, which `jointMatrix` excludes. -/
+theorem xorJoint_countermodel :
+    IsClassificationMatrix xorJoint ∧
+      (∀ e' d' e d, xorJoint (e', d') (e, d) = xorAxis d e' e * xorAxis e d' d) ∧
+      (∀ b, IsClassificationMatrix (xorAxis b) ∧ xorAxis b * xorAxis b = 1 ∧
+        (xorAxis b).det ≠ 0) ∧
+      xorJoint.det = 0 := by
+  have hsq : ∀ b, xorAxis b * xorAxis b = 1 := fun b ↦ by
+    ext x' x
+    rw [Matrix.mul_apply, Fintype.sum_bool]
+    cases x' <;> cases x <;> cases b <;> simp [xorAxis]
+  refine ⟨⟨fun i j ↦ ?_, fun ⟨e, d⟩ ↦ ?_⟩, fun _ _ _ _ ↦ rfl,
+    fun b ↦ ⟨⟨fun x' x ↦ ?_, fun x ↦ ?_⟩, hsq b, det_ne_zero_of_right_inverse (hsq b)⟩, ?_⟩
+  · simp only [xorJoint, xorAxis]
+    split_ifs <;> norm_num
+  · rw [Fintype.sum_prod_type]
+    cases e <;> cases d <;> simp [xorJoint, xorAxis]
+  · simp only [xorAxis]
+    split_ifs <;> norm_num
+  · cases x <;> cases b <;> simp [xorAxis]
+  · apply exists_mulVec_eq_zero_iff.mp
+    refine ⟨fun i ↦ if i = (true, true) then 1 else if i = (false, false) then -1 else 0,
+      fun h ↦ ?_, ?_⟩
+    · have := congrFun h (true, true)
+      simp at this
+    · funext ⟨e', d'⟩
+      simp only [mulVec, dotProduct, Fintype.sum_prod_type, Fintype.sum_bool]
+      cases e' <;> cases d' <;> simp [xorJoint, xorAxis]
+
 end Joint
 
 section Polytomous
 
 /-! ### Polytomous exposure (Tables 6.16 and 6.17) -/
-
-/-- The classification matrix of body mass index (healthy `0`, overweight `1`, obese `2`) in the
-example of the section "Misclassification of Polytomous Variables": no overreporting, `9%` of
-the truly overweight classified healthy, and `68.2%` of the truly obese classified obese (the
-proportion the book's arithmetic uses: true obese = observed obese / 0.682), the remaining
-`31.8%` classified overweight. Rows are classified values, columns true values. -/
-noncomputable def bmiMatrix : Matrix (Fin 3) (Fin 3) ℝ :=
-  !![1, 0.09, 0; 0, 0.91, 0.318; 0, 0, 0.682]
-
-theorem bmiMatrix_isClassificationMatrix : IsClassificationMatrix bmiMatrix := by
-  refine ⟨fun m t ↦ ?_, fun t ↦ ?_⟩
-  · fin_cases m <;> fin_cases t <;> norm_num [bmiMatrix]
-  · fin_cases t <;> norm_num [bmiMatrix, Fin.sum_univ_three]
-
-theorem bmiMatrix_det : bmiMatrix.det = 0.62062 := by
-  rw [det_fin_three]
-  norm_num [bmiMatrix]
-
-/-- The back substitution that inverts `bmiMatrix`. -/
-noncomputable def bmiCorrect (fs : Fin 3 → ℝ) : Fin 3 → ℝ :=
-  ![fs 0 - 0.09 * ((fs 1 - 0.318 * (fs 2 / 0.682)) / 0.91),
-    (fs 1 - 0.318 * (fs 2 / 0.682)) / 0.91, fs 2 / 0.682]
-
-theorem bmiMatrix_inv_mulVec (fs : Fin 3 → ℝ) : bmiMatrix⁻¹ *ᵥ fs = bmiCorrect fs := by
-  apply inv_mulVec_eq_of_mulVec_eq _ (by rw [bmiMatrix_det]; norm_num)
-  funext i
-  fin_cases i <;>
-    simp [bmiMatrix, bmiCorrect, mulVec, dotProduct, Fin.sum_univ_three] <;> ring
 
 /-- The observed diabetics of Table 6.16 by body mass index category. -/
 def bmiDiabetics : Fin 3 → ℝ := ![3053, 5127, 6491]
@@ -308,38 +478,114 @@ def bmiDiabetics : Fin 3 → ℝ := ![3053, 5127, 6491]
 /-- The observed nondiabetics of Table 6.16. -/
 def bmiNondiabetics : Fin 3 → ℝ := ![81416, 65104, 33814]
 
+/-- The classification matrix of body mass index (healthy `0`, overweight `1`, obese `2`) under
+the assumptions as printed in the example of the section "Misclassification of Polytomous
+Variables" (page 169): no overreporting, `9%` of the truly overweight classified healthy, `68.2%`
+of the truly obese "incorrectly classified as overweight" (so `31.8%` classified obese), and no
+obese person classified healthy. Rows are classified values, columns true values. -/
+noncomputable def bmiMatrixStated : Matrix (Fin 3) (Fin 3) ℝ :=
+  !![1, 0.09, 0; 0, 0.91, 0.682; 0, 0, 0.318]
+
+/-- The printed assumptions are infeasible for Table 6.16. `bmiMatrixStated` is a valid
+classification matrix, but no table of nonnegative true counts produces the observed diabetics,
+nor the observed nondiabetics. For the diabetics the system forces `6491 / 0.318 ≈ 20411.95` true
+obese and then `(5127 - 0.682 · 6491 / 0.318) / 0.91 ≈ -9663.68` true overweight. -/
+theorem bmiStated_infeasible :
+    IsClassificationMatrix bmiMatrixStated ∧
+      (¬ ∃ F : Fin 3 → ℝ, 0 ≤ F ∧ bmiMatrixStated *ᵥ F = bmiDiabetics) ∧
+      (¬ ∃ F : Fin 3 → ℝ, 0 ≤ F ∧ bmiMatrixStated *ᵥ F = bmiNondiabetics) ∧
+      (5127 - 0.682 * (6491 / 0.318)) / 0.91 < (-9663.68 : ℝ) ∧
+      (-9663.69 : ℝ) < (5127 - 0.682 * (6491 / 0.318)) / 0.91 := by
+  refine ⟨⟨fun m t ↦ ?_, fun t ↦ ?_⟩, ?_, ?_, by norm_num, by norm_num⟩
+  · fin_cases m <;> fin_cases t <;> norm_num [bmiMatrixStated]
+  · fin_cases t <;> norm_num [bmiMatrixStated, Fin.sum_univ_three]
+  all_goals
+    rintro ⟨F, hF, h⟩
+    have h1 := congrFun h 1
+    have h2 := congrFun h 2
+    have h0 : 0 ≤ F 1 := hF 1
+    simp [mulVec, dotProduct, Fin.sum_univ_three, bmiMatrixStated, bmiDiabetics,
+      bmiNondiabetics] at h1 h2
+    linarith
+
+/-- The matrix correction under the printed assumptions: `bmiMatrixStated` is invertible, and its
+inverse applied to the observed diabetics of Table 6.16 has a negative entry. -/
+theorem bmiStated_inverse_not_nonneg :
+    bmiMatrixStated.det ≠ 0 ∧ ¬ 0 ≤ bmiMatrixStated⁻¹ *ᵥ bmiDiabetics := by
+  have hdet : bmiMatrixStated.det ≠ 0 := by
+    rw [det_fin_three]
+    norm_num [bmiMatrixStated]
+  exact ⟨hdet, fun h ↦ bmiStated_infeasible.2.1
+    ((exists_nonneg_preimage_iff _ hdet _).mpr h)⟩
+
+/-- A repair of the printed assumptions: the matrix that keeps `68.2%` of the truly obese in the
+obese category and moves `31.8%` to overweight, the reverse of the printed sentence, with `9%`
+of the truly overweight classified healthy and no obese person classified healthy. The book's
+obese cells (true obese = observed obese / 0.682) follow this matrix. Rows are classified values,
+columns true values. -/
+noncomputable def bmiMatrixRepaired : Matrix (Fin 3) (Fin 3) ℝ :=
+  !![1, 0.09, 0; 0, 0.91, 0.318; 0, 0, 0.682]
+
+theorem bmiMatrixRepaired_isClassificationMatrix : IsClassificationMatrix bmiMatrixRepaired := by
+  refine ⟨fun m t ↦ ?_, fun t ↦ ?_⟩
+  · fin_cases m <;> fin_cases t <;> norm_num [bmiMatrixRepaired]
+  · fin_cases t <;> norm_num [bmiMatrixRepaired, Fin.sum_univ_three]
+
+theorem bmiMatrixRepaired_det : bmiMatrixRepaired.det = 0.62062 := by
+  rw [det_fin_three]
+  norm_num [bmiMatrixRepaired]
+
+/-- The back substitution that inverts `bmiMatrixRepaired`. -/
+noncomputable def bmiCorrectRepaired (fs : Fin 3 → ℝ) : Fin 3 → ℝ :=
+  ![fs 0 - 0.09 * ((fs 1 - 0.318 * (fs 2 / 0.682)) / 0.91),
+    (fs 1 - 0.318 * (fs 2 / 0.682)) / 0.91, fs 2 / 0.682]
+
+theorem bmiMatrixRepaired_inv_mulVec (fs : Fin 3 → ℝ) :
+    bmiMatrixRepaired⁻¹ *ᵥ fs = bmiCorrectRepaired fs := by
+  apply inv_mulVec_eq_of_mulVec_eq _ (by rw [bmiMatrixRepaired_det]; norm_num)
+  funext i
+  fin_cases i <;>
+    simp [bmiMatrixRepaired, bmiCorrectRepaired, mulVec, dotProduct, Fin.sum_univ_three] <;> ring
+
 /-- The odds ratio of category `k` against the healthy category `0`, from the diabetic counts
 `D` and nondiabetic counts `N`. -/
 noncomputable def categoryOddsRatio (D N : Fin 3 → ℝ) (k : Fin 3) : ℝ := (D k / N k) / (D 0 / N 0)
 
 /-- Polytomous misclassification can bias away from the null although it is nondifferential
-(the same matrix for diabetics and nondiabetics). Correcting Table 6.16 with `bmiMatrix`, the
-matrix of the stated assumptions, gives the obese cells `9517.6` and `49580.6` printed in Table
-6.17, and odds ratios `≈ 1.145` (overweight) and `≈ 5.164` (obese). The observed overweight odds
-ratio `≈ 2.100` is further from the null than the corrected one, while the obese odds ratio
-`≈ 5.119` is closer. The printed odds ratios 1.4 and 5.7 come from a different matrix
-(`bmiMatrixPrinted`). -/
-theorem bmi_values :
-    9517.59 < (bmiMatrix⁻¹ *ᵥ bmiDiabetics) 2 ∧ (bmiMatrix⁻¹ *ᵥ bmiDiabetics) 2 < 9517.60 ∧
-      49580.64 < (bmiMatrix⁻¹ *ᵥ bmiNondiabetics) 2 ∧
-      (bmiMatrix⁻¹ *ᵥ bmiNondiabetics) 2 < 49580.65 ∧
-      1.145 < categoryOddsRatio (bmiMatrix⁻¹ *ᵥ bmiDiabetics) (bmiMatrix⁻¹ *ᵥ bmiNondiabetics) 1 ∧
-      categoryOddsRatio (bmiMatrix⁻¹ *ᵥ bmiDiabetics) (bmiMatrix⁻¹ *ᵥ bmiNondiabetics) 1 < 1.146 ∧
-      5.163 < categoryOddsRatio (bmiMatrix⁻¹ *ᵥ bmiDiabetics) (bmiMatrix⁻¹ *ᵥ bmiNondiabetics) 2 ∧
-      categoryOddsRatio (bmiMatrix⁻¹ *ᵥ bmiDiabetics) (bmiMatrix⁻¹ *ᵥ bmiNondiabetics) 2 < 5.164 ∧
+(the same matrix for diabetics and nondiabetics). This is an additional scenario under the
+repaired matrix `bmiMatrixRepaired` (the printed assumptions are infeasible:
+`bmiStated_infeasible`). Correcting Table 6.16 with it gives the obese cells `9517.6` and
+`49580.6` printed in Table 6.17, and odds ratios `≈ 1.145` (overweight) and `≈ 5.164` (obese).
+The observed overweight odds ratio `≈ 2.100` is further from the null than the corrected one,
+while the obese odds ratio `≈ 5.119` is closer. The printed odds ratios 1.4 and 5.7 come from a
+different matrix (`bmiMatrixPrinted`). -/
+theorem bmiRepaired_values :
+    9517.59 < (bmiMatrixRepaired⁻¹ *ᵥ bmiDiabetics) 2 ∧
+      (bmiMatrixRepaired⁻¹ *ᵥ bmiDiabetics) 2 < 9517.60 ∧
+      49580.64 < (bmiMatrixRepaired⁻¹ *ᵥ bmiNondiabetics) 2 ∧
+      (bmiMatrixRepaired⁻¹ *ᵥ bmiNondiabetics) 2 < 49580.65 ∧
+      1.145 < categoryOddsRatio (bmiMatrixRepaired⁻¹ *ᵥ bmiDiabetics)
+        (bmiMatrixRepaired⁻¹ *ᵥ bmiNondiabetics) 1 ∧
+      categoryOddsRatio (bmiMatrixRepaired⁻¹ *ᵥ bmiDiabetics)
+        (bmiMatrixRepaired⁻¹ *ᵥ bmiNondiabetics) 1 < 1.146 ∧
+      5.163 < categoryOddsRatio (bmiMatrixRepaired⁻¹ *ᵥ bmiDiabetics)
+        (bmiMatrixRepaired⁻¹ *ᵥ bmiNondiabetics) 2 ∧
+      categoryOddsRatio (bmiMatrixRepaired⁻¹ *ᵥ bmiDiabetics)
+        (bmiMatrixRepaired⁻¹ *ᵥ bmiNondiabetics) 2 < 5.164 ∧
       2.100 < categoryOddsRatio bmiDiabetics bmiNondiabetics 1 ∧
       categoryOddsRatio bmiDiabetics bmiNondiabetics 1 < 2.101 ∧
       5.119 < categoryOddsRatio bmiDiabetics bmiNondiabetics 2 ∧
       categoryOddsRatio bmiDiabetics bmiNondiabetics 2 < 5.120 := by
-  simp only [bmiMatrix_inv_mulVec]
+  simp only [bmiMatrixRepaired_inv_mulVec]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    norm_num [bmiCorrect, categoryOddsRatio, bmiDiabetics, bmiNondiabetics]
+    norm_num [bmiCorrectRepaired, categoryOddsRatio, bmiDiabetics, bmiNondiabetics]
 
 /-- The classification matrix behind the printed Table 6.17. Its healthy weight correction moves
 `0.09/0.91` of the observed, not the true, overweight count; inverting that arithmetic gives
 this matrix, under which `0.09 · 0.318 = 2.862%` of the truly obese are classified healthy and
 `0.91 · 0.318 = 28.938%` overweight. It is a valid classification matrix but contradicts the
-text's assumption that no obese person is classified healthy. -/
+printed assumptions (page 169): no obese person classified healthy, and `68.2%` of the obese
+classified overweight. -/
 noncomputable def bmiMatrixPrinted : Matrix (Fin 3) (Fin 3) ℝ :=
   !![1, 0.09, 0.09 * 0.318; 0, 0.91, 0.91 * 0.318; 0, 0, 0.682]
 
@@ -359,9 +605,10 @@ theorem bmiMatrixPrinted_inv_mulVec (fs : Fin 3 → ℝ) :
   fin_cases i <;>
     simp [bmiMatrixPrinted, bmiCorrectPrinted, mulVec, dotProduct, Fin.sum_univ_three] <;> ring
 
-/-- The printed Table 6.17 is reproduced by `bmiMatrixPrinted`: cells `2545.9, 2607.5` (diabetics)
-and `74977.1` (nondiabetics, healthy), odds ratios `≈ 1.377` (printed 1.4) and `≈ 5.653`
-(printed 5.7). -/
+/-- The printed Table 6.17 is reproduced by `bmiMatrixPrinted` except in one digit: cells
+`2545.9, 2607.5` (diabetics) and `74977.1` (nondiabetics, healthy), odds ratios `≈ 1.377`
+(printed 1.4) and `≈ 5.653` (printed 5.7). The nondiabetic overweight cell is `≈ 55776.21`,
+which rounds to `55,776.2`, while the book prints `55,776.3`. -/
 theorem bmiPrinted_values :
     2545.93 < (bmiMatrixPrinted⁻¹ *ᵥ bmiDiabetics) 0 ∧
       (bmiMatrixPrinted⁻¹ *ᵥ bmiDiabetics) 0 < 2545.94 ∧
@@ -369,6 +616,8 @@ theorem bmiPrinted_values :
       (bmiMatrixPrinted⁻¹ *ᵥ bmiDiabetics) 1 < 2607.48 ∧
       74977.14 < (bmiMatrixPrinted⁻¹ *ᵥ bmiNondiabetics) 0 ∧
       (bmiMatrixPrinted⁻¹ *ᵥ bmiNondiabetics) 0 < 74977.15 ∧
+      55776.21 < (bmiMatrixPrinted⁻¹ *ᵥ bmiNondiabetics) 1 ∧
+      (bmiMatrixPrinted⁻¹ *ᵥ bmiNondiabetics) 1 < 55776.22 ∧
       1.376 < categoryOddsRatio (bmiMatrixPrinted⁻¹ *ᵥ bmiDiabetics)
         (bmiMatrixPrinted⁻¹ *ᵥ bmiNondiabetics) 1 ∧
       categoryOddsRatio (bmiMatrixPrinted⁻¹ *ᵥ bmiDiabetics)
@@ -378,7 +627,7 @@ theorem bmiPrinted_values :
       categoryOddsRatio (bmiMatrixPrinted⁻¹ *ᵥ bmiDiabetics)
         (bmiMatrixPrinted⁻¹ *ᵥ bmiNondiabetics) 2 < 5.654 := by
   simp only [bmiMatrixPrinted_inv_mulVec]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     norm_num [bmiCorrectPrinted, categoryOddsRatio, bmiDiabetics, bmiNondiabetics]
 
 end Polytomous
@@ -458,14 +707,47 @@ theorem table627_mul_inv : table627 * table627Inv = 1 ∧ table627.det ≠ 0 := 
       norm_num [table627, table627Inv, Fintype.sum_bool, one_apply]
   exact ⟨h, det_ne_zero_of_right_inverse h⟩
 
-/-- Table 6.28 (neighborhood problems and functional decline): the observed risk ratio is
-`(20/172)/(28/667) ≈ 2.77`; the text describes it as a 2.2-fold association. The hypothetical
-table after 1.6% dependent errors has risk ratio `≈ 1.0`. -/
+/-- Arithmetic on the printed Table 6.28 (neighborhood problems and functional decline,
+page 184): the crude risk ratio of the observed table is `(20/172)/(28/667) ≈ 2.76993` (printed
+2.8) and that of the hypothetical table is `(7.0/163.9)/(28.9/675.6) ≈ 0.99841` (printed 1.0).
+The "2.2-fold" association of the text is the estimate reported by the cited study (Balfour and
+Kaplan, 2002), an odds ratio of 2.23 adjusted for covariates: a different estimand from this
+crude risk ratio, not an arithmetic discrepancy. -/
 theorem table628_values :
-    2.769 < ((20 : ℝ) / 172) / (28 / 667) ∧ ((20 : ℝ) / 172) / (28 / 667) < 2.770 ∧
-      0.998 < ((7.0 : ℝ) / 163.9) / (28.9 / 675.6) ∧
-      ((7.0 : ℝ) / 163.9) / (28.9 / 675.6) < 0.999 := by
+    2.7699 < ((20 : ℝ) / 172) / (28 / 667) ∧ ((20 : ℝ) / 172) / (28 / 667) < 2.7700 ∧
+      0.9984 < ((7.0 : ℝ) / 163.9) / (28.9 / 675.6) ∧
+      ((7.0 : ℝ) / 163.9) / (28.9 / 675.6) < 0.9985 := by
   norm_num
+
+/-- The observed cells of Table 6.28, indexed `(neighborhood problems, functional decline)`. -/
+def cells628Observed (i : Bool × Bool) : ℝ :=
+  if i.2 then (if i.1 then 20 else 28) else (if i.1 then 152 else 639)
+
+/-- The hypothetical cells of Table 6.28, indexed as `cells628Observed`. -/
+def cells628Hypothetical (i : Bool × Bool) : ℝ :=
+  if i.2 then (if i.1 then 7.0 else 28.9) else (if i.1 then 156.9 else 646.7)
+
+/-- The two tables of Table 6.28 do not have the same total (`839` and `839.5`), so neither is
+the image of the other under any classification matrix (classification keeps the total,
+`sum_mulVec`). The printed hypothetical table is therefore not an exact reclassification of
+the observed one; `table628_values` is arithmetic on the printed tables. -/
+theorem table628_totals :
+    ∑ i, cells628Observed i = 839 ∧ ∑ i, cells628Hypothetical i = 839.5 ∧
+      (¬ ∃ P, IsClassificationMatrix P ∧ P *ᵥ cells628Hypothetical = cells628Observed) ∧
+      ¬ ∃ P, IsClassificationMatrix P ∧ P *ᵥ cells628Observed = cells628Hypothetical := by
+  have hO : ∑ i, cells628Observed i = 839 := by
+    norm_num [cells628Observed, Fintype.sum_prod_type, Fintype.sum_bool]
+  have hH : ∑ i, cells628Hypothetical i = 839.5 := by
+    norm_num [cells628Hypothetical, Fintype.sum_prod_type, Fintype.sum_bool]
+  refine ⟨hO, hH, ?_, ?_⟩
+  · rintro ⟨P, hP, h⟩
+    have := sum_mulVec P hP cells628Hypothetical
+    rw [h, hO, hH] at this
+    norm_num at this
+  · rintro ⟨P, hP, h⟩
+    have := sum_mulVec P hP cells628Observed
+    rw [h, hO, hH] at this
+    norm_num at this
 
 end Dependent
 
@@ -484,8 +766,10 @@ def cells69 (i : Bool × Bool) : ℝ :=
 
 /-- The matrix method reproduces Table 6.9: with the exposure matrix of sensitivity `128/164` and
 specificity `465/470` in both disease levels, `P⁻¹ F*` is `(256.3, 1407.7, 799.1, 4164.9)`. The
-text says that inverting `P` gives `A = (a - B(1 - SP))/(SE - (1 - SP))`; by
-`exposure_inv_mulVec` the correct expression has the row total `D₁ = a + b` in place of `B`. -/
+text (page 186) prints the first entry of the inverse as
+`A = (a - D(1 - SP_{D1}))/(SE_{D1} + SP_{D1} - 1)` with an unindexed `D`; on that page `D` also
+names the fourth true cell. By `exposure_inv_mulVec` the correct expression is that of Table 6.8,
+with the case row total `D₁ Total = a + b` in place of `D`. -/
 theorem matrix_table69 :
     256.28 < ((jointMatrix (fun _ ↦ binaryMatrix (128 / 164) (465 / 470)) 1)⁻¹ *ᵥ cells69)
         (true, true) ∧
