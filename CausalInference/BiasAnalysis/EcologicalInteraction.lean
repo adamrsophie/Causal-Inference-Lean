@@ -62,6 +62,25 @@ weights `n_{i0} n_{i1} / (n_{i0} + n_{i1})` (so only trials with both arms count
   modifier `m`, the within coefficient is `β` and the across coefficient is `β` plus the
   weighted least squares slope of `m` on the trial mean covariate.
 
+## Without balance
+
+* `colRSS_isMin_iff`: for any columns `Z`, after the trial intercepts are profiled out, a
+  parameter vector minimizes the objective if and only if it solves the normal equations
+  `∑_q G_{pq} θ_q = b_p` (`NormalEquations`), with `G_{pq} = ∑_j dZ_p dZ_q` (`gram`) and
+  `b_p = ∑_j dZ_p dy` (`gramRhs`), where `d` is the deviation from the trial mean, and every
+  populated intercept is the trial mean of the residual.
+* `normalEquations_unique`, `profiledInjective_iff_posDef`: the solution is unique when the
+  profiled design map is injective, equivalently when the Gram matrix is positive definite.
+* `interactionRSS_isMin_iff`: the model above is the case of the four columns
+  `interactionColumns`. `gram_interaction_decouple`: under binary treatment and balance the
+  Gram matrix decouples, which is the balanced case; the balanced results keep their separate
+  proof because it gives the closed forms `withinInteraction` and `acrossInteraction`.
+* `unbalanced_interaction_example`: in a design that is identifiable except for balance, the
+  least squares within coefficient is `-3/89`, while the cell-centered `withinInteraction` is
+  `0`.
+* `trialEffectFit_not_identified`: with trial-specific treatment effects, `A x̄_{trial}` lies in
+  the span of the trial by treatment columns, so `β_B` is not identified.
+
 ## References
 
 * S. Dias, A. J. Sutton, N. J. Welton, A. E. Ades, *NICE DSU Technical Support Document 3:
@@ -681,5 +700,584 @@ theorem ecological_interaction_example :
   refine ⟨h1w, ?_, h2w, ?_⟩
   · rw [h1a, hself]; ring
   · rw [h2a, hzero]; ring
+
+/-! ### The interaction model without balance -/
+
+section Unbalanced
+
+variable {m : ℕ}
+
+/-- The residual sum of squares `∑ⱼ (yⱼ - α_{tr j} - ∑ₚ θₚ Zₚⱼ)²` of a linear model with trial
+intercepts `α` and columns `Z₀, …, Z_{m-1}` with coefficients `θ`. -/
+noncomputable def colRSS (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (α : Fin k → ℝ)
+    (θ : Fin m → ℝ) : ℝ :=
+  ∑ j, (y j - α (tr j) - ∑ p, θ p * Z p j) ^ 2
+
+/-- The outcome minus the column part of the fit, `yⱼ - ∑ₚ θₚ Zₚⱼ`. -/
+noncomputable def colResid (Z : Fin m → ι → ℝ) (y : ι → ℝ) (θ : Fin m → ℝ) : ι → ℝ :=
+  fun j => y j - ∑ p, θ p * Z p j
+
+/-- The profiled objective: the residual sum of squares of the trial-demeaned outcome on the
+trial-demeaned columns, `∑ⱼ (ỹⱼ - ∑ₚ θₚ Z̃ₚⱼ)²`, the minimum over the trial intercepts. -/
+noncomputable def profiledRSS (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ)
+    (θ : Fin m → ℝ) : ℝ :=
+  ∑ j, (dev tr y j - ∑ p, θ p * dev tr (Z p) j) ^ 2
+
+/-- The profiled design Gram matrix `G_{pq} = ∑ⱼ Z̃ₚⱼ Z̃_qⱼ` (columns demeaned within trials). -/
+noncomputable def gram (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (p q : Fin m) : ℝ :=
+  ∑ j, dev tr (Z p) j * dev tr (Z q) j
+
+/-- The right side `bₚ = ∑ⱼ Z̃ₚⱼ ỹⱼ` of the normal equations. -/
+noncomputable def gramRhs (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (p : Fin m) : ℝ :=
+  ∑ j, dev tr (Z p) j * dev tr y j
+
+/-- The normal equations `G θ = b` of the profiled least squares problem. -/
+def NormalEquations (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (θ : Fin m → ℝ) : Prop :=
+  ∀ p, ∑ q, gram tr Z p q * θ q = gramRhs tr Z y p
+
+/-- Injectivity of the profiled design map `h ↦ (∑ₚ hₚ Z̃ₚⱼ)ⱼ`; equivalent to positive
+definiteness of the Gram matrix (`profiledInjective_iff_posDef`). -/
+def ProfiledInjective (tr : ι → Fin k) (Z : Fin m → ι → ℝ) : Prop :=
+  ∀ h : Fin m → ℝ, (∀ j, ∑ p, h p * dev tr (Z p) j = 0) → h = 0
+
+/-- Trial means of `y - ∑ θₚ Zₚ` are the corresponding combinations of trial means. -/
+theorem trialMean_colResid (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (θ : Fin m → ℝ)
+    (i : Fin k) :
+    trialMean tr (colResid Z y θ) i = trialMean tr y i - ∑ p, θ p * trialMean tr (Z p) i := by
+  unfold colResid trialMean
+  have e : ∑ j with tr j = i, ∑ p, θ p * Z p j = ∑ p, θ p * ∑ j with tr j = i, Z p j := by
+    rw [Finset.sum_comm]; exact Finset.sum_congr rfl fun p _ => (Finset.mul_sum _ _ _).symm
+  rw [Finset.sum_sub_distrib, e, sub_div]
+  congr 1
+  rw [Finset.sum_div]
+  exact Finset.sum_congr rfl fun p _ => by rw [mul_div_assoc]
+
+/-- Deviations of `y - ∑ θₚ Zₚ` are the corresponding combinations of deviations. -/
+theorem dev_colResid (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (θ : Fin m → ℝ)
+    (j : ι) : dev tr (colResid Z y θ) j = dev tr y j - ∑ p, θ p * dev tr (Z p) j := by
+  have e : dev tr (colResid Z y θ) j =
+      colResid Z y θ j - trialMean tr (colResid Z y θ) (tr j) := rfl
+  rw [e, trialMean_colResid]
+  simp only [colResid, dev, mul_sub, Finset.sum_sub_distrib]
+  ring
+
+/-- Products of deviations: `∑ ũ ṽ = ∑ ũ v`. -/
+theorem sum_dev_mul_dev (tr : ι → Fin k) (u v : ι → ℝ) :
+    ∑ j, dev tr u j * dev tr v j = ∑ j, dev tr u j * v j := by
+  have h := sum_dev_mul_trial (tr := tr) u (trialMean tr v)
+  rw [show ∑ j, dev tr u j * dev tr v j =
+      ∑ j, dev tr u j * v j - ∑ j, dev tr u j * trialMean tr v (tr j) by
+    rw [← Finset.sum_sub_distrib]
+    exact Finset.sum_congr rfl fun j _ => by
+      rw [show dev tr v j = v j - trialMean tr v (tr j) from rfl]; ring, h, sub_zero]
+
+/-- The defect of the normal equations, `bₚ - (G θ)ₚ = ∑ⱼ Z̃ₚⱼ (ỹⱼ - ∑_q θ_q Z̃_qⱼ)`. -/
+theorem gramRhs_sub_gram' (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (θ : Fin m → ℝ)
+    (p : Fin m) :
+    gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q =
+      ∑ j, dev tr (Z p) j * (dev tr y j - ∑ q, θ q * dev tr (Z q) j) := by
+  simp only [gramRhs, gram, mul_sub, Finset.mul_sum, Finset.sum_sub_distrib, Finset.sum_mul]
+  congr 1
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun j _ => Finset.sum_congr rfl fun q _ => by ring
+
+/-- **The normal equations in residual form.** `bₚ - (G θ)ₚ = ∑ⱼ Zₚⱼ r̃ⱼ`, where `r̃` is the
+trial-demeaned residual `dev (y - ∑ θ_q Z_q)` of the fit with coefficients `θ`. -/
+theorem gramRhs_sub_gram (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (θ : Fin m → ℝ)
+    (p : Fin m) :
+    gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q =
+      ∑ j, Z p j * dev tr (colResid Z y θ) j := by
+  rw [gramRhs_sub_gram']
+  simp_rw [← dev_colResid]
+  rw [show ∑ j, dev tr (Z p) j * dev tr (colResid Z y θ) j =
+      ∑ j, dev tr (colResid Z y θ) j * dev tr (Z p) j from
+    Finset.sum_congr rfl fun j _ => mul_comm _ _, sum_dev_mul_dev]
+  exact Finset.sum_congr rfl fun j _ => mul_comm _ _
+
+/-- **Expansion of the profiled objective** around `θ`: with `hₚ = θ'ₚ - θₚ`,
+`P(θ') = P(θ) - 2 ∑ₚ hₚ (b - G θ)ₚ + ∑ⱼ (∑ₚ hₚ Z̃ₚⱼ)²`. -/
+theorem profiledRSS_eq_add (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ)
+    (θ θ' : Fin m → ℝ) :
+    profiledRSS tr Z y θ' = profiledRSS tr Z y θ -
+      2 * ∑ p, (θ' p - θ p) * (gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q) +
+      ∑ j, (∑ p, (θ' p - θ p) * dev tr (Z p) j) ^ 2 := by
+  have hr : ∀ j, dev tr y j - ∑ p, θ' p * dev tr (Z p) j =
+      (dev tr y j - ∑ p, θ p * dev tr (Z p) j) - ∑ p, (θ' p - θ p) * dev tr (Z p) j := by
+    intro j
+    simp only [sub_mul, Finset.sum_sub_distrib]
+    ring
+  have hcross : ∑ j, (dev tr y j - ∑ p, θ p * dev tr (Z p) j) *
+      ∑ p, (θ' p - θ p) * dev tr (Z p) j =
+      ∑ p, (θ' p - θ p) * (gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q) := by
+    simp only [Finset.mul_sum]
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun p _ => ?_
+    rw [gramRhs_sub_gram', Finset.mul_sum]
+    exact Finset.sum_congr rfl fun j _ => by ring
+  unfold profiledRSS
+  rw [Finset.sum_congr rfl fun j _ => by rw [hr j], ← hcross, Finset.mul_sum,
+    ← Finset.sum_sub_distrib, ← Finset.sum_add_distrib]
+  exact Finset.sum_congr rfl fun j _ => by ring
+
+/-- The quadratic form of the Gram matrix is the squared norm of the profiled design map. -/
+theorem gram_quadratic (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (h : Fin m → ℝ) :
+    ∑ p, ∑ q, h p * gram tr Z p q * h q = ∑ j, (∑ p, h p * dev tr (Z p) j) ^ 2 := by
+  have e : ∀ j, (∑ p, h p * dev tr (Z p) j) ^ 2 =
+      ∑ p, ∑ q, h p * dev tr (Z p) j * (h q * dev tr (Z q) j) := fun j => by
+    rw [sq, Finset.sum_mul_sum]
+  rw [Finset.sum_congr rfl fun j _ => e j]
+  conv_rhs => rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun p _ => ?_
+  conv_rhs => rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun q _ => ?_
+  rw [gram, Finset.mul_sum, Finset.sum_mul]
+  exact Finset.sum_congr rfl fun j _ => by ring
+
+/-- Injectivity of the profiled design map is positive definiteness of the Gram matrix. -/
+theorem profiledInjective_iff_posDef (tr : ι → Fin k) (Z : Fin m → ι → ℝ) :
+    ProfiledInjective tr Z ↔ ∀ h : Fin m → ℝ, h ≠ 0 → 0 < ∑ p, ∑ q, h p * gram tr Z p q * h q := by
+  simp only [gram_quadratic]
+  constructor
+  · intro hinj h hh
+    rcases (Finset.sum_nonneg fun j _ => sq_nonneg (∑ p, h p * dev tr (Z p) j)).lt_or_eq with
+      hlt | heq
+    · exact hlt
+    · exact absurd (hinj h fun j => by
+        have := (Finset.sum_eq_zero_iff_of_nonneg fun j _ => sq_nonneg
+          (∑ p, h p * dev tr (Z p) j)).1 heq.symm j (Finset.mem_univ j)
+        exact pow_eq_zero_iff two_ne_zero |>.1 this) hh
+  · intro hpd h hz
+    by_contra hh
+    have := hpd h hh
+    simp [hz] at this
+
+/-- **Solutions of the normal equations minimize the profiled objective.** -/
+theorem profiledRSS_le_of_normal {tr : ι → Fin k} {Z : Fin m → ι → ℝ} {y : ι → ℝ}
+    {θ : Fin m → ℝ} (hθ : NormalEquations tr Z y θ) (θ' : Fin m → ℝ) :
+    profiledRSS tr Z y θ ≤ profiledRSS tr Z y θ' := by
+  rw [profiledRSS_eq_add tr Z y θ θ']
+  have h0 : ∑ p, (θ' p - θ p) * (gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q) = 0 :=
+    Finset.sum_eq_zero fun p _ => by rw [hθ p, sub_self, mul_zero]
+  rw [h0]
+  linarith [Finset.sum_nonneg fun j (_ : j ∈ Finset.univ) =>
+    sq_nonneg (∑ p, (θ' p - θ p) * dev tr (Z p) j)]
+
+/-- **Minimizers of the profiled objective solve the normal equations.** -/
+theorem normal_of_profiledRSS_le {tr : ι → Fin k} {Z : Fin m → ι → ℝ} {y : ι → ℝ}
+    {θ : Fin m → ℝ} (hmin : ∀ θ', profiledRSS tr Z y θ ≤ profiledRSS tr Z y θ') :
+    NormalEquations tr Z y θ := by
+  intro p
+  set c := gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q with hc
+  set g := gram tr Z p p
+  have hg : 0 ≤ g := Finset.sum_nonneg fun j _ => mul_self_nonneg _
+  have key : ∀ t : ℝ, 0 ≤ -2 * t * c + t ^ 2 * g := by
+    intro t
+    have := hmin (fun q => θ q + if q = p then t else 0)
+    rw [profiledRSS_eq_add tr Z y θ (fun q => θ q + if q = p then t else 0)] at this
+    have hs : ∀ f : Fin m → ℝ, ∑ q, (θ q + (if q = p then t else 0) - θ q) * f q = t * f p :=
+      fun f => by
+        rw [Finset.sum_eq_single p (fun b _ hb => by simp [hb]) (by simp)]
+        simp
+    simp only [hs] at this
+    have e : ∑ j, (t * dev tr (Z p) j) ^ 2 = t ^ 2 * g := by
+      simp only [g, gram, Finset.mul_sum]; exact Finset.sum_congr rfl fun j _ => by ring
+    rw [e] at this
+    linarith
+  have h := key (c / (g + 1))
+  have hg1 : 0 < g + 1 := by linarith
+  have e : (-2 * (c / (g + 1)) * c + (c / (g + 1)) ^ 2 * g) * (g + 1) ^ 2 = -c ^ 2 * (g + 2) := by
+    field_simp; ring
+  have h2 : 0 ≤ -c ^ 2 * (g + 2) := by rw [← e]; positivity
+  have hc0 : c ^ 2 = 0 := by nlinarith [sq_nonneg c]
+  have : c = 0 := pow_eq_zero_iff two_ne_zero |>.1 hc0
+  linarith
+
+/-- **Uniqueness.** If the profiled design map is injective, a solution of the normal equations
+is the unique minimizer of the profiled objective. -/
+theorem eq_of_profiledRSS_eq {tr : ι → Fin k} {Z : Fin m → ι → ℝ} {y : ι → ℝ}
+    {θ θ' : Fin m → ℝ} (hθ : NormalEquations tr Z y θ) (hinj : ProfiledInjective tr Z)
+    (h : profiledRSS tr Z y θ' = profiledRSS tr Z y θ) : θ' = θ := by
+  rw [profiledRSS_eq_add tr Z y θ θ'] at h
+  have h0 : ∑ p, (θ' p - θ p) * (gramRhs tr Z y p - ∑ q, gram tr Z p q * θ q) = 0 :=
+    Finset.sum_eq_zero fun p _ => by rw [hθ p, sub_self, mul_zero]
+  rw [h0] at h
+  have hs : ∑ j, (∑ p, (θ' p - θ p) * dev tr (Z p) j) ^ 2 = 0 := by linarith
+  have hd := hinj (fun p => θ' p - θ p) fun j => pow_eq_zero_iff two_ne_zero |>.1
+    ((Finset.sum_eq_zero_iff_of_nonneg fun j _ => sq_nonneg _).1 hs j (Finset.mem_univ j))
+  funext p
+  have := congrFun hd p
+  simp only [Pi.zero_apply, sub_eq_zero] at this
+  exact this
+
+/-- **Profiling out the trial intercepts.** The objective is the profiled objective plus
+`∑ⱼ (m_{tr j}(θ) - α_{tr j})²`, where `m_i(θ)` is the trial mean of `y - ∑ θₚ Zₚ`. -/
+theorem colRSS_eq (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (α : Fin k → ℝ)
+    (θ : Fin m → ℝ) :
+    colRSS tr Z y α θ = profiledRSS tr Z y θ +
+      ∑ j, (trialMean tr (colResid Z y θ) (tr j) - α (tr j)) ^ 2 := by
+  have h := sum_sq_split (tr := tr) (colResid Z y θ) (colResid Z y θ) 0 α
+  simp only [zero_mul, sub_zero] at h
+  unfold colRSS profiledRSS
+  rw [show ∑ j, (y j - α (tr j) - ∑ p, θ p * Z p j) ^ 2 =
+      ∑ j, (colResid Z y θ j - α (tr j)) ^ 2 from
+    Finset.sum_congr rfl fun j _ => by simp only [colResid]; ring, h]
+  simp only [dev_colResid]
+
+/-- **Least squares without balance: minimizers are the solutions of the normal equations.** A
+pair `(α, θ)` minimizes `colRSS` if and only if `θ` solves the normal equations `G θ = b` and
+every populated trial intercept is the trial mean of `y - ∑ θₚ Zₚ`. -/
+theorem colRSS_isMin_iff (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ) (α : Fin k → ℝ)
+    (θ : Fin m → ℝ) :
+    (∀ α' θ', colRSS tr Z y α θ ≤ colRSS tr Z y α' θ') ↔
+      NormalEquations tr Z y θ ∧ ∀ j, α (tr j) = trialMean tr (colResid Z y θ) (tr j) := by
+  have hQ : ∀ (α' : Fin k → ℝ) (θ' : Fin m → ℝ),
+      0 ≤ ∑ j, (trialMean tr (colResid Z y θ') (tr j) - α' (tr j)) ^ 2 :=
+    fun _ _ => Finset.sum_nonneg fun j _ => sq_nonneg _
+  have hstar : ∀ θ', colRSS tr Z y (fun i => trialMean tr (colResid Z y θ') i) θ' =
+      profiledRSS tr Z y θ' := fun θ' => by rw [colRSS_eq]; simp
+  constructor
+  · intro hmin
+    have hP : ∀ θ', profiledRSS tr Z y θ ≤ profiledRSS tr Z y θ' := by
+      intro θ'
+      have := hmin (fun i => trialMean tr (colResid Z y θ') i) θ'
+      rw [hstar, colRSS_eq] at this
+      linarith [hQ α θ]
+    refine ⟨normal_of_profiledRSS_le hP, fun j => ?_⟩
+    have := hmin (fun i => trialMean tr (colResid Z y θ) i) θ
+    rw [hstar, colRSS_eq] at this
+    have h0 : ∑ j, (trialMean tr (colResid Z y θ) (tr j) - α (tr j)) ^ 2 = 0 := by
+      linarith [hQ α θ]
+    have := (Finset.sum_eq_zero_iff_of_nonneg fun j _ => sq_nonneg _).1 h0 j (Finset.mem_univ j)
+    linarith [pow_eq_zero_iff two_ne_zero |>.1 this]
+  · rintro ⟨hθ, hα⟩ α' θ'
+    rw [colRSS_eq, colRSS_eq]
+    have h0 : ∑ j, (trialMean tr (colResid Z y θ) (tr j) - α (tr j)) ^ 2 = 0 :=
+      Finset.sum_eq_zero fun j _ => by rw [hα j, sub_self]; ring
+    rw [h0]
+    linarith [profiledRSS_le_of_normal hθ θ', hQ α' θ']
+
+/-- Two solutions of the normal equations coincide when the profiled design map is injective. -/
+theorem normalEquations_unique {tr : ι → Fin k} {Z : Fin m → ι → ℝ} {y : ι → ℝ}
+    {θ θ' : Fin m → ℝ} (hθ : NormalEquations tr Z y θ) (hθ' : NormalEquations tr Z y θ')
+    (hinj : ProfiledInjective tr Z) : θ' = θ :=
+  eq_of_profiledRSS_eq hθ hinj (le_antisymm (profiledRSS_le_of_normal hθ' θ)
+    (profiledRSS_le_of_normal hθ θ'))
+
+/-- The normal equations in residual form: `θ` solves them if and only if every column is
+orthogonal to the trial-demeaned residual. -/
+theorem normalEquations_iff_resid (tr : ι → Fin k) (Z : Fin m → ι → ℝ) (y : ι → ℝ)
+    (θ : Fin m → ℝ) :
+    NormalEquations tr Z y θ ↔ ∀ p, ∑ j, Z p j * dev tr (colResid Z y θ) j = 0 := by
+  refine forall_congr' fun p => ?_
+  rw [← gramRhs_sub_gram, sub_eq_zero, eq_comm]
+
+/-! #### The four columns of the interaction model -/
+
+/-- The four columns of the interaction model, in the order of the coefficients
+`(δ, γ, β_W, β_B)`: treatment `A`, the within-trial centered covariate `x - x̄_{trial}`,
+treatment times it, and treatment times the trial mean `A x̄_{trial}`. The normal equations of
+`interactionRSS` after profiling out the trial intercepts are `NormalEquations tr
+(interactionColumns tr A x) y θ`, the four-by-four system `∑_q G_{pq} θ_q = b_p` with
+`G_{pq} = ∑ⱼ Z̃ₚⱼ Z̃_qⱼ` and `bₚ = ∑ⱼ Z̃ₚⱼ ỹⱼ`, sums over patients of the trial-demeaned
+columns. -/
+noncomputable def interactionColumns (tr : ι → Fin k) (A x : ι → ℝ) : Fin 4 → ι → ℝ :=
+  ![A, dev tr x, fun j => A j * dev tr x j, fun j => A j * trialMean tr x (tr j)]
+
+/-- The interaction objective is the column model with the four interaction columns. -/
+theorem interactionRSS_eq_colRSS (tr : ι → Fin k) (A x y : ι → ℝ) (α : Fin k → ℝ)
+    (δ γ βW βB : ℝ) :
+    interactionRSS tr A x y α δ γ βW βB =
+      colRSS tr (interactionColumns tr A x) y α ![δ, γ, βW, βB] := by
+  unfold interactionRSS colRSS
+  refine Finset.sum_congr rfl fun j _ => ?_
+  simp only [Fin.sum_univ_four, interactionColumns, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_two, Matrix.cons_val_three, Matrix.head_cons, Matrix.tail_cons]
+  ring
+
+/-- **Least squares in the interaction model without balance.** A parameter vector
+`(α, δ, γ, β_W, β_B)` minimizes `interactionRSS` if and only if `(δ, γ, β_W, β_B)` solves the
+four-by-four normal equations of the profiled problem and every populated trial intercept is the
+trial mean of the outcome minus the column part of the fit. When the profiled design map is
+injective (equivalently, the profiled Gram matrix is positive definite,
+`profiledInjective_iff_posDef`), the coefficients `(δ, γ, β_W, β_B)` of a minimizer are unique
+(`normalEquations_unique`). -/
+theorem interactionRSS_isMin_iff (tr : ι → Fin k) (A x y : ι → ℝ) (α : Fin k → ℝ)
+    (δ γ βW βB : ℝ) :
+    (∀ (α' : Fin k → ℝ) (δ' γ' βW' βB' : ℝ),
+        interactionRSS tr A x y α δ γ βW βB ≤ interactionRSS tr A x y α' δ' γ' βW' βB') ↔
+      NormalEquations tr (interactionColumns tr A x) y ![δ, γ, βW, βB] ∧
+        ∀ j, α (tr j) =
+          trialMean tr (colResid (interactionColumns tr A x) y ![δ, γ, βW, βB]) (tr j) := by
+  rw [← colRSS_isMin_iff]
+  simp only [interactionRSS_eq_colRSS]
+  constructor
+  · intro h α' θ'
+    have := h α' (θ' 0) (θ' 1) (θ' 2) (θ' 3)
+    rwa [show (![θ' 0, θ' 1, θ' 2, θ' 3] : Fin 4 → ℝ) = θ' by
+      funext i; fin_cases i <;> rfl] at this
+  · intro h α' δ' γ' βW' βB'
+    exact h α' _
+
+/-- Under balance, a covariate deviation is orthogonal to every treated trial-level term. -/
+theorem sum_dev_mul_treated {tr : ι → Fin k} {A x : ι → ℝ} (hA : ∀ j, A j = 0 ∨ A j = 1)
+    (hbal : Balanced tr A x) (g : Fin k → ℝ) : ∑ j, dev tr x j * (A j * g (tr j)) = 0 := by
+  rw [sum_arms A hA]
+  have h0 : ∑ j : {j // A j = 0}, dev tr x j * (A j * g (tr j)) = 0 :=
+    Finset.sum_eq_zero fun j _ => by rw [j.2]; ring
+  have h1 : ∑ j : {j // A j = 1}, dev tr x j * (A j * g (tr j)) =
+      ∑ j : {j // A j = 1}, dev (armTr tr A 1) (fun j => x j) j * g (armTr tr A 1 j) :=
+    Finset.sum_congr rfl fun j _ => by rw [j.2, dev_arm hbal 1 j]; unfold armTr; ring
+  rw [h0, h1, sum_dev_mul_trial (tr := armTr tr A 1), zero_add]
+
+/-- **Decoupling under balance.** With a binary treatment and covariate balance, the profiled
+Gram matrix of the interaction columns has zero entries between the within block
+`(γ, β_W)` (columns `1, 2`) and the across block `(δ, β_B)` (columns `0, 3`), so the normal
+equations split into two two-by-two systems. The balanced theorem `interactionRSS_min` keeps its
+own proof because it gives the solutions in closed form (arm slopes and a weighted regression of
+trial treatment effects), which the general system does not display. -/
+theorem gram_interaction_decouple {tr : ι → Fin k} {A x : ι → ℝ}
+    (hA : ∀ j, A j = 0 ∨ A j = 1) (hbal : Balanced tr A x) :
+    gram tr (interactionColumns tr A x) 1 0 = 0 ∧ gram tr (interactionColumns tr A x) 1 3 = 0 ∧
+      gram tr (interactionColumns tr A x) 2 0 = 0 ∧
+      gram tr (interactionColumns tr A x) 2 3 = 0 := by
+  have hAA : ∀ j, A j * A j = A j := fun j => by rcases hA j with h | h <;> simp [h]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · change ∑ j, dev tr (dev tr x) j * dev tr A j = 0
+    rw [dev_dev, sum_dev_mul_dev]
+    simpa using sum_dev_mul_treated hA hbal (fun _ => 1)
+  · change ∑ j, dev tr (dev tr x) j * dev tr (fun j => A j * trialMean tr x (tr j)) j = 0
+    rw [dev_dev, sum_dev_mul_dev]
+    exact sum_dev_mul_treated hA hbal (trialMean tr x)
+  · change ∑ j, dev tr (fun j => A j * dev tr x j) j * dev tr A j = 0
+    rw [show ∑ j, dev tr (fun j => A j * dev tr x j) j * dev tr A j =
+        ∑ j, dev tr A j * dev tr (fun j => A j * dev tr x j) j from
+      Finset.sum_congr rfl fun j _ => mul_comm _ _, sum_dev_mul_dev]
+    rw [← sum_dev_mul_treated hA hbal (fun i => 1 - trialMean tr A i)]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [show dev tr A j = A j - trialMean tr A (tr j) from rfl]
+    linear_combination (dev tr x j) * hAA j
+  · change ∑ j, dev tr (fun j => A j * dev tr x j) j *
+      dev tr (fun j => A j * trialMean tr x (tr j)) j = 0
+    rw [show ∑ j, dev tr (fun j => A j * dev tr x j) j *
+          dev tr (fun j => A j * trialMean tr x (tr j)) j =
+        ∑ j, dev tr (fun j => A j * trialMean tr x (tr j)) j *
+          dev tr (fun j => A j * dev tr x j) j from
+      Finset.sum_congr rfl fun j _ => mul_comm _ _, sum_dev_mul_dev]
+    rw [← sum_dev_mul_treated hA hbal
+      (fun i => trialMean tr x i - trialMean tr (fun j => A j * trialMean tr x (tr j)) i)]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [show dev tr (fun j => A j * trialMean tr x (tr j)) j = A j * trialMean tr x (tr j) -
+      trialMean tr (fun j => A j * trialMean tr x (tr j)) (tr j) from rfl]
+    linear_combination (dev tr x j * trialMean tr x (tr j)) * hAA j
+
+/-! #### Trial-specific treatment effects -/
+
+/-- The fitted value of the interaction model with trial-specific treatment effects `δ_i` in
+place of the common `δ`. -/
+noncomputable def trialEffectFit (tr : ι → Fin k) (A x : ι → ℝ) (α δ : Fin k → ℝ)
+    (γ βW βB : ℝ) (j : ι) : ℝ :=
+  α (tr j) + δ (tr j) * A j + γ * dev tr x j + βW * (A j * dev tr x j) +
+    βB * (A j * trialMean tr x (tr j))
+
+/-- The column `A x̄_{trial}` is a combination of the trial by treatment columns
+`A · 1{trial = i}`, with coefficients the trial mean covariates. -/
+theorem treatedMean_mem_span (tr : ι → Fin k) (A x : ι → ℝ) :
+    (fun j => A j * trialMean tr x (tr j)) =
+      fun j => ∑ i, trialMean tr x i * (A j * if tr j = i then 1 else 0) := by
+  funext j
+  rw [Finset.sum_eq_single (tr j) (fun b _ hb => by simp [Ne.symm hb]) (by simp)]
+  simp only [ite_true]
+  ring
+
+/-- **With trial-specific treatment effects the across coefficient is not identified.** For
+every parameter vector, moving `β_B x̄_i` into the trial treatment effects gives the same fitted
+values with across coefficient `0`; so two parameter vectors with different `β_B` (when
+`β_B ≠ 0`) fit every outcome equally well. -/
+theorem trialEffectFit_not_identified (tr : ι → Fin k) (A x : ι → ℝ) (α δ : Fin k → ℝ)
+    (γ βW βB : ℝ) :
+    trialEffectFit tr A x α δ γ βW βB =
+        trialEffectFit tr A x α (fun i => δ i + βB * trialMean tr x i) γ βW 0 ∧
+      ∀ y : ι → ℝ, ∑ j, (y j - trialEffectFit tr A x α δ γ βW βB j) ^ 2 =
+        ∑ j, (y j -
+          trialEffectFit tr A x α (fun i => δ i + βB * trialMean tr x i) γ βW 0 j) ^ 2 := by
+  have h : trialEffectFit tr A x α δ γ βW βB =
+      trialEffectFit tr A x α (fun i => δ i + βB * trialMean tr x i) γ βW 0 := by
+    funext j; unfold trialEffectFit; ring
+  exact ⟨h, fun y => by rw [h]⟩
+
+end Unbalanced
+
+/-! ### Balance matters: an unbalanced design -/
+
+/-- The patients of the unbalanced example: `(trial, treated, high covariate)`, three trials of
+four patients, two per arm. -/
+abbrev UbPatient := Fin 3 × Bool × Bool
+
+/-- The trial of a patient of the unbalanced example. -/
+def ubTr : UbPatient → Fin 3 := fun j => j.1
+
+/-- The treatment of a patient of the unbalanced example. -/
+noncomputable def ubA : UbPatient → ℝ := fun j => if j.2.1 then 1 else 0
+
+/-- The covariate of the unbalanced example: in trial `i` the control arm has `o_i, o_i + 2` and
+the treated arm `o_i + s_i, o_i + s_i + 4`, with `o = (0, 2, 4)` and `s = (2, 0, 0)`. -/
+noncomputable def ubX : UbPatient → ℝ := fun j =>
+  ![0, 2, 4] j.1 + (if j.2.1 then ![2, 0, 0] j.1 else 0) +
+    if j.2.2 then (if j.2.1 then 4 else 2) else 0
+
+/-- The outcome of the unbalanced example: a treatment effect `1` in trial `0` only,
+`y = A · 1{trial = 0}`. -/
+noncomputable def ubY : UbPatient → ℝ := fun j => ubA j * ![1, 0, 0] j.1
+
+/-- The least squares coefficients `(δ, γ, β_W, β_B)` of the unbalanced example. -/
+noncomputable def ubTheta : Fin 4 → ℝ := ![235 / 178, 4 / 89, -3 / 89, -24 / 89]
+
+/-- Every cell of the unbalanced example has two patients. -/
+theorem ubCard (b : Bool) (i : Fin 3) :
+    (Finset.univ.filter fun x : UbPatient => x.2.1 = b ∧ x.1 = i).card = 2 := by
+  revert b i; decide
+
+/-- The treatment of the unbalanced example is binary. -/
+theorem ubA_binary (j : UbPatient) : ubA j = 0 ∨ ubA j = 1 := by
+  unfold ubA; split_ifs <;> simp
+
+/-- The trial mean covariates of the unbalanced example are `5/2, 7/2, 11/2`. -/
+theorem ubX_trialMean (i : Fin 3) : trialMean ubTr ubX i = ![5 / 2, 7 / 2, 11 / 2] i := by
+  rw [trialMean_eq_sum]
+  fin_cases i <;> simp [ubTr, ubX, Fintype.sum_prod_type, Fin.sum_univ_three] <;> norm_num
+
+/-- The cell mean covariates of the unbalanced example: `1, 3, 5` in the control arm and
+`4, 4, 6` in the treated arm. -/
+theorem ubX_armMean (i : Fin 3) :
+    armMean ubTr ubA 0 ubX i = ![1, 3, 5] i ∧ armMean ubTr ubA 1 ubX i = ![4, 4, 6] i := by
+  rw [armMean_eq_sum, armMean_eq_sum]
+  fin_cases i <;> simp [ubTr, ubA, ubX, Fintype.sum_prod_type, ubCard] <;> norm_num
+
+/-- The deviations of the covariate from the trial means in the unbalanced example. -/
+theorem ub_devX (j : UbPatient) : dev ubTr ubX j = ubX j - ![5 / 2, 7 / 2, 11 / 2] j.1 := by
+  unfold dev; rw [ubX_trialMean]; rfl
+
+/-- **Balance matters: the two within-trial interactions separate.** In the unbalanced example
+(three trials, two patients per cell; the treated arm has a larger covariate spread than the
+control arm, and in trial `0` the treated arm is shifted), the treatment is binary, the
+covariate varies within the cells of both arms, and the trials have positive weights and
+distinct mean covariates, but covariate balance fails. For the outcome `y = A · 1{trial = 0}`
+* the pooled difference of the arm slopes computed with cell-centered covariates,
+  `withinInteraction`, is `0` (the outcome is constant within every cell);
+* the least squares fit of the model with the document's columns `A (x - x̄_{trial})` and
+  `A x̄_{trial}` has the unique coefficients `(δ, γ, β_W, β_B) = (235/178, 4/89, -3/89, -24/89)`:
+  they solve the normal equations, the profiled design map is injective, and every minimizer of
+  `interactionRSS` has these coefficients. So its within coefficient is `-3/89 ≠ 0`. -/
+theorem unbalanced_interaction_example :
+    (∀ j, ubA j = 0 ∨ ubA j = 1) ∧ ¬ Balanced ubTr ubA ubX ∧
+      0 < ∑ j, dev (armTr ubTr ubA 0) (fun j => ubX j) j ^ 2 ∧
+      0 < ∑ j, dev (armTr ubTr ubA 1) (fun j => ubX j) j ^ 2 ∧
+      0 < wSxx (cellWeight ubTr ubA) (trialMean ubTr ubX) ∧
+      withinInteraction ubTr ubA ubX ubY = 0 ∧
+      NormalEquations ubTr (interactionColumns ubTr ubA ubX) ubY ubTheta ∧
+      ProfiledInjective ubTr (interactionColumns ubTr ubA ubX) ∧
+      (∀ (α : Fin 3 → ℝ) (δ γ βW βB : ℝ),
+        (∀ (α' : Fin 3 → ℝ) (δ' γ' βW' βB' : ℝ),
+          interactionRSS ubTr ubA ubX ubY α δ γ βW βB ≤
+            interactionRSS ubTr ubA ubX ubY α' δ' γ' βW' βB') →
+        δ = 235 / 178 ∧ γ = 4 / 89 ∧ βW = -3 / 89 ∧ βB = -24 / 89) := by
+  have hsize : ∀ a i, (a = 0 ∨ a = 1) → (armSize ubTr ubA a i : ℝ) = 2 := by
+    intro a i ha
+    rw [armSize_eq]
+    rcases ha with rfl | rfl <;> fin_cases i <;> simp [ubTr, ubA, ubCard]
+  have hcw : ∀ i, cellWeight ubTr ubA i = 1 := fun i => by
+    rw [cellWeight, hsize 0 i (Or.inl rfl), hsize 1 i (Or.inr rfl)]; norm_num
+  -- normal equations
+  have hnorm : NormalEquations ubTr (interactionColumns ubTr ubA ubX) ubY ubTheta := by
+    rw [normalEquations_iff_resid]
+    have hm : ∀ i, trialMean ubTr (colResid (interactionColumns ubTr ubA ubX) ubY ubTheta) i =
+        ![18 / 89, -16 / 89, 8 / 89] i := by
+      intro i
+      rw [trialMean_eq_sum]
+      fin_cases i <;>
+        simp [colResid, Fin.sum_univ_four, interactionColumns, ub_devX, ubX_trialMean, ubTheta,
+          ubTr, ubA, ubX, ubY, Fintype.sum_prod_type, Fin.sum_univ_three] <;> norm_num
+    intro p
+    have hd : ∀ j, dev ubTr (colResid (interactionColumns ubTr ubA ubX) ubY ubTheta) j =
+        colResid (interactionColumns ubTr ubA ubX) ubY ubTheta j -
+          ![18 / 89, -16 / 89, 8 / 89] j.1 :=
+      fun j => by unfold dev; rw [hm]; rfl
+    simp only [hd]
+    fin_cases p <;>
+      simp [colResid, Fin.sum_univ_four, interactionColumns, ub_devX, ubX_trialMean, ubTheta,
+        ubTr, ubA, ubX, ubY, Fintype.sum_prod_type, Fin.sum_univ_three] <;> norm_num
+  -- injectivity
+  have hinj : ProfiledInjective ubTr (interactionColumns ubTr ubA ubX) := by
+    have hmA : ∀ i, trialMean ubTr ubA i = 1 / 2 := by
+      intro i; rw [trialMean_eq_sum]
+      fin_cases i <;> simp [ubTr, ubA, Fintype.sum_prod_type, Fin.sum_univ_three] <;> norm_num
+    have hmAd : ∀ i, trialMean ubTr (fun j => ubA j * dev ubTr ubX j) i =
+        ![3 / 4, 1 / 4, 1 / 4] i := by
+      intro i; rw [trialMean_eq_sum]
+      fin_cases i <;>
+        simp [ubTr, ubA, ub_devX, ubX, Fintype.sum_prod_type, Fin.sum_univ_three] <;> norm_num
+    have hmAm : ∀ i, trialMean ubTr (fun j => ubA j * trialMean ubTr ubX (ubTr j)) i =
+        ![5 / 4, 7 / 4, 11 / 4] i := by
+      intro i; rw [trialMean_eq_sum]
+      fin_cases i <;>
+        simp [ubTr, ubA, ubX_trialMean, Fintype.sum_prod_type, Fin.sum_univ_three] <;> norm_num
+    intro h hz
+    have e : ∀ j, ∑ p, h p * dev ubTr (interactionColumns ubTr ubA ubX p) j =
+        h 0 * (ubA j - 1 / 2) + h 1 * dev ubTr ubX j +
+        h 2 * (ubA j * dev ubTr ubX j - ![3 / 4, 1 / 4, 1 / 4] j.1) +
+        h 3 * (ubA j * ![5 / 2, 7 / 2, 11 / 2] j.1 - ![5 / 4, 7 / 4, 11 / 4] j.1) := by
+      intro j
+      rw [Fin.sum_univ_four]
+      simp only [interactionColumns, Matrix.cons_val_zero, Matrix.cons_val_one,
+        Matrix.cons_val_two, Matrix.cons_val_three, Matrix.head_cons, Matrix.tail_cons, dev_dev]
+      rw [show dev ubTr ubA j = ubA j - trialMean ubTr ubA (ubTr j) from rfl, hmA,
+        show dev ubTr (fun j => ubA j * dev ubTr ubX j) j = ubA j * dev ubTr ubX j -
+          trialMean ubTr (fun j => ubA j * dev ubTr ubX j) (ubTr j) from rfl, hmAd,
+        show dev ubTr (fun j => ubA j * trialMean ubTr ubX (ubTr j)) j =
+          ubA j * trialMean ubTr ubX (ubTr j) -
+          trialMean ubTr (fun j => ubA j * trialMean ubTr ubX (ubTr j)) (ubTr j) from rfl,
+        hmAm, ubX_trialMean]
+      rfl
+    have q1 := hz (0, false, false)
+    have q2 := hz (0, false, true)
+    have q3 := hz (0, true, false)
+    have q4 := hz (0, true, true)
+    have q5 := hz (1, false, false)
+    rw [e] at q1 q2 q3 q4 q5
+    simp [ub_devX, ubA, ubX] at q1 q2 q3 q4 q5
+    norm_num at q1 q2 q3 q4 q5
+    funext p
+    fin_cases p <;> simp <;> linarith
+  refine ⟨ubA_binary, ?_, ?_, ?_, ?_, ?_, hnorm, hinj, ?_⟩
+  · intro hb
+    have := hb (0, true, false)
+    rw [show ubA (0, true, false) = 1 by simp [ubA], show ubTr (0, true, false) = 0 from rfl,
+      (ubX_armMean 0).2, ubX_trialMean] at this
+    norm_num at this
+  · refine lt_of_lt_of_le ?_ (Finset.single_le_sum (f := fun j => dev (armTr ubTr ubA 0)
+      (fun j => ubX j) j ^ 2) (fun j _ => sq_nonneg _)
+      (Finset.mem_univ ⟨(0, false, false), by simp [ubA]⟩))
+    change 0 < (ubX (0, false, false) - armMean ubTr ubA 0 ubX 0) ^ 2
+    rw [(ubX_armMean 0).1]; norm_num [ubX]
+  · refine lt_of_lt_of_le ?_ (Finset.single_le_sum (f := fun j => dev (armTr ubTr ubA 1)
+      (fun j => ubX j) j ^ 2) (fun j _ => sq_nonneg _)
+      (Finset.mem_univ ⟨(0, true, false), by simp [ubA]⟩))
+    change 0 < (ubX (0, true, false) - armMean ubTr ubA 1 ubX 0) ^ 2
+    rw [(ubX_armMean 0).2]; norm_num [ubX]
+  · simp only [wSxx, wMean, hcw, ubX_trialMean, Fin.sum_univ_three]
+    norm_num
+  · calc withinInteraction ubTr ubA ubX ubY = withinInteraction ubTr ubA ubX (fun _ => 0) := by
+          rw [← withinInteraction_add_trial ubTr ubA ubX (fun _ => 0) (fun _ => 0) ![1, 0, 0]]
+          congr 1; funext j; simp only [ubY, ubTr]; ring
+      _ = 0 := by simp [withinInteraction, armWithinSlope, withinSlope, dev, trialMean]
+  · intro α δ γ βW βB hmin
+    have h := ((interactionRSS_isMin_iff ubTr ubA ubX ubY α δ γ βW βB).1 hmin).1
+    have := normalEquations_unique hnorm h hinj
+    have h0 := congrFun this 0
+    have h1 := congrFun this 1
+    have h2 := congrFun this 2
+    have h3 := congrFun this 3
+    exact ⟨by simpa [ubTheta] using h0, by simpa [ubTheta] using h1, by simpa [ubTheta] using h2,
+      by simpa [ubTheta] using h3⟩
 
 end CausalInference.BiasAnalysis.EcologicalBias
