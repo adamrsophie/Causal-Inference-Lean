@@ -160,3 +160,6 @@ public import CausalInference.Survival.SwitchDecision
 public import CausalInference.Survival.SwitchingCounterexamples
 public import CausalInference.SCM.DoCalculusRule3
 public import CausalInference.BiasAnalysis.BiasedEstimates
+public import CausalInference.StructuralNested.FailureTime
+public import CausalInference.StructuralNested.RPSFTM
+public import CausalInference.StructuralNested.RPSFTMCounterexamples
