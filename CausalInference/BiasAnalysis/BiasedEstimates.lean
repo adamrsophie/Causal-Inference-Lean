@@ -20,11 +20,16 @@ is itself estimated by `b̂` with variance `s²`. The study effect `d` is a fixe
 
 ## Main results
 
-* `adjusted_mean_variance` (moment form): if `y = d + β + ε` with `E β = b`, `E ε = 0`,
-  `E b̂ = b` and the three terms uncorrelated, the adjusted estimate `y - b̂` is unbiased for `d`
-  with variance `Var β + Var ε + Var b̂ = κ² + V + s²`.
-* `adjusted_hasLaw` (Gaussian form): for independent `β ~ N(b, κ²)`, `ε ~ N(0, V)`,
-  `b̂ ~ N(b, s²)`, the adjusted estimate has law `N(d, κ² + V + s²)`.
+* `adjusted_mean_variance_of_cov` (moment form): if `y = d + β + ε` with `E β = b`, `E ε = 0`,
+  `E b̂ = b`, `β` uncorrelated with `ε` and `b̂` uncorrelated with `β + ε`, the adjusted estimate
+  `y - b̂` is unbiased for `d` with variance `Var β + Var ε + Var b̂ = κ² + V + s²`;
+  `adjusted_mean_variance` is the special case of pairwise uncorrelated terms, and
+  `cov_sum_eq_zero_example` separates the two conditions. `adjusted_mean`: in general the mean
+  is `d + E β - E b̂`; `adjusted_not_transported`: an external mean bias that differs from the
+  mean bias of the adjusted study leaves bias.
+* `adjusted_hasLaw_of_indepFun` (Gaussian form): for `β ~ N(b, κ²)` independent of
+  `ε ~ N(0, V)`, and `b̂ ~ N(b, s²)` independent of `β + ε`, the adjusted estimate has law
+  `N(d, κ² + V + s²)`; `adjusted_hasLaw` is the case of three mutually independent terms.
 * `adjusted_weight_lt`: the adjusted estimate is down-weighted, `1/(V + κ² + s²) < 1/V`.
 * `ivPooled_mean_variance`: pooling independent unbiased (adjusted or high-quality) estimates
   by inverse variance gives an unbiased estimate with variance `1 / ∑ 1/Wᵢ`, the least
@@ -32,20 +37,24 @@ is itself estimated by `b̂` with variance `s²`. The study effect `d` is a fixe
   `BiasAnalysis/VarianceFormulas.lean`).
 * `variance_shared_adjustment`, `ivPooledVariance_lt_shared`: with one bias estimate `b̂`
   shared by several trials the adjusted estimates are correlated and the nominal pooled variance
-  understates the true one; independence of the adjustments is needed.
+  understates the true one. `ivWeights_minimize_shared`: the weights proportional to
+  `1 / Var(yᵢ)` minimize the actual variance, which is then `1 / ∑ 1/Var(yᵢ) + Var(b̂)`.
 * `biasModelCriterion_min` (TSD 3, Section 5.3): with two treatments and a free mean bias, the
   estimate of the effect is the pooled high-quality estimate; the lower-quality trials inform
   only the bias. `biasModelCriterion_fixed_bias_example`: fixing the bias at `0` lets them move
-  the estimate.
+  the estimate. `biasModelCriterion_shift_of_no_high`: without high-quality trials the effect is
+  not identified.
 * `wlsIntercept_unbiased` (TSD 3, Section 5.3, small-study bias): if `E yᵢ = d + γ Vᵢ`, the
-  weighted least squares intercept of the estimates on the study variances is unbiased for `d`;
+  intercept formula of the regression of the estimates on the study variances is unbiased for
+  `d`; `wlsRSS_le`: under `0 < Sxx` the formula is the unique weighted least squares minimizer,
+  and `wlsRSS_signed_example` shows that signed weights can leave the objective unbounded below;
   `wMean_biased`: the weighted mean is biased by `γ V̄_w`;
   `smallStudy_not_identified_of_const`: with equal variances `d` is not identified.
 
 The pairwise model of Section 5.3 is stated for weighted least squares with known variances;
-for normal estimates this is maximum likelihood, but the likelihood is not formalized. The
-pooling of several assessors' bias distributions in Section 5.4 is not stated in the document
-and is not formalized.
+for independent normal estimates this is maximum likelihood, but the likelihood is not
+formalized. The pooling of several assessors' bias distributions in Section 5.4 is not stated
+in the document and is not formalized.
 
 ## References
 
@@ -66,37 +75,113 @@ open VarianceFormulas
 
 variable {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω} [IsProbabilityMeasure P]
 
-/-- **Bias adjustment of one estimate: moments** (TSD 3, Sections 5.2 and 5.4, equation (9)).
-A lower-quality study reports `y = d + β + ε`: the effect `d`, a study-specific bias `β` with
-mean `b` (and variance `κ² = Var β`), and sampling error `ε` with mean `0` (and variance
-`V = Var ε`). The external estimate `b̂` of the mean bias has mean `b` (and variance
-`s² = Var b̂`). If `β`, `ε` and `b̂` are square integrable and pairwise uncorrelated, the adjusted
+/-- **The mean of the adjusted estimate.** For integrable `β`, `ε`, `b̂` with `E ε = 0`, the
+adjusted estimate `d + β + ε - b̂` has mean `d + E β - E b̂`: it is unbiased for `d` exactly when
+the external estimate `b̂` has the mean of the bias of the study being adjusted. -/
+theorem adjusted_mean {β ε bh : Ω → ℝ} (d : ℝ) (hβi : Integrable β P) (hεi : Integrable ε P)
+    (hbi : Integrable bh P) (hεm : P[ε] = 0) :
+    P[fun ω => d + β ω + ε ω - bh ω] = d + P[β] - P[bh] := by
+  rw [integral_sub (f := fun ω => d + β ω + ε ω) ((integrable_const d).add hβi |>.add hεi) hbi,
+    integral_add (f := fun ω => d + β ω) ((integrable_const d).add hβi) hεi,
+    integral_add (f := fun _ => d) (integrable_const d) hβi]
+  simp [hεm]
+
+/-- **Bias adjustment of one estimate: moments, under the reported-estimate condition** (TSD 3,
+Sections 5.2 and 5.4, equation (9)). A lower-quality study reports `y = d + β + ε`: the effect
+`d`, a study-specific bias `β` with mean `b` (and variance `κ² = Var β`), and sampling error `ε`
+with mean `0` (and variance `V = Var ε`). The external estimate `b̂` of the mean bias has mean
+`b` (and variance `s² = Var b̂`). If `β`, `ε` and `b̂` are square integrable, the bias is
+uncorrelated with the sampling error, and `b̂` is uncorrelated with the random part `β + ε` of
+the reported estimate (no condition on its covariance with `β` and `ε` separately), the adjusted
 estimate `y - b̂` has mean `d` and variance `κ² + V + s²`. -/
+theorem adjusted_mean_variance_of_cov {β ε bh : Ω → ℝ} (d b : ℝ) (hβ : MemLp β 2 P)
+    (hε : MemLp ε 2 P) (hb : MemLp bh 2 P) (hβm : P[β] = b) (hεm : P[ε] = 0) (hbm : P[bh] = b)
+    (h1 : cov[β, ε; P] = 0) (h23 : cov[β + ε, bh; P] = 0) :
+    P[fun ω => d + β ω + ε ω - bh ω] = d ∧
+      Var[fun ω => d + β ω + ε ω - bh ω; P] = Var[β; P] + Var[ε; P] + Var[bh; P] := by
+  constructor
+  · rw [adjusted_mean d (hβ.integrable one_le_two) (hε.integrable one_le_two)
+      (hb.integrable one_le_two) hεm, hβm, hbm]
+    ring
+  · have e : (fun ω => d + β ω + ε ω - bh ω) = fun ω => d + (β + ε - bh) ω := by
+      funext ω; simp only [Pi.sub_apply, Pi.add_apply]; ring
+    rw [e, variance_const_add ((hβ.add hε).sub hb).aestronglyMeasurable,
+      variance_sub (hβ.add hε) hb, variance_add hβ hε, h1, h23]
+    ring
+
+/-- **Bias adjustment of one estimate: moments** (TSD 3, Sections 5.2 and 5.4, equation (9)).
+The special case of `adjusted_mean_variance_of_cov` in which `β`, `ε` and `b̂` are pairwise
+uncorrelated: the adjusted estimate `y - b̂` has mean `d` and variance `κ² + V + s²`. -/
 theorem adjusted_mean_variance {β ε bh : Ω → ℝ} (d b : ℝ) (hβ : MemLp β 2 P)
     (hε : MemLp ε 2 P) (hb : MemLp bh 2 P) (hβm : P[β] = b) (hεm : P[ε] = 0) (hbm : P[bh] = b)
     (h1 : cov[β, ε; P] = 0) (h2 : cov[β, bh; P] = 0) (h3 : cov[ε, bh; P] = 0) :
     P[fun ω => d + β ω + ε ω - bh ω] = d ∧
-      Var[fun ω => d + β ω + ε ω - bh ω; P] = Var[β; P] + Var[ε; P] + Var[bh; P] := by
-  have hβi := hβ.integrable one_le_two
-  have hεi := hε.integrable one_le_two
-  have hbi := hb.integrable one_le_two
-  constructor
-  · rw [integral_sub (f := fun ω => d + β ω + ε ω) ((integrable_const d).add hβi |>.add hεi) hbi,
-      integral_add (f := fun ω => d + β ω) ((integrable_const d).add hβi) hεi,
-      integral_add (f := fun _ => d) (integrable_const d) hβi]
-    simp [hβm, hεm, hbm]
-  · have e : (fun ω => d + β ω + ε ω - bh ω) = fun ω => d + (β + ε - bh) ω := by
-      funext ω; simp only [Pi.sub_apply, Pi.add_apply]; ring
-    rw [e, variance_const_add ((hβ.add hε).sub hb).aestronglyMeasurable,
-      variance_sub (hβ.add hε) hb, variance_add hβ hε, h1,
-      covariance_add_left hβ hε hb, h2, h3]
+      Var[fun ω => d + β ω + ε ω - bh ω; P] = Var[β; P] + Var[ε; P] + Var[bh; P] :=
+  adjusted_mean_variance_of_cov d b hβ hε hb hβm hεm hbm h1
+    (by rw [covariance_add_left hβ hε hb, h2, h3, add_zero])
+
+/-- **The reported-estimate condition is weaker.** For independent standard normal `β` and `ε`,
+the external estimate `b̂ = β - ε` is uncorrelated with `β + ε` (so
+`adjusted_mean_variance_of_cov` applies), while its covariances with `β` and with `ε` are `1`
+and `-1` (so `adjusted_mean_variance` does not). -/
+theorem cov_sum_eq_zero_example {β ε : Ω → ℝ} (hβ : MemLp β 2 P) (hε : MemLp ε 2 P)
+    (hind : cov[β, ε; P] = 0) (hvβ : Var[β; P] = 1) (hvε : Var[ε; P] = 1) :
+    cov[β + ε, β - ε; P] = 0 ∧ cov[β, β - ε; P] = 1 ∧ cov[ε, β - ε; P] = -1 := by
+  have hεβ : cov[ε, β; P] = 0 := by rw [covariance_comm, hind]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [covariance_add_left hβ hε (hβ.sub hε), covariance_sub_right hβ hβ hε,
+      covariance_sub_right hε hβ hε, covariance_self hβ.aemeasurable,
+      covariance_self hε.aemeasurable, hind, hεβ, hvβ, hvε]
+    ring
+  · rw [covariance_sub_right hβ hβ hε, covariance_self hβ.aemeasurable, hind, hvβ]
+    ring
+  · rw [covariance_sub_right hε hβ hε, covariance_self hε.aemeasurable, hεβ, hvε]
     ring
 
+/-- **Countermodel: the external mean bias does not transport.** Let the study being adjusted
+have bias `β = 1` and the external estimate be `b̂ = 0` (estimating the mean bias of a different
+population of studies), with any square integrable centered sampling error `ε`. Every
+hypothesis of `adjusted_mean_variance_of_cov` holds with `b = 1` except `E b̂ = b`, and the
+adjusted estimate has mean `d + 1`, not `d`: one unit of bias is left. -/
+theorem adjusted_not_transported {ε : Ω → ℝ} (d : ℝ) (hε : MemLp ε 2 P) (hεm : P[ε] = 0) :
+    let β : Ω → ℝ := fun _ => 1
+    let bh : Ω → ℝ := fun _ => 0
+    MemLp β 2 P ∧ MemLp bh 2 P ∧ P[β] = 1 ∧ cov[β, ε; P] = 0 ∧ cov[β + ε, bh; P] = 0 ∧
+      P[bh] ≠ 1 ∧ P[fun ω => d + β ω + ε ω - bh ω] = d + 1 := by
+  intro β bh
+  refine ⟨memLp_const 1, memLp_const 0, by simp [β], by simp [β, covariance_const_left],
+    by simp [bh, covariance_const_right], by simp [bh], ?_⟩
+  rw [adjusted_mean d (integrable_const 1) (hε.integrable one_le_two) (integrable_const 0) hεm]
+  simp
+
 omit [IsProbabilityMeasure P] in
-/-- **Bias adjustment of one estimate: Gaussian law** (TSD 3, Section 5.2, equation (9) with
-`β ~ N(b₀, κ²)`). If the bias `β ~ N(b, κ²)`, the sampling error `ε ~ N(0, V)` and the estimate
-`b̂ ~ N(b, s²)` of the mean bias are mutually independent, the adjusted estimate
-`d + β + ε - b̂` has law `N(d, κ² + V + s²)`. -/
+/-- **Bias adjustment of one estimate: Gaussian law, under the reported-estimate condition**
+(TSD 3, Section 5.2, equation (9) with `β ~ N(b₀, κ²)`). If the bias `β ~ N(b, κ²)` and the
+sampling error `ε ~ N(0, V)` are independent, and the estimate `b̂ ~ N(b, s²)` of the mean bias
+is independent of the random part `β + ε` of the reported estimate (no condition on its joint
+law with `β` and `ε` separately), the adjusted estimate `d + β + ε - b̂` has law
+`N(d, κ² + V + s²)`. -/
+theorem adjusted_hasLaw_of_indepFun {β ε bh : Ω → ℝ} (d b : ℝ) (κ2 V s2 : ℝ≥0)
+    (hmβ : Measurable β) (hmε : Measurable ε) (hmb : Measurable bh) (h01 : IndepFun β ε P)
+    (hind : IndepFun (β + ε) bh P)
+    (hβ : HasLaw β (gaussianReal b κ2) P) (hε : HasLaw ε (gaussianReal 0 V) P)
+    (hb : HasLaw bh (gaussianReal b s2) P) :
+    HasLaw (fun ω => d + β ω + ε ω - bh ω) (gaussianReal d (κ2 + V + s2)) P := by
+  have hsum : HasLaw (β + ε) (gaussianReal (b + 0) (κ2 + V)) P :=
+    ⟨(hmβ.add hmε).aemeasurable, gaussianReal_add_gaussianReal_of_indepFun h01 hβ hε⟩
+  have h2 : IndepFun (β + ε) (-bh) P := hind.comp measurable_id measurable_neg
+  have hsum2 := gaussianReal_add_gaussianReal_of_indepFun h2 hsum (gaussianReal_neg hb)
+  have hlaw : HasLaw (β + ε + -bh) (gaussianReal (b + 0 + -b) (κ2 + V + s2)) P :=
+    ⟨((hmβ.add hmε).add hmb.neg).aemeasurable, hsum2⟩
+  have := gaussianReal_const_add hlaw d
+  convert this using 2
+  · simp only [Pi.add_apply, Pi.neg_apply]; ring
+  · ring
+
+omit [IsProbabilityMeasure P] in
+/-- **Bias adjustment of one estimate: Gaussian law** (TSD 3, Section 5.2, equation (9)). The
+special case of `adjusted_hasLaw_of_indepFun` in which `β ~ N(b, κ²)`, `ε ~ N(0, V)` and
+`b̂ ~ N(b, s²)` are mutually independent: the adjusted estimate has law `N(d, κ² + V + s²)`. -/
 theorem adjusted_hasLaw {β ε bh : Ω → ℝ} (d b : ℝ) (κ2 V s2 : ℝ≥0) (hmβ : Measurable β)
     (hmε : Measurable ε) (hmb : Measurable bh) (hind : iIndepFun ![β, ε, bh] P)
     (hβ : HasLaw β (gaussianReal b κ2) P) (hε : HasLaw ε (gaussianReal 0 V) P)
@@ -105,19 +190,10 @@ theorem adjusted_hasLaw {β ε bh : Ω → ℝ} (d b : ℝ) (κ2 V s2 : ℝ≥0)
   have hmeas : ∀ i, Measurable (![β, ε, bh] i) := fun i => by
     fin_cases i <;> simpa
   have h01 : IndepFun β ε P := by simpa using hind.indepFun (i := 0) (j := 1) (by decide)
-  have hsum : HasLaw (β + ε) (gaussianReal (b + 0) (κ2 + V)) P :=
-    ⟨(hmβ.add hmε).aemeasurable, gaussianReal_add_gaussianReal_of_indepFun h01 hβ hε⟩
-  have h2 : IndepFun (β + ε) (-bh) P := by
-    have := (hind.indepFun_prodMk hmeas 0 1 2 (by decide) (by decide)).comp
-      (measurable_fst.add measurable_snd) measurable_neg
-    exact this
-  have hsum2 := gaussianReal_add_gaussianReal_of_indepFun h2 hsum (gaussianReal_neg hb)
-  have hlaw : HasLaw (β + ε + -bh) (gaussianReal (b + 0 + -b) (κ2 + V + s2)) P :=
-    ⟨((hmβ.add hmε).add hmb.neg).aemeasurable, hsum2⟩
-  have := gaussianReal_const_add hlaw d
-  convert this using 2
-  · simp only [Pi.add_apply, Pi.neg_apply]; ring
-  · ring
+  have h2 : IndepFun (β + ε) bh P :=
+    (hind.indepFun_prodMk hmeas 0 1 2 (by decide) (by decide)).comp
+      (measurable_fst.add measurable_snd) measurable_id
+  exact adjusted_hasLaw_of_indepFun d b κ2 V s2 hmβ hmε hmb h01 h2 hβ hε hb
 
 /-- **Down-weighting.** The inverse-variance weight `1 / (V + κ² + s²)` of an adjusted estimate
 is below the weight `1 / V` of the unadjusted one whenever the bias distribution has positive
@@ -175,9 +251,12 @@ theorem variance_shared_adjustment {k : ℕ} {y : Fin k → Ω → ℝ} {bh : Ω
 /-- **Shared adjustment: the nominal pooled variance is too small.** With `k ≥ 2` trials, a
 common bias estimate of variance `s² > 0`, and the inverse-variance weights computed from the
 nominal variances `Wᵢ = Var(yᵢ) + s²`, the actual variance of the pooled adjusted estimate
-exceeds the nominal value `ivPooledVariance W` (it equals it plus `s² (1 - ∑ cᵢ²)`). So the
-optimality of `ivPooled_mean_variance` needs independent adjustments (a separate bias estimate
-per trial, or `s² = 0`). -/
+exceeds the nominal value `ivPooledVariance W` (it equals it plus `s² (1 - ∑ cᵢ²)`). The
+statement is about the reported variance: the variance formula of `ivPooled_mean_variance`
+needs independent adjustments. The choice of weights is a separate matter; by
+`ivWeights_minimize_shared` the weights proportional to `1 / Var(yᵢ)` (not to `1 / Wᵢ`) are
+optimal under a shared adjustment, and when the `Var(yᵢ)` are equal the nominal weights are the
+optimal ones. -/
 theorem ivPooledVariance_lt_shared {k : ℕ} (hk : 2 ≤ k) {y : Fin k → Ω → ℝ} {bh : Ω → ℝ}
     (hy : ∀ i, MemLp (y i) 2 P) (hb : MemLp bh 2 P)
     (hind : Pairwise fun i j => IndepFun (y i) (y j) P) (hcov : ∀ i, cov[y i, bh; P] = 0)
@@ -220,6 +299,26 @@ theorem ivPooledVariance_lt_shared {k : ℕ} (hk : 2 ≤ k) {y : Fin k → Ω �
   rw [hfov'] at this
   nlinarith
 
+/-- **Optimal weights under a shared adjustment.** Under the hypotheses of
+`variance_shared_adjustment`, with `k ≥ 1` trials of positive variances `Var(yᵢ) > 0`, every
+weighted average `∑ᵢ cᵢ (yᵢ - b̂)` with `∑ᵢ cᵢ = 1` has variance at least
+`ivPooledVariance (Var y) + Var(b̂)`, and the inverse-variance weights
+`cᵢ ∝ 1 / Var(yᵢ)` of the unadjusted estimates attain it. The shared term `Var(b̂)` does not
+depend on the weights, so it does not change which weights are optimal. -/
+theorem ivWeights_minimize_shared {k : ℕ} (hk : 0 < k) {y : Fin k → Ω → ℝ} {bh : Ω → ℝ}
+    (hy : ∀ i, MemLp (y i) 2 P) (hb : MemLp bh 2 P)
+    (hind : Pairwise fun i j => IndepFun (y i) (y j) P) (hcov : ∀ i, cov[y i, bh; P] = 0)
+    (hV : ∀ i, 0 < Var[y i; P]) {c : Fin k → ℝ} (hc : ∑ i, c i = 1) :
+    ivPooledVariance (fun i => Var[y i; P]) + Var[bh; P] ≤
+        Var[fun ω => ∑ i, c i * (y i ω - bh ω); P] ∧
+      Var[fun ω => ∑ i, (1 / Var[y i; P]) / ivTotalWeight (fun i => Var[y i; P]) *
+          (y i ω - bh ω); P] = ivPooledVariance (fun i => Var[y i; P]) + Var[bh; P] := by
+  obtain ⟨hsum, hfov⟩ := firstOrderVariance_ivWeights hV hk
+  refine ⟨?_, ?_⟩
+  · rw [variance_shared_adjustment hy hb hind hcov hc]
+    linarith [ivPooledVariance_le hV hk hc]
+  · rw [variance_shared_adjustment hy hb hind hcov hsum, hfov]
+
 /-! ### Lower-quality trials with a free mean bias -/
 
 /-- **Weighted sum of squares about a point.** For positive variances,
@@ -254,9 +353,13 @@ distribution, but it would add nothing to our knowledge of the true treatment ef
 fixed effect model with known variances, high-quality estimates `yh i` of `d` and lower-quality
 estimates `yl i` of `d + b₀` with an unrestricted mean bias `b₀`, the weighted least squares
 estimate of `(d, b₀)` is unique and equals `d̂ = ivPooled yh Vh`, the pooled high-quality
-estimate, which does not involve the lower-quality data, and `b̂₀ = ivPooled yl Vl - d̂`. For
-normal estimates the log-likelihood is `-1/2` times this criterion plus a constant, so this is
-also the maximum likelihood estimate; the likelihood itself is not formalized here. -/
+estimate, which does not involve the lower-quality data, and `b̂₀ = ivPooled yl Vl - d̂`. When
+the estimates are independent normal with the stated variances (a product likelihood with
+diagonal covariance), the log-likelihood is `-1/2` times this criterion plus a constant, so
+this is also the maximum likelihood estimate; with correlated estimates the likelihood involves
+the full inverse covariance matrix and this diagonal criterion is not it. The likelihood itself
+is not formalized here. At least one high-quality trial is needed: without one the effect is
+not identified (`biasModelCriterion_shift_of_no_high`). -/
 theorem biasModelCriterion_min {m n : ℕ} (hm : 0 < m) (hn : 0 < n) {yh Vh : Fin m → ℝ}
     {yl Vl : Fin n → ℝ} (hVh : ∀ i, 0 < Vh i) (hVl : ∀ i, 0 < Vl i) (d b₀ : ℝ) :
     biasModelCriterion yh Vh yl Vl (ivPooled yh Vh) (ivPooled yl Vl - ivPooled yh Vh) ≤
@@ -289,6 +392,17 @@ theorem biasModelCriterion_min {m n : ℕ} (hm : 0 < m) (hn : 0 < n) {yh Vh : Fi
   rw [mul_eq_zero, or_iff_right hTh.ne', sq_eq_zero_iff, sub_eq_zero] at e1
   rw [mul_eq_zero, or_iff_right hTl.ne', sq_eq_zero_iff, sub_eq_zero] at e2
   exact ⟨e1.symm, by linarith⟩
+
+/-- **Lower-quality trials alone do not identify the effect.** With no high-quality trial
+(`m = 0`) the criterion depends on `(d, b₀)` only through `d + b₀`: it is invariant under
+`(d, b₀) ↦ (d + t, b₀ - t)` for every `t`, so every effect `d` attains the minimum value
+together with a suitable mean bias. Only the criterion is stated here; the observed law, in
+which each lower-quality estimate has mean `d + b₀`, is not formalized. -/
+theorem biasModelCriterion_shift_of_no_high {n : ℕ} (yh Vh : Fin 0 → ℝ) (yl Vl : Fin n → ℝ)
+    (d b₀ t : ℝ) :
+    biasModelCriterion yh Vh yl Vl (d + t) (b₀ - t) = biasModelCriterion yh Vh yl Vl d b₀ := by
+  simp only [biasModelCriterion, Finset.univ_eq_empty, Finset.sum_empty, zero_add]
+  exact Finset.sum_congr rfl fun i _ => by ring_nf
 
 /-- **Countermodel: ignoring the bias.** With one high-quality estimate `0` and one
 lower-quality estimate `1`, both of variance `1`, the free-bias model estimates `d̂ = 0`
@@ -343,8 +457,8 @@ theorem wlsIntercept_eq_sum {k : ℕ} (w x y : Fin k → ℝ) (h : ∑ j, w j �
   rw [h2, h3, wlsIntercept, wlsSlope, h1, wMean]
 
 /-- **The intercept reproduces lines.** If `yᵢ = d + γ xᵢ` exactly, with positive total weight
-and `Sxx ≠ 0` (the regressor is not constant on the support of the weights), the weighted least
-squares intercept is `d` and the slope is `γ`. -/
+and `Sxx ≠ 0` (for nonnegative weights: the regressor is not constant on their support), the
+intercept formula is `d` and the slope is `γ`. -/
 theorem wlsIntercept_line {k : ℕ} {w x : Fin k → ℝ} (hw : 0 < ∑ i, w i) (hS : wSxx w x ≠ 0)
     (d γ : ℝ) : wlsSlope w x (fun i => d + γ * x i) = γ ∧
       wlsIntercept w x (fun i => d + γ * x i) = d := by
@@ -359,13 +473,104 @@ theorem wlsIntercept_line {k : ℕ} {w x : Fin k → ℝ} (hw : 0 < ∑ i, w i) 
     exact Finset.sum_congr rfl fun i _ => by ring
   exact ⟨hs, by rw [wlsIntercept, hs, hm]; ring⟩
 
+/-- The weighted least squares objective `∑ᵢ wᵢ (yᵢ - a - b xᵢ)²` of a line `a + b x`. -/
+noncomputable def wlsRSS {k : ℕ} (w x y : Fin k → ℝ) (a b : ℝ) : ℝ :=
+  ∑ i, w i * (y i - a - b * x i) ^ 2
+
+/-- **The weighted least squares decomposition.** With positive total weight and `Sxx ≠ 0`, the
+objective at `(a, b)` is its value at the formula `(wlsIntercept, wlsSlope)` plus
+`(∑ w) (ŷ_w(a, b))² + Sxx (b - b̂)²`, where `ŷ_w(a, b) = â - a + (b̂ - b) x̄_w` is the gap
+between the two lines at the weighted mean regressor. -/
+theorem wlsRSS_eq {k : ℕ} (w x y : Fin k → ℝ) (hw : ∑ i, w i ≠ 0) (hS : wSxx w x ≠ 0)
+    (a b : ℝ) :
+    wlsRSS w x y a b = wlsRSS w x y (wlsIntercept w x y) (wlsSlope w x y) +
+      (∑ i, w i) * (wlsIntercept w x y - a + (wlsSlope w x y - b) * wMean w x) ^ 2 +
+      wSxx w x * (wlsSlope w x y - b) ^ 2 := by
+  set S0 := ∑ i, w i
+  set Sx := ∑ i, w i * x i
+  set Sy := ∑ i, w i * y i
+  set Sxx := ∑ i, w i * x i ^ 2
+  set Sxy := ∑ i, w i * x i * y i
+  set Syy := ∑ i, w i * y i ^ 2
+  have hR : ∀ a b, wlsRSS w x y a b =
+      Syy - 2 * a * Sy - 2 * b * Sxy + a ^ 2 * S0 + 2 * a * b * Sx + b ^ 2 * Sxx := by
+    intro a b
+    simp only [wlsRSS, Syy, Sy, Sxy, S0, Sx, Sxx, Finset.mul_sum, ← Finset.sum_sub_distrib,
+      ← Finset.sum_add_distrib]
+    exact Finset.sum_congr rfl fun i _ => by ring
+  have hmx : wMean w x = Sx / S0 := rfl
+  have hmy : wMean w y = Sy / S0 := rfl
+  have hSxx : wSxx w x = Sxx - Sx ^ 2 / S0 := by
+    have : wSxx w x = Sxx - 2 * wMean w x * Sx + wMean w x ^ 2 * S0 := by
+      simp only [wSxx, Sxx, Sx, S0, Finset.mul_sum, ← Finset.sum_sub_distrib,
+        ← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun i _ => by ring
+    rw [this, hmx]; field_simp; ring
+  have hSxy : ∑ i, w i * (x i - wMean w x) * (y i - wMean w y) = Sxy - Sx * Sy / S0 := by
+    have : ∑ i, w i * (x i - wMean w x) * (y i - wMean w y) =
+        Sxy - wMean w x * Sy - wMean w y * Sx + wMean w x * wMean w y * S0 := by
+      simp only [Sxy, Sy, Sx, S0, Finset.mul_sum, ← Finset.sum_sub_distrib,
+        ← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun i _ => by ring
+    rw [this, hmx, hmy]; field_simp; ring
+  have hb : wlsSlope w x y = (Sxy - Sx * Sy / S0) / wSxx w x := by rw [wlsSlope, hSxy]
+  have ha : wlsIntercept w x y = Sy / S0 - wlsSlope w x y * (Sx / S0) := by
+    rw [wlsIntercept, hmx, hmy]
+  have hD : S0 * Sxx - Sx ^ 2 ≠ 0 := by
+    intro h; apply hS; rw [hSxx]; field_simp; linarith
+  have hb' : wlsSlope w x y = (S0 * Sxy - Sx * Sy) / (S0 * Sxx - Sx ^ 2) := by
+    rw [hb, hSxx]; field_simp
+  have hSxx' : wSxx w x = (S0 * Sxx - Sx ^ 2) / S0 := by rw [hSxx]; field_simp
+  rw [hR, hR, ha, hmx, hb', hSxx']
+  field_simp
+  ring
+
+/-- **The formula minimizes the weighted least squares objective.** For weights with positive
+total and positive weighted spread of the regressor (`0 < Sxx`), `(wlsIntercept, wlsSlope)`
+minimizes `wlsRSS` and is its unique minimizer. For nonnegative weights `0 < Sxx` says that the
+regressor is not constant on the support of the weights; the sign of the individual weights is
+not used. With `Sxx < 0` (possible only for signed weights) the objective is unbounded below
+(`wlsRSS_signed_example`), and the formula then has no least squares reading. -/
+theorem wlsRSS_le {k : ℕ} {w x : Fin k → ℝ} (y : Fin k → ℝ)
+    (hw : 0 < ∑ i, w i) (hS : 0 < wSxx w x) (a b : ℝ) :
+    wlsRSS w x y (wlsIntercept w x y) (wlsSlope w x y) ≤ wlsRSS w x y a b ∧
+      (wlsRSS w x y a b = wlsRSS w x y (wlsIntercept w x y) (wlsSlope w x y) →
+        a = wlsIntercept w x y ∧ b = wlsSlope w x y) := by
+  rw [wlsRSS_eq w x y hw.ne' hS.ne' a b]
+  have h1 : 0 ≤ (∑ i, w i) * (wlsIntercept w x y - a + (wlsSlope w x y - b) * wMean w x) ^ 2 :=
+    mul_nonneg hw.le (sq_nonneg _)
+  have h2 : 0 ≤ wSxx w x * (wlsSlope w x y - b) ^ 2 := mul_nonneg hS.le (sq_nonneg _)
+  refine ⟨by linarith, fun h => ?_⟩
+  have e2 : wSxx w x * (wlsSlope w x y - b) ^ 2 = 0 := by linarith
+  have e1 : (∑ i, w i) * (wlsIntercept w x y - a + (wlsSlope w x y - b) * wMean w x) ^ 2 = 0 := by
+    linarith
+  rw [mul_eq_zero, or_iff_right hS.ne', sq_eq_zero_iff, sub_eq_zero] at e2
+  rw [mul_eq_zero, or_iff_right hw.ne', sq_eq_zero_iff, e2, sub_self, zero_mul, add_zero,
+    sub_eq_zero] at e1
+  exact ⟨e1.symm, e2.symm⟩
+
+/-- **Countermodel: signed weights.** With weights `(2, -1)`, study variances `(1, 2)` as the
+regressor and outcomes `0`, the total weight is `1` and `wSxx = -2`, and the objective at
+intercept `0` and slope `b` is `-2 b²`: it has no minimum, although `wlsIntercept_unbiased`
+applies. -/
+theorem wlsRSS_signed_example (b : ℝ) :
+    ∑ i, ![(2 : ℝ), -1] i = 1 ∧ wSxx ![2, -1] ![1, 2] = -2 ∧
+      wlsRSS ![2, -1] ![1, 2] ![0, 0] 0 b = -2 * b ^ 2 := by
+  simp only [wSxx, wMean, wlsRSS, Fin.sum_univ_two, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_fin_one]
+  refine ⟨by norm_num, by norm_num, by ring⟩
+
 omit [IsProbabilityMeasure P] in
 /-- **The small-study intercept is unbiased** (TSD 3, Section 5.3: the true treatment effect
 "is taken to be the intercept in a regression of the treatment effect against the study
 variance", following Moreno and colleagues). Let the study estimates `Yᵢ` be integrable with
 `E Yᵢ = d + γ Vᵢ` (a bias linear in the known study variance `Vᵢ`, the effect of a study of
-infinite size being `d`), and take weights `w` with positive total and a nonconstant regressor
-(`Sxx ≠ 0`). Then the weighted least squares intercept of `Y` on `V` is unbiased for `d`. -/
+infinite size being `d`), and take weights `w` with positive total and `Sxx ≠ 0`. Then the
+intercept formula `wlsIntercept` applied to `Y` and `V` is unbiased for `d`. This is a statement
+about the formula, valid for signed weights. It is the weighted least squares intercept, the
+unique minimizer of `wlsRSS`, when moreover `0 < Sxx` (`wlsRSS_le`), for instance for
+nonnegative weights and study variances not all equal on the support of the weights; with
+`Sxx < 0` the objective has no minimum (`wlsRSS_signed_example`). -/
 theorem wlsIntercept_unbiased {k : ℕ} {w Vs : Fin k → ℝ} (hw : 0 < ∑ i, w i)
     (hS : wSxx w Vs ≠ 0) {Y : Fin k → Ω → ℝ} (hY : ∀ i, Integrable (Y i) P) (d γ : ℝ)
     (hmean : ∀ i, P[Y i] = d + γ * Vs i) :
