@@ -109,3 +109,4 @@ public import CausalInference.Graphical.Criteria.Moralization
 public import CausalInference.Graphical.Criteria.SequentialBackDoor
 public import CausalInference.SCM.DoCalculus
 public import CausalInference.SCM.DoCalculusExamples
+public import CausalInference.BiasAnalysis.SelectionAdjustment
