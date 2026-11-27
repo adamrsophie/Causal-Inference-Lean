@@ -67,7 +67,10 @@ probability (`CausalInference.IsConsistent`).
   fair coins with an exogenous instrument, an error independent of instrument and treatment and
   a zero first stage, in which the sample covariance ratio is not consistent for `β`: by an
   exchange of treatment and error in every draw, it is at least `1` in absolute value with
-  probability at least `1/16` at every even sample size.
+  probability at least `1/16` at every even sample size. By a flip of the error in every draw,
+  which negates the ratio, it is consistent for no constant at all
+  (`IVConsistencyExample.threeCoins_not_isConsistent_const`,
+  `IVConsistencyExample.exists_relevance_only_countermodel_const`).
 
 The finite sample bias of the IV estimator, which the source also mentions, is not formalized:
 the ratio need not even have a finite mean.
@@ -793,7 +796,8 @@ second moments, an exogenous instrument (`Cov(Z, U) = 0`), an error independent 
 instrument and treatment, and a zero first stage `Cov(Z, D) = 0`; the outcome is `Y = U` and the
 structural slope is `β = 0`. The sample covariance ratio is not consistent for `β`: at every
 even sample size it is at least `1` in absolute value with probability at least `1/16`
-(`IVConsistencyExample.measureReal_bigRatio`). -/
+(`IVConsistencyExample.measureReal_bigRatio`). It is consistent for no other constant either
+(`IVConsistencyExample.threeCoins_not_isConsistent_const`). -/
 theorem threeCoins_not_isConsistent (hX : IsIIDSample X μ) (hm : ∀ i, Measurable (X i))
     (hlaw : ∀ i, HasLaw (X i) coins3 μ) :
     (threeCoins X).SecondMoments μ ∧ (threeCoins X).Exogeneity μ ∧
@@ -851,13 +855,105 @@ theorem threeCoins_not_isConsistent (hX : IsIIDSample X μ) (hm : ∀ i, Measura
     ← ofReal_measureReal]
   exact ENNReal.ofReal_le_ofReal (measureReal_bigRatio ⟨N + 1, by ring⟩ (by omega))
 
+/-- The flip of the error in a draw, `((z, d), u) ↦ ((z, d), ¬u)`, which codes `U ↦ 1 - U`. -/
+def flipU (o : (Bool × Bool) × Bool) : (Bool × Bool) × Bool := (o.1, !o.2)
+
+theorem measurePreserving_flipU : MeasurePreserving flipU coins3 coins3 := by
+  refine ⟨measurable_of_countable _, Measure.ext_of_singleton fun x ↦ ?_⟩
+  rw [Measure.map_apply (measurable_of_countable _) (measurableSet_singleton _)]
+  have h : flipU ⁻¹' {x} = {flipU x} := by
+    ext ⟨⟨a, b⟩, c⟩
+    obtain ⟨⟨a', b'⟩, c'⟩ := x
+    cases c <;> cases c' <;> simp [flipU]
+  rw [h, coins3_singleton, coins3_singleton]
+
+/-- The flip of the error negates the plug-in covariance of instrument and error. -/
+theorem vcov_flipU {n : ℕ} (x : Fin n → (Bool × Bool) × Bool) :
+    vcov zc uc (fun i ↦ flipU (x i)) = -vcov zc uc x := by
+  have hu : ∀ o, uc (flipU o) = 1 - uc o := by
+    rintro ⟨⟨a, b⟩, c⟩; cases c <;> simp [uc, flipU]
+  have hz : ∀ o, zc (flipU o) = zc o := fun _ ↦ rfl
+  simp only [vcov, hu, hz, mul_sub, mul_one, Finset.sum_sub_distrib, Finset.sum_const,
+    Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+  rcases eq_or_ne n 0 with rfl | hn
+  · simp
+  · have hn' : (n : ℝ) ≠ 0 := Nat.cast_ne_zero.2 hn
+    field_simp
+    ring
+
+/-- The flip of the error preserves the law of the draws and turns the event
+`ε ≤ |R - c|` for the ratio `R = Ĉov(Z, U) / Ĉov(Z, D)` into `ε ≤ |R + c|`. -/
+theorem piCoins3_flip_dist (n : ℕ) (c ε : ℝ) :
+    piCoins3 n {x | ε ≤ |vcov zc uc x / vcov zc dc x - c|} =
+      piCoins3 n {x | ε ≤ |vcov zc uc x / vcov zc dc x - -c|} := by
+  have hfl : MeasurePreserving (fun x (i : Fin n) ↦ flipU (x i)) (piCoins3 n) (piCoins3 n) :=
+    measurePreserving_pi _ _ fun _ ↦ measurePreserving_flipU
+  have hpre : (fun x (i : Fin n) ↦ flipU (x i)) ⁻¹'
+      {x | ε ≤ |vcov zc uc x / vcov zc dc x - -c|} =
+      {x | ε ≤ |vcov zc uc x / vcov zc dc x - c|} := by
+    ext x
+    have hd : vcov zc dc (fun i ↦ flipU (x i)) = vcov zc dc x := rfl
+    simp only [Set.mem_preimage, Set.mem_ofPred_eq, vcov_flipU, hd]
+    rw [neg_div, sub_neg_eq_add, ← abs_neg]
+    ring_nf
+  rw [← hpre, hfl.measure_preimage (Set.to_countable _).measurableSet.nullMeasurableSet]
+
+omit [IsProbabilityMeasure μ] in
+theorem measure_dist_sampleCovRatio (hX : IsIIDSample X μ) (hm : ∀ i, Measurable (X i))
+    (hlaw : ∀ i, HasLaw (X i) coins3 μ) (n : ℕ) (c ε : ℝ) :
+    μ {ω | ε ≤ dist (sampleCovRatio zc uc dc X n ω) c} =
+      piCoins3 n {x | ε ≤ |vcov zc uc x / vcov zc dc x - c|} := by
+  have hset : {ω | ε ≤ dist (sampleCovRatio zc uc dc X n ω) c} =
+      (fun ω (i : Fin n) ↦ X i ω) ⁻¹' {x | ε ≤ |vcov zc uc x / vcov zc dc x - c|} := by
+    ext ω
+    simp [sampleCovRatio, sampleCov_eq_vcov, Real.dist_eq]
+  rw [hset, ← Measure.map_apply (Measurable.of_eval fun i : Fin n ↦ hm i)
+    (Set.to_countable _).measurableSet, map_sample_eq_piCoins3 hX hm hlaw]
+
+/-- **The sample IV estimator of the three-coin model is consistent for no constant.** On an
+i.i.d. sample of three fair coins, where only relevance fails, the sample covariance ratio
+`Ĉov(Z, U) / Ĉov(Z, D)` is consistent for no `c`. The flip of the error in every draw preserves
+the law of the sample and negates the ratio, so consistency for `c` would give consistency for
+`-c`; the two limits force `c = 0`, which `threeCoins_not_isConsistent` excludes. -/
+theorem threeCoins_not_isConsistent_const (hX : IsIIDSample X μ) (hm : ∀ i, Measurable (X i))
+    (hlaw : ∀ i, HasLaw (X i) coins3 μ) (c : ℝ) :
+    ¬ IsConsistent (sampleCovRatio zc uc dc X) c μ := by
+  intro hc
+  rcases eq_or_ne c 0 with rfl | h0
+  · exact (threeCoins_not_isConsistent hX hm hlaw).2.2.2.2.2.2 hc
+  have hpos : 0 < |c| := abs_pos.2 h0
+  rw [IsConsistent, tendstoInMeasure_iff_dist] at hc
+  have h1 := hc |c| hpos
+  have h2 : Tendsto (fun n ↦ μ {ω | |c| ≤ dist (sampleCovRatio zc uc dc X n ω) (-c)}) atTop
+      (𝓝 0) := by
+    refine h1.congr fun n ↦ ?_
+    rw [measure_dist_sampleCovRatio hX hm hlaw, measure_dist_sampleCovRatio hX hm hlaw,
+      piCoins3_flip_dist]
+  have hcov : ∀ n, (1 : ℝ≥0∞) ≤ μ {ω | |c| ≤ dist (sampleCovRatio zc uc dc X n ω) c} +
+      μ {ω | |c| ≤ dist (sampleCovRatio zc uc dc X n ω) (-c)} := fun n ↦ by
+    refine (measure_univ (μ := μ)).symm.le.trans ((measure_mono fun ω _ ↦ ?_).trans
+      (measure_union_le _ _))
+    simp only [Set.mem_union, Set.mem_ofPred_eq, Real.dist_eq]
+    by_contra! h
+    have := abs_add_le (c - sampleCovRatio zc uc dc X n ω) (sampleCovRatio zc uc dc X n ω - -c)
+    rw [abs_sub_comm] at h
+    have e : c - sampleCovRatio zc uc dc X n ω + (sampleCovRatio zc uc dc X n ω - -c) = 2 * c := by
+      ring
+    rw [e, abs_mul, abs_two] at this
+    linarith [h.1, h.2]
+  have hsum := h1.add h2
+  rw [add_zero] at hsum
+  have := ge_of_tendsto' hsum hcov
+  simp at this
+
 end Sample
 
 /-- **A countermodel in which only relevance fails.** There is a linear instrumental variable
 model `Y = α + β D + U` with finite second moments, an exogenous instrument, an error independent
 of the treatment and of the instrument, and a zero first stage, together with an i.i.d. sample
 whose first observation carries it, such that the sample covariance ratio is not consistent for
-the true slope `β`. The model is `threeCoins` on an i.i.d. sample of three fair coins. -/
+the true slope `β`. The model is `threeCoins` on an i.i.d. sample of three fair coins; for
+non-consistency for every constant see `exists_relevance_only_countermodel_const`. -/
 theorem exists_relevance_only_countermodel :
     ∃ Ω : Type, ∃ _ : MeasurableSpace Ω, ∃ μ : Measure Ω,
       ∃ X : ℕ → Ω → (Bool × Bool) × Bool, ∃ L : LinearIVModel Ω,
@@ -868,6 +964,23 @@ theorem exists_relevance_only_countermodel :
   obtain ⟨Ω, _, μ, X, hμ, hm, hX, hlaw⟩ := exists_isIIDSample coins3
   obtain ⟨h1, h2, h3, h4, h5, -, h7⟩ := threeCoins_not_isConsistent hX hm hlaw
   exact ⟨Ω, _, μ, X, threeCoins X, hμ, hX, rfl, rfl, h5, h1, h2, h3, h4, h7⟩
+
+/-- **A countermodel in which only relevance fails, for every constant.** There is a linear
+instrumental variable model with finite second moments, an exogenous instrument, an error
+independent of the treatment and of the instrument, and a zero first stage, together with an
+i.i.d. sample whose first observation carries it, such that the sample covariance ratio is
+consistent for no constant `c`, the true slope `β` included. -/
+theorem exists_relevance_only_countermodel_const :
+    ∃ Ω : Type, ∃ _ : MeasurableSpace Ω, ∃ μ : Measure Ω,
+      ∃ X : ℕ → Ω → (Bool × Bool) × Bool, ∃ L : LinearIVModel Ω,
+        IsProbabilityMeasure μ ∧ IsIIDSample X μ ∧ L.Z = (fun ω ↦ zc (X 0 ω)) ∧
+        L.D = (fun ω ↦ dc (X 0 ω)) ∧ L.Y = (fun ω ↦ uc (X 0 ω)) ∧ L.SecondMoments μ ∧
+        L.Exogeneity μ ∧ IndepFun (fun ω ↦ (L.Z ω, L.D ω)) L.U μ ∧ cov[L.Z, L.D; μ] = 0 ∧
+        ∀ c, ¬ IsConsistent (sampleCovRatio zc uc dc X) c μ := by
+  obtain ⟨Ω, _, μ, X, hμ, hm, hX, hlaw⟩ := exists_isIIDSample coins3
+  obtain ⟨h1, h2, h3, h4, h5, -, -⟩ := threeCoins_not_isConsistent hX hm hlaw
+  exact ⟨Ω, _, μ, X, threeCoins X, hμ, hX, rfl, rfl, h5, h1, h2, h3, h4,
+    threeCoins_not_isConsistent_const hX hm hlaw⟩
 
 end IVConsistencyExample
 
