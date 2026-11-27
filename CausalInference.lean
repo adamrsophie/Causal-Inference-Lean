@@ -54,3 +54,12 @@ public import CausalInference.MissingData.Basic
 public import CausalInference.MissingData.Counterexamples
 public import CausalInference.MissingData.Mechanisms
 public import CausalInference.MissingData.Weighting
+public import CausalInference.Basic.FiniteCondIndep
+public import CausalInference.Basic.FiniteDistribution
+public import CausalInference.Graphical.Factorization
+public import CausalInference.Graphical.LocalMarkov
+public import CausalInference.Longitudinal.Basic
+public import CausalInference.Longitudinal.Counterexamples
+public import CausalInference.Longitudinal.GFormula
+public import CausalInference.Longitudinal.TwoTime
+public import CausalInference.Longitudinal.Weighting
