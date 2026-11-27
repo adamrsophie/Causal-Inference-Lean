@@ -74,3 +74,6 @@ public import CausalInference.Measures.EffectMeasures
 public import CausalInference.Measures.Examples
 public import CausalInference.Measures.Simpson
 public import CausalInference.Interference.DesignBridge
+public import CausalInference.Bias.HazardRatio
+public import CausalInference.Bias.Misclassification
+public import CausalInference.Bias.Selection
