@@ -24,8 +24,10 @@ set of vertices.
 
 ## Main results
 
-* Decidable membership in `G.ancestorsOf S` and `G.descendantsOf S` for a finite vertex type,
-  decidable adjacency, and decidable `S`, usable by `decide`.
+* Decidable membership in `G.parents v` and `G.children v` for decidable adjacency, and in
+  `G.ancestors v`, `G.descendants v`, `G.nonDescendants v`, `G.ancestorsOf S` and
+  `G.descendantsOf S` for a finite vertex type, decidable adjacency, and decidable `S`, usable
+  by `decide`.
 * `Digraph.ancestorsOf_eq_union_iUnion_ancestors`: `G.ancestorsOf S = S ∪ ⋃ s ∈ S, G.ancestors s`,
   and `Digraph.ancestorsOf_eq_iUnion_singleton`; likewise for descendants.
 * `Digraph.isAncestral_iff_forall_adj`: a set is ancestral exactly when it contains every parent
@@ -291,6 +293,22 @@ theorem IsAcyclic.parents_subset_nonDescendants (hG : G.IsAcyclic) (v : V) :
 
 end NonDescendants
 
+/-! ### Decidable membership in parents and children -/
+
+section DecidableAdj
+
+variable (G : Digraph V) [DecidableRel G.Adj]
+
+/-- Membership in the parents of `v` is decidable when adjacency is. -/
+instance decidablePredMemParents (v : V) : DecidablePred (· ∈ G.parents v) :=
+  fun u => inferInstanceAs (Decidable (G.Adj u v))
+
+/-- Membership in the children of `v` is decidable when adjacency is. -/
+instance decidablePredMemChildren (v : V) : DecidablePred (· ∈ G.children v) :=
+  fun w => inferInstanceAs (Decidable (G.Adj v w))
+
+end DecidableAdj
+
 /-! ### Finite vertex types: decidability and finsets -/
 
 section Finite
@@ -308,6 +326,21 @@ with decidable adjacency; it is computed from the saturation `reachFinset`. -/
 instance decidablePredMemDescendantsOf (S : Set V) [DecidablePred (· ∈ S)] :
     DecidablePred (· ∈ G.descendantsOf S) := fun w =>
   decidable_of_iff (∃ s, s ∈ S ∧ w ∈ G.reachFinset s) (by simp)
+
+/-- Membership in the strict ancestors of `v` is decidable on a finite vertex type with
+decidable adjacency. -/
+instance decidablePredMemAncestors (v : V) : DecidablePred (· ∈ G.ancestors v) :=
+  fun u => inferInstanceAs (Decidable (G.IsAncestor u v))
+
+/-- Membership in the strict descendants of `v` is decidable on a finite vertex type with
+decidable adjacency. -/
+instance decidablePredMemDescendants (v : V) : DecidablePred (· ∈ G.descendants v) :=
+  fun w => inferInstanceAs (Decidable (G.IsAncestor v w))
+
+/-- Membership in the non-descendants of `v` is decidable on a finite vertex type with
+decidable adjacency. -/
+instance decidablePredMemNonDescendants (v : V) : DecidablePred (· ∈ G.nonDescendants v) :=
+  fun u => inferInstanceAs (Decidable (u ∉ G.descendantsOf {v}))
 
 /-- Being ancestral is decidable, through the closure test `isAncestral_iff_forall_adj`. -/
 instance decidableIsAncestral (S : Set V) [DecidablePred (· ∈ S)] :

@@ -152,5 +152,10 @@ example : six.DSep {1} {5} {0, 2, 3} := by decide
 example : ¬ six.DSep {1} {5} {0, 2, 4} := by decide
 -- The local Markov statement at `3`: its parent `1` separates it from its non-descendants.
 example : six.DSep {3} {0, 2, 5} {1} := by decide
+-- The local Markov statement in the library vocabulary, at every vertex.
+example : ∀ v, six.DSep {v} (six.nonDescendants v) (six.parents v) := by decide
+-- The decision procedure also answers the trail and simple-path forms of d-connection.
+example : chain.DConnPath {0} {2} ∅ := by decide
+example : ¬ chain.DConnTrail {0} {2} {1} := by decide
 
 end CausalInference.DSeparationExamples

@@ -5,6 +5,7 @@ Authors: Adam R Sophie
 -/
 module
 
+public import CausalInference.Graphical.Closure
 public import CausalInference.Graphical.DSeparation
 
 /-!
@@ -35,6 +36,9 @@ d-separation on finite graphs.
 * `Decidable (G.DSep X Y Z)` for a finite vertex type with decidable adjacency and decidable
   membership in `X`, `Y`, `Z`; it computes reachability in the finite state graph `V × Bool`
   with `Digraph.reachFinset`, so `decide` works on concrete graphs.
+* `Decidable (G.DConnTrail X Y Z)` and `Decidable (G.DConnPath X Y Z)`, through the two
+  equivalences above. Membership in `G.ancestorsOf Z` is decided by the instance of
+  `CausalInference.Graphical.Closure`.
 
 See Pearl (2009), *Causality*, section 1.2.3, and Shachter (1998), *Bayes-Ball*.
 -/
@@ -232,10 +236,6 @@ section Decidable
 
 variable (G) [Fintype V] [DecidableEq V] [DecidableRel G.Adj]
 
-instance decidableMemAncestorsOf (S : Set V) [DecidablePred (· ∈ S)] :
-    DecidablePred (· ∈ G.ancestorsOf S) :=
-  fun u => decidable_of_iff (∃ s, s ∈ S ∧ ReflTransGen G.Adj u s) (by simp)
-
 instance decidablePasses (Z : Set V) [DecidablePred (· ∈ Z)] (v : V) (b c : Bool) :
     Decidable (G.Passes Z v b c) :=
   inferInstanceAs (Decidable (if b = true ∧ c = false then _ else _))
@@ -252,6 +252,16 @@ instance decidableDConn (X Y Z : Set V) [DecidablePred (· ∈ X)] [DecidablePre
 instance decidableDSep (X Y Z : Set V) [DecidablePred (· ∈ X)] [DecidablePred (· ∈ Y)]
     [DecidablePred (· ∈ Z)] : Decidable (G.DSep X Y Z) :=
   inferInstanceAs (Decidable (¬ _))
+
+/-- d-connection by active trails is decidable, through `Digraph.dConn_iff_dConnTrail`. -/
+instance decidableDConnTrail (X Y Z : Set V) [DecidablePred (· ∈ X)] [DecidablePred (· ∈ Y)]
+    [DecidablePred (· ∈ Z)] : Decidable (G.DConnTrail X Y Z) :=
+  decidable_of_iff _ dConn_iff_dConnTrail
+
+/-- d-connection by active simple paths is decidable, through `Digraph.dConn_iff_dConnPath`. -/
+instance decidableDConnPath (X Y Z : Set V) [DecidablePred (· ∈ X)] [DecidablePred (· ∈ Y)]
+    [DecidablePred (· ∈ Z)] : Decidable (G.DConnPath X Y Z) :=
+  decidable_of_iff _ dConn_iff_dConnPath
 
 end Decidable
 
