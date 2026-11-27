@@ -27,8 +27,9 @@ The predictive values `ppvBayes` and `npvBayes` (equations (1) and (2) of TSD 25
 * `posFraction P c = P [c, ∞)`: the fraction testing positive at threshold `c` for a score law
   `P`. With the score law `PD` of the diseased it is the sensitivity `Se(c)`, with the score law
   `PND` of the disease free the false positive fraction `FPF(c)` (Section 2.3).
-* `auc PD PND`: the probability `P(Y_D > Y_ND)` that an independent diseased score exceeds a
-  disease free score (the concordance form of the area under the ROC curve, Section 2.4).
+* `concordance PD PND = P(Y_D > Y_ND)` and `tieProb PD PND = P(Y_D = Y_ND)` for independent
+  diseased and disease free scores; `auc PD PND = P(Y_D > Y_ND) + P(Y_D = Y_ND) / 2`: the
+  concordance form of the area under the ROC curve (Section 2.4), with half weight on ties.
 
 ## Main results
 
@@ -41,18 +42,22 @@ The predictive values `ppvBayes` and `npvBayes` (equations (1) and (2) of TSD 25
   misclassification matrix (`Bias.misclassMatrix_det`), the quantity whose vanishing makes the
   prevalence unidentified (`Bias.prevalence_not_identified`).
 * `npvBayes_strictAntiOn`: the negative predictive value decreases with prevalence when
-  `se < 1` and `0 < sp` (TSD 25, Section 2.2), the counterpart of `ppvBayes_strictMonoOn`;
+  `se < 1` and `0 < sp`, derived here from equation (2) of TSD 25, Section 2.2 (the document
+  does not state the monotonicity); the counterpart of `ppvBayes_strictMonoOn`.
   `npvBayes_perfect_sensitivity` shows that `se < 1` is needed.
 * `posFraction_antitone`, `roc_comonotone`: raising the threshold lowers both the
   sensitivity and the false positive fraction (Section 2.3), so the points of studies that share
   the score laws but use different thresholds are comonotone (Section 3: threshold variation
   makes sensitivity and specificity negatively correlated); `roc_not_comonotone_of_laws` shows
   that the shared laws are needed.
-* `auc_eq_integral`: `auc PD PND = ∫ PD (y, ∞) dPND(y)`; `auc_eq_integral_posFraction`: when
-  every point has `PD` mass zero, `auc PD PND = ∫ Se dPND`, the Lebesgue Stieltjes form
-  `∫ Se d(-FPF)` of the area under the ROC curve, since `FPF(c) = PND [c, ∞)`.
-  `auc_ne_integral_posFraction_of_atom` shows that the formula fails with ties. The change of
-  variables to `∫₀¹ ROC(t) dt` is not stated.
+* `auc_eq_integral`: `auc PD PND = ∫ (PD (y, ∞) + PD {y} / 2) dPND(y)`; `auc_eq_average`:
+  the area is the average of the strict concordance `P(Y_D > Y_ND)` and the weak one
+  `∫ Se dPND`; `auc_eq_concordance_of_tieProb_eq_zero`: without ties it is the strict
+  concordance; `auc_eq_integral_posFraction`: when every point has `PD` mass zero,
+  `auc PD PND = ∫ Se dPND`, the Lebesgue Stieltjes form `∫ Se d(-FPF)` of the area under the
+  ROC curve, since `FPF(c) = PND [c, ∞)`. `auc_ne_integral_posFraction_of_atom`: for two point
+  masses at `0` the area is `1/2` while the strict form is `0` and the weak form `1`. The
+  change of variables to `∫₀¹ ROC(t) dt` is not stated.
 
 ## Sources
 
@@ -175,8 +180,9 @@ theorem odds_one_sub_npvBayes {se sp π : ℝ} (hse : se ≤ 1) (hsp : 0 < sp) (
   rw [odds, sub_sub_cancel, e, npvBayes, lrNeg, odds]
   field_simp
 
-/-- The negative predictive value decreases with prevalence (TSD 25, Section 2.2): for
-`se < 1` and `0 < sp`, `npvBayes se sp` is strictly decreasing on `[0, 1]`. This is the
+/-- The negative predictive value decreases with prevalence: for `se < 1` and `0 < sp`,
+`npvBayes se sp` is strictly decreasing on `[0, 1]`. This is derived here from equation (2) of
+TSD 25, Section 2.2, which prints the formula but not the monotonicity. It is the
 counterpart of `MisclassificationTables.ppvBayes_strictMonoOn`. -/
 theorem npvBayes_strictAntiOn {se sp : ℝ} (hse : se < 1) (hsp : 0 < sp) :
     StrictAntiOn (npvBayes se sp) (Icc 0 1) := by
@@ -240,43 +246,151 @@ theorem roc_not_comonotone_of_laws :
 
 /-! ### The area under the ROC curve (TSD 25, Section 2.4) -/
 
-/-- The area under the ROC curve in concordance form: the probability `P(Y_D > Y_ND)` that a
-diseased score exceeds an independent disease free score, with score laws `PD` and `PND`. -/
-noncomputable def auc (PD PND : Measure ℝ) : ℝ := (PD.prod PND).real {p : ℝ × ℝ | p.2 < p.1}
+/-- The strict concordance probability `P(Y_D > Y_ND)`: the probability that a diseased score
+exceeds an independent disease free score, with score laws `PD` and `PND`. It is the area under
+the ROC curve only when ties have probability zero (`auc_eq_concordance_of_tieProb_eq_zero`). -/
+noncomputable def concordance (PD PND : Measure ℝ) : ℝ :=
+  (PD.prod PND).real {p : ℝ × ℝ | p.2 < p.1}
 
-/-- Fubini for the concordance probability: `P(Y_D > Y_ND) = ∫ PD (y, ∞) dPND(y)`. -/
-theorem auc_eq_integral (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
-    [IsProbabilityMeasure PND] : auc PD PND = ∫ y, PD.real (Ioi y) ∂PND := by
+/-- The tie probability `P(Y_D = Y_ND)` of independent diseased and disease free scores. -/
+noncomputable def tieProb (PD PND : Measure ℝ) : ℝ :=
+  (PD.prod PND).real {p : ℝ × ℝ | p.1 = p.2}
+
+/-- The area under the ROC curve in concordance form with half weight on ties:
+`AUC = P(Y_D > Y_ND) + P(Y_D = Y_ND) / 2`. With ties this is the area under the ROC curve whose
+points `(FPF(c), Se(c))` are joined by straight segments; for identical score laws with an atom
+it gives the chance value `1/2` (`auc_dirac_self`). -/
+noncomputable def auc (PD PND : Measure ℝ) : ℝ := concordance PD PND + tieProb PD PND / 2
+
+/-- The sensitivity at `y` splits into the atom at `y` and the mass above `y`:
+`PD [y, ∞) = PD {y} + PD (y, ∞)`. -/
+theorem posFraction_eq_add (P : Measure ℝ) [IsFiniteMeasure P] (y : ℝ) :
+    posFraction P y = P.real {y} + P.real (Ioi y) := by
+  rw [posFraction, ← insert_Ioi, insert_eq,
+    measureReal_union (by simp) measurableSet_Ioi]
+
+/-- Fubini for the strict concordance probability: `P(Y_D > Y_ND) = ∫ PD (y, ∞) dPND(y)`. -/
+theorem concordance_eq_integral (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] : concordance PD PND = ∫ y, PD.real (Ioi y) ∂PND := by
   have hpre : ∀ y : ℝ, (fun x => (x, y)) ⁻¹' {p : ℝ × ℝ | p.2 < p.1} = Ioi y := by
     intro y; ext x; simp
   have hanti : Antitone fun y : ℝ => PD (Ioi y) := fun _ _ h => measure_mono (Ioi_subset_Ioi h)
-  rw [auc, measureReal_def, Measure.prod_apply_symm (measurableSet_lt measurable_snd
+  rw [concordance, measureReal_def, Measure.prod_apply_symm (measurableSet_lt measurable_snd
     measurable_fst)]
   simp_rw [hpre, measureReal_def]
   rw [integral_toReal hanti.measurable.aemeasurable (ae_of_all _ fun _ => measure_lt_top _ _)]
 
+/-- Fubini for the weak concordance probability: `P(Y_D ≥ Y_ND) = ∫ Se dPND`, with
+`Se(y) = PD [y, ∞)`. -/
+theorem prod_real_le_eq_integral (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] :
+    (PD.prod PND).real {p : ℝ × ℝ | p.2 ≤ p.1} = ∫ y, posFraction PD y ∂PND := by
+  have hpre : ∀ y : ℝ, (fun x => (x, y)) ⁻¹' {p : ℝ × ℝ | p.2 ≤ p.1} = Ici y := by
+    intro y; ext x; simp
+  have hanti : Antitone fun y : ℝ => PD (Ici y) := fun _ _ h => measure_mono (Ici_subset_Ici.2 h)
+  rw [measureReal_def, Measure.prod_apply_symm (measurableSet_le measurable_snd
+    measurable_fst)]
+  simp_rw [hpre, posFraction, measureReal_def]
+  rw [integral_toReal hanti.measurable.aemeasurable (ae_of_all _ fun _ => measure_lt_top _ _)]
+
+/-- The tie probability is the weak minus the strict concordance probability. -/
+theorem tieProb_eq_sub (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] :
+    tieProb PD PND = (PD.prod PND).real {p : ℝ × ℝ | p.2 ≤ p.1} - concordance PD PND := by
+  have hdiff : {p : ℝ × ℝ | p.2 ≤ p.1} \ {p : ℝ × ℝ | p.2 < p.1} = {p : ℝ × ℝ | p.1 = p.2} := by
+    ext p; simp only [mem_sdiff, mem_ofPred_eq, not_lt]
+    constructor
+    · rintro ⟨h1, h2⟩; exact le_antisymm h2 h1
+    · intro h; exact ⟨h.ge, h.le⟩
+  rw [tieProb, concordance, ← hdiff, measureReal_sdiff (fun p hp => le_of_lt hp)
+    (measurableSet_lt measurable_snd measurable_fst)]
+
+/-- Fubini for the tie probability: `P(Y_D = Y_ND) = ∫ PD {y} dPND(y)`. -/
+theorem tieProb_eq_integral (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] : tieProb PD PND = ∫ y, PD.real {y} ∂PND := by
+  have hint : ∀ s : ℝ → Set ℝ, Antitone (fun y => PD.real (s y)) →
+      Integrable (fun y => PD.real (s y)) PND := fun s hs =>
+    Integrable.of_bound hs.measurable.aestronglyMeasurable 1 (ae_of_all _ fun y => by
+      rw [Real.norm_eq_abs, abs_of_nonneg measureReal_nonneg]; exact measureReal_le_one)
+  have hIci : Antitone (fun y => PD.real (Ici y)) :=
+    fun _ _ h => measureReal_mono (Ici_subset_Ici.2 h)
+  have hIoi : Antitone (fun y => PD.real (Ioi y)) :=
+    fun _ _ h => measureReal_mono (Ioi_subset_Ioi h)
+  rw [tieProb_eq_sub, prod_real_le_eq_integral, concordance_eq_integral]
+  unfold posFraction
+  rw [← integral_sub (hint _ hIci) (hint _ hIoi)]
+  congr 1
+  funext y
+  rw [← posFraction, posFraction_eq_add, add_sub_cancel_right]
+
+/-- **Integral form of the area under the ROC curve.**
+`AUC = ∫ (PD (y, ∞) + PD {y} / 2) dPND(y)`. -/
+theorem auc_eq_integral (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] :
+    auc PD PND = ∫ y, (PD.real (Ioi y) + PD.real {y} / 2) ∂PND := by
+  have hIoi : Integrable (fun y => PD.real (Ioi y)) PND :=
+    Integrable.of_bound (Antitone.measurable (fun _ _ h => measureReal_mono (Ioi_subset_Ioi h) :
+      Antitone fun y => PD.real (Ioi y))).aestronglyMeasurable 1
+      (ae_of_all _ fun y => by
+        rw [Real.norm_eq_abs, abs_of_nonneg measureReal_nonneg]; exact measureReal_le_one)
+  have hsing : Integrable (fun y => PD.real {y}) PND := by
+    have : (fun y => PD.real {y}) = fun y => posFraction PD y - PD.real (Ioi y) := by
+      funext y
+      rw [posFraction_eq_add, add_sub_cancel_right]
+    rw [this]
+    refine Integrable.sub (Integrable.of_bound
+      (posFraction_antitone PD).measurable.aestronglyMeasurable 1 (ae_of_all _ fun y => ?_)) hIoi
+    rw [Real.norm_eq_abs, posFraction, abs_of_nonneg measureReal_nonneg]; exact measureReal_le_one
+  rw [auc, concordance_eq_integral, tieProb_eq_integral, integral_add hIoi (hsing.div_const 2),
+    integral_div]
+
+/-- The area under the ROC curve is the average of the strict and the weak concordance
+probabilities: `AUC = (P(Y_D > Y_ND) + ∫ Se dPND) / 2`. -/
+theorem auc_eq_average (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] :
+    auc PD PND = (concordance PD PND + ∫ y, posFraction PD y ∂PND) / 2 := by
+  rw [auc, tieProb_eq_sub, prod_real_le_eq_integral]; ring
+
+/-- Without ties the area under the ROC curve is the strict concordance probability
+`P(Y_D > Y_ND)`. -/
+theorem auc_eq_concordance_of_tieProb_eq_zero {PD PND : Measure ℝ}
+    (h : tieProb PD PND = 0) : auc PD PND = concordance PD PND := by
+  rw [auc, h, zero_div, add_zero]
+
+/-- If the diseased score law has no atoms, ties have probability zero. -/
+theorem tieProb_eq_zero (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
+    [IsProbabilityMeasure PND] [NullSingletonClass PD] : tieProb PD PND = 0 := by
+  rw [tieProb_eq_integral]
+  simp [measureReal_def]
+
 /-- The area under the ROC curve as an integral of the sensitivity: if the diseased score law
-has no atoms, `P(Y_D > Y_ND) = ∫ Se(y) dPND(y)`, which is the Lebesgue Stieltjes integral
+has no atoms, `AUC = P(Y_D > Y_ND) = ∫ Se(y) dPND(y)`, which is the Lebesgue Stieltjes integral
 `∫ Se d(-FPF)` since `FPF(c) = PND [c, ∞)`. -/
 theorem auc_eq_integral_posFraction (PD PND : Measure ℝ) [IsProbabilityMeasure PD]
     [IsProbabilityMeasure PND] [NullSingletonClass PD] :
     auc PD PND = ∫ y, posFraction PD y ∂PND := by
-  rw [auc_eq_integral]
+  rw [auc_eq_concordance_of_tieProb_eq_zero (tieProb_eq_zero PD PND), concordance_eq_integral]
   congr 1
   funext y
   rw [posFraction, measureReal_def, measureReal_def, measure_congr Ioi_ae_eq_Ici]
 
-/-- Ties break `auc_eq_integral_posFraction`: with both scores equal to `0`,
-`P(Y_D > Y_ND) = 0` while `∫ Se dPND = Se(0) = 1`. -/
+/-- **Ties: the atom example.** With both scores equal to `0` the ROC points are `(0, 0)` and
+`(1, 1)` and the area under the curve is the chance value `1/2`, while the strict concordance
+probability is `0` and the weak one `∫ Se dPND = Se(0) = 1`. So neither one sided form is the
+area when ties have positive probability. -/
 theorem auc_ne_integral_posFraction_of_atom :
-    auc (Measure.dirac 0) (Measure.dirac 0) = 0 ∧
+    auc (Measure.dirac 0) (Measure.dirac 0) = 1 / 2 ∧
+      concordance (Measure.dirac 0) (Measure.dirac 0) = 0 ∧
       ∫ y, posFraction (Measure.dirac 0) y ∂(Measure.dirac (0 : ℝ)) = 1 := by
-  constructor
-  · rw [auc, Measure.dirac_prod_dirac, measureReal_def,
+  have hc : concordance (Measure.dirac (0 : ℝ)) (Measure.dirac 0) = 0 := by
+    rw [concordance, Measure.dirac_prod_dirac, measureReal_def,
       Measure.dirac_apply' _ (measurableSet_lt measurable_snd measurable_fst)]
     simp
-  · rw [integral_dirac]
+  have hi : ∫ y, posFraction (Measure.dirac 0) y ∂(Measure.dirac (0 : ℝ)) = 1 := by
+    rw [integral_dirac]
     simp [posFraction, measureReal_def]
+  refine ⟨?_, hc, hi⟩
+  rw [auc_eq_average, hc, hi]; norm_num
 
 end DiagnosticAccuracy
 

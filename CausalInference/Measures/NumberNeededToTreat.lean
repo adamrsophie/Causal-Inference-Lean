@@ -26,8 +26,8 @@ nonnull effect, `T_k ≠ T_1`, which every result below assumes.
 
 ## Main results
 
-* `numberNeededToTreat_mul_riskDiff`: `NNT × RD = 1`; treating `NNT` patients changes the
-  expected number of events by exactly one.
+* `numberNeededToTreat_mul_riskDiff`: `NNT × RD = 1`; `|NNT|` is the average number treated
+  per event gained or lost (the signed value need not be a patient count).
 * `numberNeededToTreatBad_eq_neg`: the two conventions differ by sign.
 * `numberNeededToTreat_pos_iff`, `numberNeededToTreatBad_pos_iff`: the sign gives the direction.
 * `one_le_abs_numberNeededToTreat`: for risks in `[0, 1]`, `|NNT| ≥ 1`.
@@ -59,8 +59,11 @@ noncomputable def numberNeededToTreat (p₁ p₀ : ℝ) : ℝ := 1 / riskDiff p�
 `1 / (p₀ - p₁)`. It is meaningful only for `p₁ ≠ p₀`. -/
 noncomputable def numberNeededToTreatBad (p₁ p₀ : ℝ) : ℝ := 1 / riskDiff p₀ p₁
 
-/-- **Treating `NNT` patients changes the expected number of events by one.** For a nonnull
-effect, `NNT × (p₁ - p₀) = 1`. -/
+/-- **The number needed to treat is the reciprocal of the risk difference.** For a nonnull
+effect, `NNT × (p₁ - p₀) = 1`. Treating `n` patients rather than leaving them untreated changes
+the expected number of events by `n (p₁ - p₀)`; so `|NNT|` is the average number of patients
+treated per event gained (when `p₀ < p₁`) or lost (when `p₁ < p₀`). `NNT` itself is signed and
+in general not an integer: `p₁ - p₀ = -1/2` gives `NNT = -2`. -/
 theorem numberNeededToTreat_mul_riskDiff {p₁ p₀ : ℝ} (h : p₁ ≠ p₀) :
     numberNeededToTreat p₁ p₀ * riskDiff p₁ p₀ = 1 :=
   one_div_mul_cancel (sub_ne_zero.2 h)
