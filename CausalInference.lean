@@ -148,3 +148,4 @@ public import CausalInference.Survival.MultiState
 public import CausalInference.Survival.PostProgression
 public import CausalInference.Survival.IPCW
 public import CausalInference.LinearSEM.DSeparation
+public import CausalInference.Survival.RMST
