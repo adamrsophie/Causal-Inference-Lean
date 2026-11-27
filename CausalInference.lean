@@ -177,3 +177,5 @@ public import CausalInference.Survival.RecensoringBias
 public import CausalInference.StructuralNested.MultiLevelIdentification
 public import CausalInference.StructuralNested.GTestsCensored
 public import CausalInference.BiasAnalysis.EcologicalInteraction
+public import CausalInference.Survival.WeightedScore
+public import CausalInference.Survival.IPCWBridge

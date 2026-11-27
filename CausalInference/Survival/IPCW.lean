@@ -35,6 +35,9 @@ The marginal conclusions are stated against the measure-theoretic `Survival.haza
 ratios of masses. The conditional expectation lemmas of `MissingData.Weighting` (one and
 two periods, a static outcome) are not used: on a concrete countermodel their hypotheses are
 conditional expectation identities, which are hard to check, while here they are finite sums.
+`Survival.IPCWBridge` derives the one-period identity from them and identifies the weighted
+product limit with the longitudinal g-formula, and `Survival.WeightedScore` has the weighted
+Cox score.
 
 ## Time indexing and Eq A1
 
