@@ -111,3 +111,4 @@ public import CausalInference.SCM.DoCalculus
 public import CausalInference.SCM.DoCalculusExamples
 public import CausalInference.BiasAnalysis.SelectionAdjustment
 public import CausalInference.BiasAnalysis.ExternalAdjustment
+public import CausalInference.BiasAnalysis.MeasurementError
