@@ -33,13 +33,23 @@ Main results:
 * `greenland_differential`, `greenland_nondifferential`: Greenland's variances for the
   correction with sensitivity and specificity, with `trueProportion_of_forward` (the correction
   recovers the true proportion) and `logORSeSp_eq_log_direct` (the direct odds ratio formula).
+  `greenland_differential_admissible` and `greenland_nondifferential_admissible` extend them to
+  the whole admissible region, including `se + sp < 1` (`trueProportion_mem_Ioo_iff`), and
+  `greenlandTerm_nonneg`, `greenlandNondiff_nonneg` are the statistical versions with parameters
+  in `[0, 1]` and nonnegative input variances.
 * `marshall_variance`: Marshall's variance for the correction with predictive values
   (Equations 10.4 to 10.6), with `trueProportionPV_eq_true` (Equation 10.4 recovers the truth).
 * `pvw_recovers_true`: predictive value weighting reproduces the true row.
 * `jackknifeVariance_leaveOneOutMean`: the jackknife variance of the sample mean is `s² / n`.
+* `duplicated_erase`, `pvwCell_erase`: in the duplicated dataset of predictive value weighting,
+  leaving out one record removes exactly its two weighted copies, of total weight one;
+  `Examples.pvw_jackknife_example` is the record-level jackknife of Table 10.3 (`SE ≈ 0.076`,
+  interval `(1.00, 1.35)`).
 * `rubinVariance_eq`: Equation 10.21 is Rubin's `W + (1 + 1/M) B`.
-* `ivPooledVariance_le`, `firstOrderVariance_ivWeights`: inverse-variance weights minimize the
-  variance of a weighted average, with minimum `1 / ∑ (1/Vᵢ)`.
+* `ivPooled_eq_sum_weights`, `ivPooledVariance_le`, `firstOrderVariance_ivWeights`: for a
+  nonempty family of positive variances the pooled estimate is a weighted average, and
+  inverse-variance weights minimize the variance of a weighted average, with minimum
+  `1 / ∑ (1/Vᵢ)`.
 * `forward_eq_se_of_sum_eq_one`, `trueProportion_neg_example`: the correction is undefined at
   `se + sp = 1` and can leave the unit interval.
 * `Examples`: the worked numbers of Chapter 2 and Chapter 10, recomputed.
@@ -279,31 +289,37 @@ noncomputable def greenlandTerm (vse vsp se sp pe D : ℝ) : ℝ :=
     pe * (1 - pe) / (D * trueProportion se sp pe ^ 2 * (1 - trueProportion se sp pe) ^ 2)) /
       (se + sp - 1) ^ 2
 
+/-- The algebra behind `greenlandTerm`: whenever `se + sp - 1`, `pe + sp - 1`, `se - pe` and `D`
+are nonzero, the first-order variance with gradient `(-1/(se - pe), 1/(pe + sp - 1),
+1/(pe + sp - 1) + 1/(se - pe))` and input variances `(Var SE, Var SP, pe (1 - pe) / D)` is
+`greenlandTerm`. -/
+theorem firstOrderVariance_greenland_eq {vse vsp se sp pe D : ℝ} (hk : se + sp - 1 ≠ 0)
+    (hA : pe + sp - 1 ≠ 0) (hB : se - pe ≠ 0) (hD : D ≠ 0) :
+    firstOrderVariance ![-(1 / (se - pe)), 1 / (pe + sp - 1), 1 / (pe + sp - 1) + 1 / (se - pe)]
+        ![vse, vsp, pe * (1 - pe) / D] = greenlandTerm vse vsp se sp pe D := by
+  rw [greenlandTerm, one_sub_trueProportion hk, trueProportion]
+  simp only [firstOrderVariance, Fin.sum_univ_three, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_two, Matrix.head_cons, Matrix.tail_cons]
+  field_simp
+  ring
+
 /-- One group's contribution to the first-order variance equals `greenlandTerm`: the squared
 partial derivatives of `hasDerivAt_logOddsSeSp`, weighted by `Var SE`, `Var SP` and the binomial
 variance `pe (1 - pe) / D` of the observed proportion. -/
 theorem firstOrderVariance_logOddsSeSp {vse vsp se sp pe D : ℝ} (hA : 0 < pe + sp - 1)
     (hB : 0 < se - pe) (hD : 0 < D) :
     firstOrderVariance ![-(1 / (se - pe)), 1 / (pe + sp - 1), 1 / (pe + sp - 1) + 1 / (se - pe)]
-        ![vse, vsp, pe * (1 - pe) / D] = greenlandTerm vse vsp se sp pe D := by
-  have hk : 0 < se + sp - 1 := by linarith
-  have h1 := hA.ne'
-  have h2 := hB.ne'
-  have h3 := hk.ne'
-  have h4 := hD.ne'
-  rw [greenlandTerm, one_sub_trueProportion h3, trueProportion]
-  simp only [firstOrderVariance, Fin.sum_univ_three, Matrix.cons_val_zero, Matrix.cons_val_one,
-    Matrix.cons_val_two, Matrix.head_cons, Matrix.tail_cons]
-  field_simp
-  ring
+        ![vse, vsp, pe * (1 - pe) / D] = greenlandTerm vse vsp se sp pe D :=
+  firstOrderVariance_greenland_eq (by linarith) hA.ne' hB.ne' hD.ne'
 
 /-- **Greenland variance, differential misclassification** (Fox, MacLehose and Lash, Chapter 10,
 "Standard Errors for Misclassification When Sensitivity and Specificity Are Used"; Greenland
 1988). With independent estimates of `SEᵢ`, `SPᵢ` and of the observed proportions `pe_i` (binomial
 variance `pe_i (1 - pe_i) / Dᵢ`), the first-order variance of the adjusted log odds ratio
 `logORSeSp`, from its six partial derivatives, is the sum over cases and controls of
-`greenlandTerm`. The admissibility hypotheses force `seᵢ + spᵢ > 1`; the mirrored region
-`seᵢ + spᵢ < 1` is not treated. -/
+`greenlandTerm`. The positivity hypotheses force `seᵢ + spᵢ > 1` and make `logORSeSp` a
+difference of logarithms of positive numbers. The general admissible region, including the
+mirrored region `seᵢ + spᵢ < 1`, is `greenland_differential_admissible`. -/
 theorem greenland_differential {vse₁ vsp₁ se₁ sp₁ pe₁ D₁ vse₀ vsp₀ se₀ sp₀ pe₀ D₀ : ℝ}
     (hA₁ : 0 < pe₁ + sp₁ - 1) (hB₁ : 0 < se₁ - pe₁) (hD₁ : 0 < D₁)
     (hA₀ : 0 < pe₀ + sp₀ - 1) (hB₀ : 0 < se₀ - pe₀) (hD₀ : 0 < D₀) :
@@ -345,6 +361,24 @@ noncomputable def greenlandNondiff (vse vsp se sp pe₁ D₁ pe₀ D₀ : ℝ) :
         (D₀ * trueProportion se sp pe₀ ^ 2 * (1 - trueProportion se sp pe₀) ^ 2)) /
       (se + sp - 1) ^ 2
 
+/-- The algebra behind `greenlandNondiff`: whenever `se + sp - 1`, `pe_i + sp - 1`, `se - pe_i`
+and `Dᵢ` are nonzero, the first-order variance with the four-coordinate gradient of
+`greenland_nondifferential` is `greenlandNondiff`. -/
+theorem firstOrderVariance_greenlandNondiff_eq {vse vsp se sp pe₁ D₁ pe₀ D₀ : ℝ}
+    (hk : se + sp - 1 ≠ 0) (hA₁ : pe₁ + sp - 1 ≠ 0) (hB₁ : se - pe₁ ≠ 0) (hD₁ : D₁ ≠ 0)
+    (hA₀ : pe₀ + sp - 1 ≠ 0) (hB₀ : se - pe₀ ≠ 0) (hD₀ : D₀ ≠ 0) :
+    firstOrderVariance
+        ![-(1 / (se - pe₁)) + 1 / (se - pe₀), 1 / (pe₁ + sp - 1) - 1 / (pe₀ + sp - 1),
+          1 / (pe₁ + sp - 1) + 1 / (se - pe₁), -(1 / (pe₀ + sp - 1) + 1 / (se - pe₀))]
+        ![vse, vsp, pe₁ * (1 - pe₁) / D₁, pe₀ * (1 - pe₀) / D₀] =
+      greenlandNondiff vse vsp se sp pe₁ D₁ pe₀ D₀ := by
+  rw [greenlandNondiff, one_sub_trueProportion hk, one_sub_trueProportion hk, trueProportion,
+    trueProportion]
+  simp only [firstOrderVariance, Fin.sum_univ_four, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_two, Matrix.cons_val_three, Matrix.head_cons, Matrix.tail_cons]
+  field_simp
+  ring
+
 /-- **Greenland variance, nondifferential misclassification** (Fox, MacLehose and Lash,
 Chapter 10, second display of "Standard Errors for Misclassification When Sensitivity and
 Specificity Are Used", evaluated in Equation 10.1). With one sensitivity and one specificity for
@@ -352,7 +386,8 @@ cases and controls, the adjusted log odds ratio is a function of the four inputs
 `(SE, SP, pe₁, pe₀)`; its partial derivatives are as stated, and with independent inputs of
 variances `Var SE`, `Var SP`, `pe_i (1 - pe_i) / Dᵢ` its first-order variance is
 `greenlandNondiff`. The hypotheses `pe_i + sp - 1 > 0` and `se - pe_i > 0` (corrected proportions
-strictly inside `(0, 1)`) force `se + sp > 1`; the mirrored region `se + sp < 1` is not treated. -/
+strictly inside `(0, 1)`) force `se + sp > 1`; the general admissible region, including the
+mirrored region `se + sp < 1`, is `greenland_nondifferential_admissible`. -/
 theorem greenland_nondifferential {vse vsp se sp pe₁ D₁ pe₀ D₀ : ℝ}
     (hA₁ : 0 < pe₁ + sp - 1) (hB₁ : 0 < se - pe₁) (hD₁ : 0 < D₁)
     (hA₀ : 0 < pe₀ + sp - 1) (hB₀ : 0 < se - pe₀) (hD₀ : 0 < D₀) :
@@ -380,12 +415,223 @@ theorem greenland_nondifferential {vse vsp se sp pe₁ D₁ pe₀ D₀ : ℝ}
   have h5 := hA₀.ne'
   have h6 := hB₀.ne'
   have h7 := hD₀.ne'
-  rw [greenlandNondiff, one_sub_trueProportion h3, one_sub_trueProportion h3, trueProportion,
-    trueProportion]
-  simp only [firstOrderVariance, Fin.sum_univ_four, Matrix.cons_val_zero, Matrix.cons_val_one,
-    Matrix.cons_val_two, Matrix.cons_val_three, Matrix.head_cons, Matrix.tail_cons]
-  field_simp
-  ring
+  exact firstOrderVariance_greenlandNondiff_eq h3 h1 h2 h4 h5 h6 h7
+
+/-! ### Greenland variance on the whole admissible region
+
+The theorems above assume `pe + sp - 1 > 0` and `se - pe > 0`, which forces `se + sp > 1`. The
+correction is also meaningful in the mirrored region `se + sp < 1`, where both quantities are
+negative and the corrected proportion still lies in `(0, 1)`. There `logOddsSeSp` takes logarithms
+of negative numbers, so the statements below are about `logit (trueProportion se sp pe)` itself,
+and the derivatives are obtained by the chain rule through `hasDerivAt_logit`. -/
+
+/-- **Admissibility of the corrected proportion.** If `se + sp ≠ 1`, the corrected proportion
+`trueProportion se sp pe` lies strictly inside `(0, 1)` exactly when
+`(pe + sp - 1)(se - pe) > 0`, that is, when `pe + sp - 1` and `se - pe` are nonzero with the same
+sign. Both signs occur: positive for `se + sp > 1`, negative for `se + sp < 1`
+(`trueProportion_mirrored_example`). -/
+theorem trueProportion_mem_Ioo_iff {se sp pe : ℝ} (hk : se + sp - 1 ≠ 0) :
+    (0 < trueProportion se sp pe ∧ trueProportion se sp pe < 1) ↔
+      0 < (pe + sp - 1) * (se - pe) := by
+  rw [← sub_pos (a := (1 : ℝ)), one_sub_trueProportion hk, trueProportion]
+  constructor
+  · rintro ⟨h1, h2⟩
+    have hJJ : 0 < (se + sp - 1) * (se + sp - 1) := mul_self_pos.2 hk
+    have := mul_pos (mul_pos h1 h2) hJJ
+    rwa [div_mul_div_comm, div_mul_cancel₀ _ hJJ.ne'] at this
+  · intro h
+    rw [div_pos_iff, div_pos_iff]
+    rcases hk.lt_or_gt with hJ | hJ
+    · refine ⟨Or.inr ⟨?_, hJ⟩, Or.inr ⟨?_, hJ⟩⟩ <;> nlinarith
+    · refine ⟨Or.inl ⟨?_, hJ⟩, Or.inl ⟨?_, hJ⟩⟩ <;> nlinarith
+
+/-- **A point of the mirrored region.** With `se = 0.2`, `sp = 0.3` (so `se + sp < 1`) and
+`pe = 0.45`, both `pe + sp - 1` and `se - pe` equal `-0.25` and the corrected proportion is
+`1/2`. -/
+theorem trueProportion_mirrored_example :
+    trueProportion 0.2 0.3 0.45 = 1 / 2 ∧ (0.2 : ℝ) + 0.3 - 1 < 0 ∧
+      0 < ((0.45 : ℝ) + 0.3 - 1) * (0.2 - 0.45) := by
+  norm_num [trueProportion]
+
+/-- **Partial derivatives of the corrected log odds, whole admissible region.** If
+`se + sp ≠ 1` and the corrected proportion `P = trueProportion se sp pe` lies in `(0, 1)`, then
+`logit P` has partial derivatives `-1 / (se - pe)` in `se`, `1 / (pe + sp - 1)` in `sp` and
+`1 / (pe + sp - 1) + 1 / (se - pe)` in `pe`, the same gradient as in `hasDerivAt_logOddsSeSp`. -/
+theorem hasDerivAt_logit_trueProportion {se sp pe : ℝ} (hk : se + sp - 1 ≠ 0)
+    (hP₀ : 0 < trueProportion se sp pe) (hP₁ : trueProportion se sp pe < 1) :
+    HasDerivAt (fun x ↦ logit (trueProportion x sp pe)) (-(1 / (se - pe))) se ∧
+      HasDerivAt (fun x ↦ logit (trueProportion se x pe)) (1 / (pe + sp - 1)) sp ∧
+      HasDerivAt (fun x ↦ logit (trueProportion se sp x))
+        (1 / (pe + sp - 1) + 1 / (se - pe)) pe := by
+  have hAB := (trueProportion_mem_Ioo_iff hk).1 ⟨hP₀, hP₁⟩
+  have hA : pe + sp - 1 ≠ 0 := left_ne_zero_of_mul hAB.ne'
+  have hB : se - pe ≠ 0 := right_ne_zero_of_mul hAB.ne'
+  have hl := hasDerivAt_logit hP₀ hP₁
+  rw [one_sub_trueProportion hk] at hl
+  refine ⟨?_, ?_, ?_⟩
+  · have hi : HasDerivAt (fun x ↦ trueProportion x sp pe)
+        ((0 * (se + sp - 1) - (pe + sp - 1) * 1) / (se + sp - 1) ^ 2) se :=
+      (hasDerivAt_const se (pe + sp - 1)).div (((hasDerivAt_id' se).add_const sp).sub_const 1) hk
+    refine (hl.comp se hi).congr_deriv ?_
+    rw [trueProportion]
+    field_simp
+    ring
+  · have hi : HasDerivAt (fun x ↦ trueProportion se x pe)
+        ((1 * (se + sp - 1) - (pe + sp - 1) * 1) / (se + sp - 1) ^ 2) sp :=
+      (((hasDerivAt_id' sp).const_add pe).sub_const 1).div
+        (((hasDerivAt_id' sp).const_add se).sub_const 1) hk
+    refine (hl.comp sp hi).congr_deriv ?_
+    rw [trueProportion]
+    field_simp
+    ring
+  · have hi : HasDerivAt (fun x ↦ trueProportion se sp x) (1 / (se + sp - 1)) pe := by
+      have := (((hasDerivAt_id' pe).add_const sp).sub_const 1).div_const (se + sp - 1)
+      exact this
+    refine (hl.comp pe hi).congr_deriv ?_
+    rw [trueProportion]
+    field_simp
+    ring
+
+/-- The bias-adjusted log odds ratio `logit P(E₁) - logit P(E₀)` written with the corrected
+proportions themselves; it is defined by genuine logarithms of positive numbers on the whole
+admissible region. -/
+noncomputable def logORSeSpLogit (se₁ sp₁ pe₁ se₀ sp₀ pe₀ : ℝ) : ℝ :=
+  logit (trueProportion se₁ sp₁ pe₁) - logit (trueProportion se₀ sp₀ pe₀)
+
+/-- On the region `pe_i + sp_i - 1 > 0`, `se_i - pe_i > 0` the two forms of the adjusted log odds
+ratio agree. -/
+theorem logORSeSp_eq_logORSeSpLogit {se₁ sp₁ pe₁ se₀ sp₀ pe₀ : ℝ} (hA₁ : 0 < pe₁ + sp₁ - 1)
+    (hB₁ : 0 < se₁ - pe₁) (hA₀ : 0 < pe₀ + sp₀ - 1) (hB₀ : 0 < se₀ - pe₀) :
+    logORSeSp se₁ sp₁ pe₁ se₀ sp₀ pe₀ = logORSeSpLogit se₁ sp₁ pe₁ se₀ sp₀ pe₀ := by
+  rw [logORSeSp, logORSeSpLogit, logOddsSeSp_eq_logit hA₁ hB₁, logOddsSeSp_eq_logit hA₀ hB₀]
+
+/-- **Greenland variance, differential misclassification, whole admissible region.** If in each
+group `seᵢ + spᵢ ≠ 1` and the corrected proportion lies in `(0, 1)` (so either region, chosen
+separately for cases and controls), the adjusted log odds ratio `logORSeSpLogit` has the six
+partial derivatives of `greenland_differential`, and with independent inputs its first-order
+variance is the sum of the two `greenlandTerm`s. -/
+theorem greenland_differential_admissible
+    {vse₁ vsp₁ se₁ sp₁ pe₁ D₁ vse₀ vsp₀ se₀ sp₀ pe₀ D₀ : ℝ}
+    (hk₁ : se₁ + sp₁ - 1 ≠ 0)
+    (hP₁ : 0 < trueProportion se₁ sp₁ pe₁ ∧ trueProportion se₁ sp₁ pe₁ < 1) (hD₁ : 0 < D₁)
+    (hk₀ : se₀ + sp₀ - 1 ≠ 0)
+    (hP₀ : 0 < trueProportion se₀ sp₀ pe₀ ∧ trueProportion se₀ sp₀ pe₀ < 1) (hD₀ : 0 < D₀) :
+    HasDerivAt (fun x ↦ logORSeSpLogit x sp₁ pe₁ se₀ sp₀ pe₀) (-(1 / (se₁ - pe₁))) se₁ ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se₁ x pe₁ se₀ sp₀ pe₀) (1 / (pe₁ + sp₁ - 1)) sp₁ ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se₁ sp₁ x se₀ sp₀ pe₀)
+      (1 / (pe₁ + sp₁ - 1) + 1 / (se₁ - pe₁)) pe₁ ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se₁ sp₁ pe₁ x sp₀ pe₀) (1 / (se₀ - pe₀)) se₀ ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se₁ sp₁ pe₁ se₀ x pe₀) (-(1 / (pe₀ + sp₀ - 1))) sp₀ ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se₁ sp₁ pe₁ se₀ sp₀ x)
+      (-(1 / (pe₀ + sp₀ - 1) + 1 / (se₀ - pe₀))) pe₀ ∧
+    firstOrderVariance
+        ![-(1 / (se₁ - pe₁)), 1 / (pe₁ + sp₁ - 1), 1 / (pe₁ + sp₁ - 1) + 1 / (se₁ - pe₁),
+          1 / (se₀ - pe₀), -(1 / (pe₀ + sp₀ - 1)), -(1 / (pe₀ + sp₀ - 1) + 1 / (se₀ - pe₀))]
+        ![vse₁, vsp₁, pe₁ * (1 - pe₁) / D₁, vse₀, vsp₀, pe₀ * (1 - pe₀) / D₀] =
+      greenlandTerm vse₁ vsp₁ se₁ sp₁ pe₁ D₁ + greenlandTerm vse₀ vsp₀ se₀ sp₀ pe₀ D₀ := by
+  have hAB₁ := (trueProportion_mem_Ioo_iff hk₁).1 hP₁
+  have hAB₀ := (trueProportion_mem_Ioo_iff hk₀).1 hP₀
+  obtain ⟨d1, d2, d3⟩ := hasDerivAt_logit_trueProportion hk₁ hP₁.1 hP₁.2
+  obtain ⟨e1, e2, e3⟩ := hasDerivAt_logit_trueProportion hk₀ hP₀.1 hP₀.2
+  refine ⟨d1.sub_const _, d2.sub_const _, d3.sub_const _, ?_, ?_, ?_, ?_⟩
+  · exact (e1.const_sub (logit (trueProportion se₁ sp₁ pe₁))).congr_deriv (by ring)
+  · exact e2.const_sub (logit (trueProportion se₁ sp₁ pe₁))
+  · exact e3.const_sub (logit (trueProportion se₁ sp₁ pe₁))
+  · rw [← firstOrderVariance_greenland_eq hk₁ (left_ne_zero_of_mul hAB₁.ne')
+      (right_ne_zero_of_mul hAB₁.ne') hD₁.ne', ← firstOrderVariance_greenland_eq hk₀
+      (left_ne_zero_of_mul hAB₀.ne') (right_ne_zero_of_mul hAB₀.ne') hD₀.ne']
+    simp only [firstOrderVariance, Fin.sum_univ_six, Fin.sum_univ_three]
+    simp
+    ring
+
+/-- **Greenland variance, nondifferential misclassification, whole admissible region.** If
+`se + sp ≠ 1` and both corrected proportions lie in `(0, 1)` (this covers `se + sp < 1` as well as
+`se + sp > 1`), the adjusted log odds ratio `logORSeSpLogit` with shared `se`, `sp` has the four
+partial derivatives of `greenland_nondifferential`, and its first-order variance with independent
+inputs is `greenlandNondiff`. -/
+theorem greenland_nondifferential_admissible {vse vsp se sp pe₁ D₁ pe₀ D₀ : ℝ}
+    (hk : se + sp - 1 ≠ 0)
+    (hP₁ : 0 < trueProportion se sp pe₁ ∧ trueProportion se sp pe₁ < 1) (hD₁ : 0 < D₁)
+    (hP₀ : 0 < trueProportion se sp pe₀ ∧ trueProportion se sp pe₀ < 1) (hD₀ : 0 < D₀) :
+    HasDerivAt (fun x ↦ logORSeSpLogit x sp pe₁ x sp pe₀)
+      (-(1 / (se - pe₁)) + 1 / (se - pe₀)) se ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se x pe₁ se x pe₀)
+      (1 / (pe₁ + sp - 1) - 1 / (pe₀ + sp - 1)) sp ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se sp x se sp pe₀)
+      (1 / (pe₁ + sp - 1) + 1 / (se - pe₁)) pe₁ ∧
+    HasDerivAt (fun x ↦ logORSeSpLogit se sp pe₁ se sp x)
+      (-(1 / (pe₀ + sp - 1) + 1 / (se - pe₀))) pe₀ ∧
+    firstOrderVariance
+        ![-(1 / (se - pe₁)) + 1 / (se - pe₀), 1 / (pe₁ + sp - 1) - 1 / (pe₀ + sp - 1),
+          1 / (pe₁ + sp - 1) + 1 / (se - pe₁), -(1 / (pe₀ + sp - 1) + 1 / (se - pe₀))]
+        ![vse, vsp, pe₁ * (1 - pe₁) / D₁, pe₀ * (1 - pe₀) / D₀] =
+      greenlandNondiff vse vsp se sp pe₁ D₁ pe₀ D₀ := by
+  have hAB₁ := (trueProportion_mem_Ioo_iff hk).1 hP₁
+  have hAB₀ := (trueProportion_mem_Ioo_iff hk).1 hP₀
+  obtain ⟨d1, d2, d3⟩ := hasDerivAt_logit_trueProportion hk hP₁.1 hP₁.2
+  obtain ⟨e1, e2, e3⟩ := hasDerivAt_logit_trueProportion hk hP₀.1 hP₀.2
+  refine ⟨(d1.sub e1).congr_deriv (by ring), d2.sub e2, d3.sub_const _, e3.const_sub _, ?_⟩
+  exact firstOrderVariance_greenlandNondiff_eq hk (left_ne_zero_of_mul hAB₁.ne')
+    (right_ne_zero_of_mul hAB₁.ne') hD₁.ne' (left_ne_zero_of_mul hAB₀.ne')
+    (right_ne_zero_of_mul hAB₀.ne') hD₀.ne'
+
+/-! ### Nonnegativity: statistical versions of the variance formulas -/
+
+/-- A first-order variance with nonnegative input variances is nonnegative. -/
+theorem firstOrderVariance_nonneg {k : ℕ} (grad : Fin k → ℝ) {var : Fin k → ℝ}
+    (hv : ∀ i, 0 ≤ var i) : 0 ≤ firstOrderVariance grad var :=
+  Finset.sum_nonneg fun i _ ↦ mul_nonneg (sq_nonneg _) (hv i)
+
+/-- In an admissible group with sensitivity and specificity in `[0, 1]`, the observed proportion
+lies in `(0, 1)`: in the region `se + sp > 1` because `1 - sp < pe < se`, in the mirrored region
+because `se < pe < 1 - sp`. -/
+theorem observed_mem_Ioo_of_admissible {se sp pe : ℝ} (hse : 0 ≤ se ∧ se ≤ 1)
+    (hsp : 0 ≤ sp ∧ sp ≤ 1) (hk : se + sp - 1 ≠ 0)
+    (hP : 0 < trueProportion se sp pe ∧ trueProportion se sp pe < 1) : 0 < pe ∧ pe < 1 := by
+  rcases mul_pos_iff.1 ((trueProportion_mem_Ioo_iff hk).1 hP) with ⟨h1, h2⟩ | ⟨h1, h2⟩ <;>
+    constructor <;> linarith
+
+/-- **The Greenland term is a variance (statistical version).** With sensitivity and specificity
+in `[0, 1]`, nonnegative variances `Var SE`, `Var SP`, a positive group size and an admissible
+corrected proportion (either region), the observed proportion is in `(0, 1)`, so its binomial
+variance is nonnegative, and `greenlandTerm` is nonnegative. -/
+theorem greenlandTerm_nonneg {vse vsp se sp pe D : ℝ} (hse : 0 ≤ se ∧ se ≤ 1)
+    (hsp : 0 ≤ sp ∧ sp ≤ 1) (hk : se + sp - 1 ≠ 0)
+    (hP : 0 < trueProportion se sp pe ∧ trueProportion se sp pe < 1)
+    (hvse : 0 ≤ vse) (hvsp : 0 ≤ vsp) (hD : 0 < D) :
+    0 ≤ greenlandTerm vse vsp se sp pe D := by
+  have hAB := (trueProportion_mem_Ioo_iff hk).1 hP
+  obtain ⟨h0, h1⟩ := observed_mem_Ioo_of_admissible hse hsp hk hP
+  rw [← firstOrderVariance_greenland_eq hk (left_ne_zero_of_mul hAB.ne')
+    (right_ne_zero_of_mul hAB.ne') hD.ne']
+  refine firstOrderVariance_nonneg _ fun i ↦ ?_
+  fin_cases i
+  · simpa using hvse
+  · simpa using hvsp
+  · simpa using div_nonneg (mul_nonneg h0.le (by linarith : (0 : ℝ) ≤ 1 - pe)) hD.le
+
+/-- **The nondifferential Greenland variance is a variance (statistical version).** Under the
+hypotheses of `greenlandTerm_nonneg` for both groups, with shared `se` and `sp`,
+`greenlandNondiff` is nonnegative. -/
+theorem greenlandNondiff_nonneg {vse vsp se sp pe₁ D₁ pe₀ D₀ : ℝ} (hse : 0 ≤ se ∧ se ≤ 1)
+    (hsp : 0 ≤ sp ∧ sp ≤ 1) (hk : se + sp - 1 ≠ 0)
+    (hP₁ : 0 < trueProportion se sp pe₁ ∧ trueProportion se sp pe₁ < 1)
+    (hP₀ : 0 < trueProportion se sp pe₀ ∧ trueProportion se sp pe₀ < 1)
+    (hvse : 0 ≤ vse) (hvsp : 0 ≤ vsp) (hD₁ : 0 < D₁) (hD₀ : 0 < D₀) :
+    0 ≤ greenlandNondiff vse vsp se sp pe₁ D₁ pe₀ D₀ := by
+  have hAB₁ := (trueProportion_mem_Ioo_iff hk).1 hP₁
+  have hAB₀ := (trueProportion_mem_Ioo_iff hk).1 hP₀
+  obtain ⟨h₁0, h₁1⟩ := observed_mem_Ioo_of_admissible hse hsp hk hP₁
+  obtain ⟨h₀0, h₀1⟩ := observed_mem_Ioo_of_admissible hse hsp hk hP₀
+  rw [← firstOrderVariance_greenlandNondiff_eq hk (left_ne_zero_of_mul hAB₁.ne')
+    (right_ne_zero_of_mul hAB₁.ne') hD₁.ne' (left_ne_zero_of_mul hAB₀.ne')
+    (right_ne_zero_of_mul hAB₀.ne') hD₀.ne']
+  refine firstOrderVariance_nonneg _ fun i ↦ ?_
+  fin_cases i
+  · simpa using hvse
+  · simpa using hvsp
+  · simpa using div_nonneg (mul_nonneg h₁0.le (by linarith : (0 : ℝ) ≤ 1 - pe₁)) hD₁.le
+  · simpa using div_nonneg (mul_nonneg h₀0.le (by linarith : (0 : ℝ) ≤ 1 - pe₀)) hD₀.le
 
 /-! ### Marshall variance: correction with predictive values -/
 
@@ -593,6 +839,127 @@ theorem jackknifeVariance_leaveOneOutMean {n : ℕ} (hn : 2 ≤ n) (x : Fin n �
   simp_rw [hterm, mul_pow, ← Finset.mul_sum]
   field_simp
 
+/-- The weight of a copy in predictive value weighting (Chapter 10, "Predictive Value
+Weighting", Table 10.3). Each record observed with exposure `o` is copied twice, reclassified as
+exposed (`e = true`) and as unexposed (`e = false`); a record observed exposed gives its copies
+the weights `PPV` and `1 - PPV`, a record observed unexposed the weights `1 - NPV` and `NPV`. -/
+def pvwWeight (ppv npv : ℝ) : Bool → Bool → ℝ
+  | true, true => ppv
+  | true, false => 1 - ppv
+  | false, true => 1 - npv
+  | false, false => npv
+
+/-- The two copies of a record carry total weight one. -/
+theorem pvwWeight_add (ppv npv : ℝ) (o : Bool) :
+    pvwWeight ppv npv o true + pvwWeight ppv npv o false = 1 := by
+  cases o <;> simp [pvwWeight]
+
+/-- The duplicated dataset of a set of records: each record `i` appears as the two copies
+`(i, true)` and `(i, false)`. -/
+def duplicated {ι : Type*} (s : Finset ι) : Finset (ι × Bool) := s ×ˢ univ
+
+/-- **Leaving out one record removes exactly its two copies.** The duplicated dataset of
+`s.erase i` is that of `s` without `(i, true)` and `(i, false)`. This is the deletion step of the
+record-level jackknife of Chapter 10: excluding one observation of the original data means
+excluding "two record-level observations from the weighted data". -/
+theorem duplicated_erase {ι : Type*} [DecidableEq ι] (s : Finset ι) (i : ι) :
+    duplicated (s.erase i) = duplicated s \ {(i, true), (i, false)} := by
+  ext ⟨j, e⟩
+  cases e <;> simp [duplicated, and_comm]
+
+/-- A cell of the weighted table: the total weight of the copies in the duplicated dataset of `s`
+whose record is in group `d` (`case`, cases for `d = true`) and whose reclassified exposure is
+`e`, with group-specific predictive values `ppv d` and `npv d`. -/
+def pvwCell {ι : Type*} (s : Finset ι) (case obs : ι → Bool) (ppv npv : Bool → ℝ)
+    (d e : Bool) : ℝ :=
+  ∑ p ∈ duplicated s with case p.1 = d ∧ p.2 = e, pvwWeight (ppv d) (npv d) (obs p.1) p.2
+
+/-- A weighted cell as a sum over records: each record of group `d` contributes the weight of its
+copy with exposure `e`. -/
+theorem pvwCell_eq_sum {ι : Type*} (s : Finset ι) (case obs : ι → Bool) (ppv npv : Bool → ℝ)
+    (d e : Bool) :
+    pvwCell s case obs ppv npv d e =
+      ∑ i ∈ s, if case i = d then pvwWeight (ppv d) (npv d) (obs i) e else 0 := by
+  rw [pvwCell, Finset.sum_filter, duplicated, Finset.sum_product]
+  refine Finset.sum_congr rfl fun i _ ↦ ?_
+  cases e <;> by_cases h : case i = d <;> simp [h]
+
+/-- Leaving out record `i` lowers each cell of its own group by the weight of the corresponding
+copy of `i` and leaves the cells of the other group unchanged. -/
+theorem pvwCell_erase {ι : Type*} [DecidableEq ι] {s : Finset ι} {i : ι} (hi : i ∈ s)
+    (case obs : ι → Bool) (ppv npv : Bool → ℝ) (d e : Bool) :
+    pvwCell (s.erase i) case obs ppv npv d e =
+      pvwCell s case obs ppv npv d e -
+        if case i = d then pvwWeight (ppv d) (npv d) (obs i) e else 0 := by
+  rw [pvwCell_eq_sum, pvwCell_eq_sum, Finset.sum_erase_eq_sub hi]
+
+/-- The weighted cells of group `d` are the counts `pvwExposed` and `pvwUnexposed` of Table 10.3
+applied to the numbers of records of that group observed exposed and observed unexposed. -/
+theorem pvwCell_eq {ι : Type*} (s : Finset ι) (case obs : ι → Bool) (ppv npv : Bool → ℝ)
+    (d : Bool) :
+    pvwCell s case obs ppv npv d true =
+        pvwExposed #{i ∈ s | case i = d ∧ obs i = true} #{i ∈ s | case i = d ∧ obs i = false}
+          (ppv d) (npv d) ∧
+      pvwCell s case obs ppv npv d false =
+        pvwUnexposed #{i ∈ s | case i = d ∧ obs i = true}
+          #{i ∈ s | case i = d ∧ obs i = false} (ppv d) (npv d) := by
+  have key : ∀ e, pvwCell s case obs ppv npv d e =
+      #{i ∈ s | case i = d ∧ obs i = true} * pvwWeight (ppv d) (npv d) true e +
+        #{i ∈ s | case i = d ∧ obs i = false} * pvwWeight (ppv d) (npv d) false e := by
+    intro e
+    rw [pvwCell_eq_sum, ← Finset.sum_filter, ← Finset.sum_filter_add_sum_filter_not _
+      (fun i ↦ obs i = true), Finset.filter_filter, Finset.filter_filter]
+    congr 1
+    · rw [Finset.sum_congr rfl (g := fun _ ↦ pvwWeight (ppv d) (npv d) true e)
+        (fun i hi ↦ by simp only [Finset.mem_filter] at hi; rw [hi.2.2]),
+        Finset.sum_const, nsmul_eq_mul]
+    · rw [Finset.sum_congr rfl (g := fun _ ↦ pvwWeight (ppv d) (npv d) false e)
+        (fun i hi ↦ by simp only [Finset.mem_filter, Bool.not_eq_true] at hi; rw [hi.2.2]),
+        Finset.sum_const, nsmul_eq_mul]
+      congr 3
+  rw [key, key]
+  simp [pvwWeight, pvwExposed, pvwUnexposed]
+
+/-- The jackknife variance can be computed after centering at any constant `c`:
+`((n - 1) / n) (∑ᵢ (θᵢ - c)² - (∑ᵢ (θᵢ - c))² / n)` for `n > 0`. -/
+theorem jackknifeVariance_eq_centered {n : ℕ} (hn : 0 < n) (θ : Fin n → ℝ) (c : ℝ) :
+    jackknifeVariance θ =
+      ((n - 1) / n) * (∑ i, (θ i - c) ^ 2 - (∑ i, (θ i - c)) ^ 2 / n) := by
+  have hn0 : (n : ℝ) ≠ 0 := by positivity
+  set m := (∑ j, θ j) / n with hm
+  have hsu : ∑ i, (θ i - c) = n * (m - c) := by
+    rw [Finset.sum_sub_distrib, hm]
+    simp
+    field_simp
+  have hexp : ∀ i, (θ i - m) ^ 2 = (θ i - c) ^ 2 - 2 * (m - c) * (θ i - c) + (m - c) ^ 2 := by
+    intro i; ring
+  rw [jackknifeVariance, ← hm]
+  simp_rw [hexp]
+  rw [Finset.sum_add_distrib, Finset.sum_sub_distrib, ← Finset.mul_sum, hsu, Finset.sum_const,
+    Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+  field_simp
+  ring
+
+/-- A sum of a function of the class `(case i, obs i)` of each record, grouped by class: each of
+the four classes contributes its number of records times the value. -/
+theorem sum_comp_class {n : ℕ} (case obs : Fin n → Bool) (f : Bool → Bool → ℝ) :
+    ∑ i, f (case i) (obs i) =
+      ∑ d, ∑ o, (#{i | case i = d ∧ obs i = o} : ℝ) * f d o := by
+  rw [← Finset.sum_fiberwise Finset.univ (fun i ↦ (case i, obs i))
+    (fun i ↦ f (case i) (obs i)), Fintype.sum_prod_type]
+  refine Finset.sum_congr rfl fun d _ ↦ Finset.sum_congr rfl fun o _ ↦ ?_
+  rw [Finset.sum_congr rfl (g := fun _ ↦ f d o) (fun i hi ↦ by
+    simp only [Finset.mem_filter, Prod.mk.injEq] at hi; rw [hi.2.1, hi.2.2]),
+    Finset.sum_const, nsmul_eq_mul]
+  congr 3
+
+/-- The odds ratio `A D / (B C)` of the weighted table of the records in `s`: `A`, `B` the cases
+reclassified exposed and unexposed, `C`, `D` the controls. -/
+noncomputable def pvwOddsRatio {ι : Type*} (s : Finset ι) (case obs : ι → Bool)
+    (ppv npv : Bool → ℝ) : ℝ :=
+  pvwCell s case obs ppv npv true true * pvwCell s case obs ppv npv false false /
+    (pvwCell s case obs ppv npv true false * pvwCell s case obs ppv npv false true)
+
 /-! ### Rubin's rules -/
 
 /-- The multiple imputation estimate (Chapter 10, Equation 10.20): the average of the `M`
@@ -638,18 +1005,40 @@ theorem withinVariance_le_rubinVariance {M : ℕ} (hM : 2 ≤ M) (θ V : Fin M �
 noncomputable def ivTotalWeight {k : ℕ} (V : Fin k → ℝ) : ℝ := ∑ i, 1 / V i
 
 /-- The inverse-variance pooled estimate `∑ᵢ (θᵢ / Vᵢ) / ∑ᵢ (1 / Vᵢ)` (Chapter 10,
-"Misclassification Example"). -/
+"Misclassification Example"). The expression is totalized; it is a weighted average of the `θᵢ`
+only for a nonempty family with strictly positive variances (`ivPooled_eq_sum_weights`). -/
 noncomputable def ivPooled {k : ℕ} (θ V : Fin k → ℝ) : ℝ := (∑ i, θ i / V i) / ivTotalWeight V
 
 /-- The variance `1 / ∑ᵢ (1 / Vᵢ)` attributed to the pooled estimate. -/
 noncomputable def ivPooledVariance {k : ℕ} (V : Fin k → ℝ) : ℝ := 1 / ivTotalWeight V
 
-/-- The pooled estimate is the weighted average with normalized weights `(1/Vᵢ) / ∑ⱼ (1/Vⱼ)`. -/
-theorem ivPooled_eq_sum_weights {k : ℕ} (θ V : Fin k → ℝ) :
-    ivPooled θ V = ∑ i, (1 / V i) / ivTotalWeight V * θ i := by
-  rw [ivPooled, Finset.sum_div]
-  refine Finset.sum_congr rfl fun i _ ↦ ?_
-  ring
+/-- For a nonempty family of positive variances the total inverse-variance weight is positive. -/
+theorem ivTotalWeight_pos {k : ℕ} {V : Fin k → ℝ} (hV : ∀ i, 0 < V i) (hk : 0 < k) :
+    0 < ivTotalWeight V := by
+  have : Nonempty (Fin k) := ⟨⟨0, hk⟩⟩
+  exact Finset.sum_pos (fun i _ ↦ one_div_pos.2 (hV i)) Finset.univ_nonempty
+
+/-- **The pooled estimate is a weighted average.** For a nonempty family (`0 < k`) of estimates
+with strictly positive variances, the weights `(1/Vᵢ) / ∑ⱼ (1/Vⱼ)` sum to one and the pooled
+estimate is the average of the `θᵢ` with these weights. Both hypotheses are needed: with an empty
+family the weights sum to `0`, and a zero variance gets the totalized precision `1 / 0 = 0`
+(`ivPooled_zero_variance_example`). -/
+theorem ivPooled_eq_sum_weights {k : ℕ} (θ V : Fin k → ℝ) (hV : ∀ i, 0 < V i) (hk : 0 < k) :
+    ∑ i, (1 / V i) / ivTotalWeight V = 1 ∧
+      ivPooled θ V = ∑ i, (1 / V i) / ivTotalWeight V * θ i := by
+  refine ⟨?_, ?_⟩
+  · rw [← Finset.sum_div]
+    exact div_self (ivTotalWeight_pos hV hk).ne'
+  · rw [ivPooled, Finset.sum_div]
+    refine Finset.sum_congr rfl fun i _ ↦ ?_
+    ring
+
+/-- **A zero variance is discarded, not favored.** With estimates `0` and `1` and variances `0`
+and `1`, the totalized formula `ivPooled` returns `1`: the estimate with zero variance, which
+should dominate the pooled value, receives weight `1 / 0 = 0`. This is why the statements about
+`ivPooled` assume strictly positive variances. -/
+theorem ivPooled_zero_variance_example : ivPooled ![0, 1] ![0, 1] = 1 := by
+  norm_num [ivPooled, ivTotalWeight, Fin.sum_univ_two]
 
 /-- **Variance of a weighted average, decomposed.** For positive variances `Vᵢ` and weights `cᵢ`
 summing to one, the variance `∑ᵢ cᵢ² Vᵢ` of `∑ᵢ cᵢ θᵢ` for independent `θᵢ` equals
@@ -658,9 +1047,7 @@ theorem firstOrderVariance_weights_eq {k : ℕ} {V : Fin k → ℝ} (hV : ∀ i,
     (hk : 0 < k) {c : Fin k → ℝ} (hc : ∑ i, c i = 1) :
     firstOrderVariance c V = ivPooledVariance V +
       ∑ i, V i * (c i - (1 / V i) / ivTotalWeight V) ^ 2 := by
-  have hW : 0 < ivTotalWeight V := by
-    have : Nonempty (Fin k) := ⟨⟨0, hk⟩⟩
-    exact Finset.sum_pos (fun i _ ↦ one_div_pos.2 (hV i)) Finset.univ_nonempty
+  have hW : 0 < ivTotalWeight V := ivTotalWeight_pos hV hk
   have hterm : ∀ i, V i * (c i - (1 / V i) / ivTotalWeight V) ^ 2 =
       c i ^ 2 * V i - 2 * (c i / ivTotalWeight V) + (1 / V i) / ivTotalWeight V ^ 2 := by
     intro i
@@ -688,12 +1075,7 @@ first-order variance of the pooled estimate is `1 / ∑ⱼ (1/Vⱼ)`. -/
 theorem firstOrderVariance_ivWeights {k : ℕ} {V : Fin k → ℝ} (hV : ∀ i, 0 < V i) (hk : 0 < k) :
     ∑ i, (1 / V i) / ivTotalWeight V = 1 ∧
       firstOrderVariance (fun i ↦ (1 / V i) / ivTotalWeight V) V = ivPooledVariance V := by
-  have hW : 0 < ivTotalWeight V := by
-    have : Nonempty (Fin k) := ⟨⟨0, hk⟩⟩
-    exact Finset.sum_pos (fun i _ ↦ one_div_pos.2 (hV i)) Finset.univ_nonempty
-  have hsum : ∑ i, (1 / V i) / ivTotalWeight V = 1 := by
-    rw [← Finset.sum_div]
-    exact div_self hW.ne'
+  have hsum : ∑ i, (1 / V i) / ivTotalWeight V = 1 := (ivPooled_eq_sum_weights V V hV hk).1
   refine ⟨hsum, ?_⟩
   rw [firstOrderVariance_weights_eq hV hk hsum]
   simp
@@ -804,8 +1186,8 @@ theorem greenland_example :
 /-- **Equation 10.2 and the variance share.** With the same inputs the adjusted odds ratio
 (direct formula of Chapter 6) lies in `(0.9485, 0.9495)`, the printed `0.949`. The conventional
 Woolf variance `1/215 + 1/1449 + 1/668 + 1/4296 ≈ 0.00707` is between `79.5%` and `79.6%` of the
-Greenland variance. The book prints `79%`; rounding gives `80%`, so the printed share is
-truncated rather than rounded. -/
+unrounded Greenland variance. The book (p. 333) prints `79%`; the unrounded Woolf variance is
+`79.45…%` of the printed `0.0089` (`greenland_example_printed_shares`). -/
 theorem greenland_example_or_share :
     (0.9485 : ℝ) < (215 / 1664 + 465 / 470 - 1) * (128 / 164 - 668 / 4964) /
         ((668 / 4964 + 465 / 470 - 1) * (128 / 164 - 215 / 1664)) ∧
@@ -820,6 +1202,18 @@ theorem greenland_example_or_share :
         (215 / 1664) 1664 (668 / 4964) 4964 := by
   refine ⟨by norm_num, by norm_num, ?_, ?_⟩ <;>
     norm_num [greenlandNondiff, trueProportion, woolfVariance]
+
+/-- **The two printed shares (Chapter 10, p. 333).** The book states that the conventional
+variance `0.0071` accounts for `79%` of the variance `0.0089` of Equation 10.1 and for `76%` of the
+variance `0.0094` implied by the probabilistic interval of Chapter 8. The unrounded Woolf variance
+over the printed `0.0089` is `79.45…%`, which rounds to `79%`; the ratio of the printed values
+`0.0071 / 0.0094` is `75.53…%`, which rounds to `76%`. The share computed from the displayed
+interval limits themselves is `greenland_example_second_share`. -/
+theorem greenland_example_printed_shares :
+    (0.7945 < woolfVariance 215 1449 668 4296 / 0.0089 ∧
+        woolfVariance 215 1449 668 4296 / 0.0089 < (0.7946 : ℝ)) ∧
+      ((0.7553 : ℝ) < 0.0071 / 0.0094 ∧ (0.0071 : ℝ) / 0.0094 < 0.7554) := by
+  norm_num [woolfVariance]
 
 /-- **Marshall's example (Chapter 10, Tables 10.1 and 10.2).** Observed `122/442` exposed and
 unexposed cases and `101/479` controls; `PPV₁ = 29/51`, `NPV₁ = 143/160`, `PPV₀ = 21/33`,
@@ -840,18 +1234,20 @@ theorem marshall_example :
   norm_num [marshallA, trueProportionPV]
 
 /-- **Table 10.3, predictive value weighting.** The weighted cells are
-`122 · 29/51 + 442 · (1 - 143/160) ≈ 116.335`, `122 · (1 - 29/51) + 442 · 143/160 ≈ 447.665`,
-`101 · 21/33 + 479 · (1 - 168/184) ≈ 105.925`, `101 · (1 - 21/33) + 479 · 168/184 ≈ 474.075`.
-The book prints `116.34, 447.67, 105.92, 474.08`; the second cell rounds to `447.66`. -/
+`122 · 29/51 + 442 · (1 - 143/160) = 116.33505…`, `122 · (1 - 29/51) + 442 · 143/160 = 447.66495…`,
+`101 · 21/33 + 479 · (1 - 168/184) = 105.92490…`, `101 · (1 - 21/33) + 479 · 168/184 = 474.07510…`.
+The half-unit intervals below establish their rounding to two decimals: `116.34`, `447.66`,
+`105.92`, `474.08`. The book prints `116.34, 447.67, 105.92, 474.08`, so the second printed cell
+is one unit too large in the last digit; the other three agree. -/
 theorem pvw_example :
-    (116.33 < pvwExposed 122 442 (29 / 51) (143 / 160) ∧
-        pvwExposed 122 442 (29 / 51) (143 / 160) < 116.34) ∧
-      (447.66 < pvwUnexposed 122 442 (29 / 51) (143 / 160) ∧
-        pvwUnexposed 122 442 (29 / 51) (143 / 160) < 447.67) ∧
-      (105.92 < pvwExposed 101 479 (21 / 33) (168 / 184) ∧
-        pvwExposed 101 479 (21 / 33) (168 / 184) < 105.93) ∧
-      (474.07 < pvwUnexposed 101 479 (21 / 33) (168 / 184) ∧
-        pvwUnexposed 101 479 (21 / 33) (168 / 184) < 474.08) := by
+    (116.335 < pvwExposed 122 442 (29 / 51) (143 / 160) ∧
+        pvwExposed 122 442 (29 / 51) (143 / 160) < 116.345) ∧
+      (447.655 < pvwUnexposed 122 442 (29 / 51) (143 / 160) ∧
+        pvwUnexposed 122 442 (29 / 51) (143 / 160) < 447.665) ∧
+      (105.915 < pvwExposed 101 479 (21 / 33) (168 / 184) ∧
+        pvwExposed 101 479 (21 / 33) (168 / 184) < 105.925) ∧
+      (474.075 < pvwUnexposed 101 479 (21 / 33) (168 / 184) ∧
+        pvwUnexposed 101 479 (21 / 33) (168 / 184) < 474.085) := by
   norm_num [pvwExposed, pvwUnexposed]
 
 /-- **Inverse-variance pooling (Chapter 10, "Misclassification Example").** With standard errors
@@ -875,6 +1271,40 @@ theorem exp_lt_of_taylor {x a : ℝ} (hx₀ : 0 ≤ x) (hx₁ : x ≤ 1) {n : �
     (h : ∑ i ∈ Finset.range n, x ^ i / i.factorial + x ^ n * (n + 1) / (n.factorial * n) < a) :
     Real.exp x < a :=
   (Real.exp_bound' hx₀ hx₁ hn).trans_lt h
+
+/-- **The second variance share, from the displayed limits (Chapter 10, p. 333).** The variance
+implied by the limits `(0.78, 1.14)` of the probabilistic bias analysis is
+`((ln 1.14 - ln 0.78) / 3.92)² ≈ 0.009372` (printed `0.0094`), and the unrounded Woolf variance
+`0.0070711` is between `75.4%` and `75.5%` of it (`75.45%`), which rounds to `75%`; the book
+prints `76%`, and the ratio `0.0071 / 0.0094` of the printed values is `75.53…%`
+(`greenland_example_printed_shares`). It is a different comparison from the share `79.5%` of
+the Greenland variance in `greenland_example_or_share`. -/
+theorem greenland_example_second_share :
+    ((0.37948 : ℝ) < Real.log 1.14 - Real.log 0.78 ∧
+        Real.log 1.14 - Real.log 0.78 < 0.37950) ∧
+      0.754 * ((Real.log 1.14 - Real.log 0.78) / 3.92) ^ 2 < woolfVariance 215 1449 668 4296 ∧
+      woolfVariance 215 1449 668 4296 < 0.755 * ((Real.log 1.14 - Real.log 0.78) / 3.92) ^ 2 := by
+  have hl₁ : (0.13102 : ℝ) < Real.log 1.14 := (Real.lt_log_iff_exp_lt (by norm_num)).2
+    (exp_lt_of_taylor (by norm_num) (by norm_num) (n := 6) (by norm_num)
+      (by norm_num [Finset.sum_range_succ, Nat.factorial]))
+  have hl₂ : Real.log 1.14 < 0.13103 := (Real.log_lt_iff_lt_exp (by norm_num)).2
+    (lt_exp_of_taylor (by norm_num) 7 (by norm_num [Finset.sum_range_succ, Nat.factorial]))
+  have hm : Real.log 0.78 = -Real.log (50 / 39) := by
+    rw [← Real.log_inv]; norm_num
+  have hm₁ : (0.24846 : ℝ) < Real.log (50 / 39) := (Real.lt_log_iff_exp_lt (by norm_num)).2
+    (exp_lt_of_taylor (by norm_num) (by norm_num) (n := 7) (by norm_num)
+      (by norm_num [Finset.sum_range_succ, Nat.factorial]))
+  have hm₂ : Real.log (50 / 39) < 0.24847 := (Real.log_lt_iff_lt_exp (by norm_num)).2
+    (lt_exp_of_taylor (by norm_num) 8 (by norm_num [Finset.sum_range_succ, Nat.factorial]))
+  rw [hm]
+  have hw : woolfVariance 215 1449 668 4296 = 1 / 215 + 1 / 1449 + 1 / 668 + 1 / 4296 := rfl
+  have hx₁ : (0.37948 : ℝ) ^ 2 < (Real.log 1.14 - -Real.log (50 / 39)) ^ 2 := by
+    apply pow_lt_pow_left₀ (by linarith) (by norm_num) (by norm_num)
+  have hx₂ : (Real.log 1.14 - -Real.log (50 / 39)) ^ 2 < (0.37950 : ℝ) ^ 2 := by
+    apply pow_lt_pow_left₀ (by linarith) (by linarith) (by norm_num)
+  refine ⟨⟨by linarith, by linarith⟩, ?_, ?_⟩
+  · rw [hw, div_pow]; norm_num at hx₁ hx₂ ⊢; linarith
+  · rw [hw, div_pow]; norm_num at hx₁ hx₂ ⊢; linarith
 
 /-- The Greenland variance of the smoking and breast cancer example (inputs of
 `greenland_example`). -/
@@ -1067,6 +1497,205 @@ theorem greenland_differential_ne_nondifferential :
       greenlandTerm ((128 / 164) * (1 - 128 / 164) / 164) ((465 / 470) * (1 - 465 / 470) / 470)
         (128 / 164) (465 / 470) (668 / 4964) 4964 ≠ exampleGreenlandVar := by
   norm_num [greenlandTerm, exampleGreenlandVar, greenlandNondiff, trueProportion]
+
+
+/-- The positive predictive values of Table 10.2, by group (cases `true`, controls `false`). -/
+noncomputable def examplePPV : Bool → ℝ
+  | true => 29 / 51
+  | false => 21 / 33
+
+/-- The negative predictive values of Table 10.2, by group. -/
+noncomputable def exampleNPV : Bool → ℝ
+  | true => 143 / 160
+  | false => 168 / 184
+
+/-- The odds ratio of the weighted table built from counts `a`, `b` (cases observed exposed and
+unexposed) and `c`, `d` (controls) with the predictive values of Table 10.2. -/
+noncomputable def exampleWeightedOR (a b c d : ℝ) : ℝ :=
+  pvwExposed a b (29 / 51) (143 / 160) * pvwUnexposed c d (21 / 33) (168 / 184) /
+    (pvwUnexposed a b (29 / 51) (143 / 160) * pvwExposed c d (21 / 33) (168 / 184))
+
+/-- The leave-one-out odds ratio after deleting one record of class `(case, observed exposure)`
+from the data of Table 10.1 (`122, 442` cases and `101, 479` controls). -/
+noncomputable def exampleLooOR : Bool → Bool → ℝ
+  | true, true => exampleWeightedOR 121 442 101 479
+  | true, false => exampleWeightedOR 122 441 101 479
+  | false, true => exampleWeightedOR 122 442 100 479
+  | false, false => exampleWeightedOR 122 442 101 478
+
+/-- **The weighted tables of the example.** For any labeling of `1144` records with the counts
+of Table 10.1, the weighted odds ratio of all records is that of Table 10.3, and the weighted odds
+ratio after leaving out record `i` depends only on the class of `i` (`exampleLooOR`). -/
+theorem pvwOddsRatio_example (case obs : Fin 1144 → Bool)
+    (h₁₁ : #{i | case i = true ∧ obs i = true} = 122)
+    (h₁₀ : #{i | case i = true ∧ obs i = false} = 442)
+    (h₀₁ : #{i | case i = false ∧ obs i = true} = 101)
+    (h₀₀ : #{i | case i = false ∧ obs i = false} = 479) :
+    pvwOddsRatio univ case obs examplePPV exampleNPV = exampleWeightedOR 122 442 101 479 ∧
+      ∀ i, pvwOddsRatio (univ.erase i) case obs examplePPV exampleNPV =
+        exampleLooOR (case i) (obs i) := by
+  obtain ⟨c₁₁, c₁₀⟩ := pvwCell_eq univ case obs examplePPV exampleNPV true
+  obtain ⟨c₀₁, c₀₀⟩ := pvwCell_eq univ case obs examplePPV exampleNPV false
+  rw [h₁₁, h₁₀] at c₁₁ c₁₀
+  rw [h₀₁, h₀₀] at c₀₁ c₀₀
+  refine ⟨?_, fun i ↦ ?_⟩
+  · rw [pvwOddsRatio, c₁₁, c₁₀, c₀₁, c₀₀]
+    norm_num [examplePPV, exampleNPV, exampleWeightedOR]
+  · rw [pvwOddsRatio, pvwCell_erase (mem_univ i), pvwCell_erase (mem_univ i),
+      pvwCell_erase (mem_univ i), pvwCell_erase (mem_univ i), c₁₁, c₁₀, c₀₁, c₀₀]
+    cases case i <;> cases obs i <;>
+      norm_num [examplePPV, exampleNPV, exampleWeightedOR, exampleLooOR, pvwWeight,
+        pvwExposed, pvwUnexposed]
+
+/-- Bounds on `log r` from the elementary inequalities `1 - 1/r ≤ log r ≤ r - 1`. -/
+theorem log_bounds_of_ratio {r lo hi : ℝ} (hr : 0 < r) (hlo : lo < 1 - r⁻¹)
+    (hhi : r - 1 < hi) :
+    lo < Real.log r ∧ Real.log r < hi :=
+  ⟨hlo.trans_le (Real.one_sub_inv_le_log_of_pos hr),
+    (Real.log_le_sub_one_of_pos hr).trans_lt hhi⟩
+
+/-- The four leave-one-out log odds ratios, centered at the full log odds ratio, are bounded by
+`1 - 1/r ≤ log r ≤ r - 1` applied to exact rationals. -/
+theorem exampleLoo_bound_tt :
+    (-0.0039436 : ℝ) < Real.log (exampleLooOR true true / exampleWeightedOR 122 442 101 479) ∧
+      Real.log (exampleLooOR true true / exampleWeightedOR 122 442 101 479) < -0.0039280 :=
+  log_bounds_of_ratio (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+
+theorem exampleLoo_bound_tf :
+    (0.0010841 : ℝ) < Real.log (exampleLooOR true false / exampleWeightedOR 122 442 101 479) ∧
+      Real.log (exampleLooOR true false / exampleWeightedOR 122 442 101 479) < 0.0010854 :=
+  log_bounds_of_ratio (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+
+theorem exampleLoo_bound_ft :
+    (0.0052446 : ℝ) < Real.log (exampleLooOR false true / exampleWeightedOR 122 442 101 479) ∧
+      Real.log (exampleLooOR false true / exampleWeightedOR 122 442 101 479) < 0.0052724 :=
+  log_bounds_of_ratio (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+
+theorem exampleLoo_bound_ff :
+    (-0.0011072 : ℝ) < Real.log (exampleLooOR false false / exampleWeightedOR 122 442 101 479) ∧
+      Real.log (exampleLooOR false false / exampleWeightedOR 122 442 101 479) < -0.0011059 :=
+  log_bounds_of_ratio (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+    (by norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed])
+
+/-- The arithmetic of the jackknife example: given the bounds on the full odds ratio and on the four
+centered leave-one-out log odds ratios, the jackknife standard error and the Wald interval satisfy
+the bounds of `pvw_jackknife_example`. -/
+theorem jackknife_example_numeric {E x₁ x₂ x₃ x₄ V : ℝ} (hE₁ : 1.16307 < E)
+    (hE₂ : E < 1.16308)
+    (l₁ : -0.0039436 < x₁) (u₁ : x₁ < -0.0039280) (l₂ : 0.0010841 < x₂) (u₂ : x₂ < 0.0010854)
+    (l₃ : 0.0052446 < x₃) (u₃ : x₃ < 0.0052724) (l₄ : -0.0011072 < x₄) (u₄ : x₄ < -0.0011059)
+    (hV : V = ((1144 : ℝ) - 1) / 1144 * (122 * x₁ ^ 2 + 442 * x₂ ^ 2 + 101 * x₃ ^ 2 +
+      479 * x₄ ^ 2 - (122 * x₁ + 442 * x₂ + 101 * x₃ + 479 * x₄) ^ 2 / 1144)) :
+    (0.0758 < √V ∧ √V < 0.0763) ∧
+      (0.995 < Real.exp (Real.log E - 1.96 * √V) ∧
+        Real.exp (Real.log E - 1.96 * √V) < 1.005) ∧
+      (1.345 < Real.exp (Real.log E + 1.96 * √V) ∧
+        Real.exp (Real.log E + 1.96 * √V) < 1.355) := by
+  have q₁ : (0.0039280 : ℝ) ^ 2 < x₁ ^ 2 := by
+    rw [← neg_sq x₁]; exact pow_lt_pow_left₀ (by linarith) (by norm_num) two_ne_zero
+  have r₁ : x₁ ^ 2 < (0.0039436 : ℝ) ^ 2 := sq_lt_sq' l₁ (by linarith)
+  have q₂ : (0.0010841 : ℝ) ^ 2 < x₂ ^ 2 := pow_lt_pow_left₀ l₂ (by norm_num) two_ne_zero
+  have r₂ : x₂ ^ 2 < (0.0010854 : ℝ) ^ 2 := sq_lt_sq' (by linarith) u₂
+  have q₃ : (0.0052446 : ℝ) ^ 2 < x₃ ^ 2 := pow_lt_pow_left₀ l₃ (by norm_num) two_ne_zero
+  have r₃ : x₃ ^ 2 < (0.0052724 : ℝ) ^ 2 := sq_lt_sq' (by linarith) u₃
+  have q₄ : (0.0011059 : ℝ) ^ 2 < x₄ ^ 2 := by
+    rw [← neg_sq x₄]; exact pow_lt_pow_left₀ (by linarith) (by norm_num) two_ne_zero
+  have r₄ : x₄ ^ 2 < (0.0011072 : ℝ) ^ 2 := sq_lt_sq' l₄ (by linarith)
+  have hSlo : -0.0034 < 122 * x₁ + 442 * x₂ + 101 * x₃ + 479 * x₄ := by linarith
+  have hShi : 122 * x₁ + 442 * x₂ + 101 * x₃ + 479 * x₄ < 0.0034 := by linarith
+  have hS2 := sq_lt_sq' hSlo hShi
+  generalize 122 * x₁ + 442 * x₂ + 101 * x₃ + 479 * x₄ = S at hV hS2
+  have hS0 := sq_nonneg S
+  have hV₁ : (0.0758 : ℝ) ^ 2 < V := by
+    rw [hV]; linarith
+  have hV₂ : V < (0.0763 : ℝ) ^ 2 := by
+    rw [hV]; linarith
+  have hs₁ : (0.0758 : ℝ) < √V := Real.lt_sqrt_of_sq_lt hV₁
+  have hs₂ : √V < 0.0763 := (Real.sqrt_lt' (by norm_num)).2 hV₂
+  have he₁ : (1.16017 : ℝ) < Real.exp (1.96 * √V) :=
+    (lt_exp_of_taylor (x := 0.148568) (by norm_num) 6
+      (by norm_num [Finset.sum_range_succ, Nat.factorial])).trans
+      (Real.exp_lt_exp.2 (by linarith))
+  have he₂ : Real.exp (1.96 * √V) < 1.16131 :=
+    (Real.exp_lt_exp.2 (by linarith : 1.96 * √V < 0.149548)).trans
+      (exp_lt_of_taylor (by norm_num) (by norm_num) (n := 6) (by norm_num)
+        (by norm_num [Finset.sum_range_succ, Nat.factorial]))
+  have hEpos : 0 < E := by linarith
+  have hpos := Real.exp_pos (1.96 * √V)
+  have hm₁ := mul_lt_mul'' hE₁ he₁ (by norm_num) (by norm_num)
+  have hm₂ := mul_lt_mul'' hE₂ he₂ hEpos.le hpos.le
+  rw [Real.exp_sub, Real.exp_add, Real.exp_log hEpos]
+  refine ⟨⟨hs₁, hs₂⟩, ⟨?_, ?_⟩, ⟨by linarith, by linarith⟩⟩
+  · rw [lt_div_iff₀ hpos]; linarith
+  · rw [div_lt_iff₀ hpos]; linarith
+
+/-- **Record-level jackknife of predictive value weighting (Chapter 10, pp. 337 to 338).** Label
+`1144` records by case status and observed exposure with the counts of Table 10.1. Deleting each
+record in turn (both of its weighted copies, `duplicated_erase`), the leave-one-out log odds
+ratios of the weighted table take four values, with multiplicities `122, 442, 101, 479`. Their
+jackknife standard error lies in `(0.0758, 0.0763)` (printed `0.076`), and the interval
+`exp (ln OR ± 1.96 SE)`, with `ln OR` from the full weighted table, has endpoints in
+`(0.995, 1.005)` and `(1.345, 1.355)` (printed `(1.00, 1.35)`). The predictive values are held
+fixed at those of Table 10.2 when a record is deleted. -/
+theorem pvw_jackknife_example (case obs : Fin 1144 → Bool)
+    (h₁₁ : #{i | case i = true ∧ obs i = true} = 122)
+    (h₁₀ : #{i | case i = true ∧ obs i = false} = 442)
+    (h₀₁ : #{i | case i = false ∧ obs i = true} = 101)
+    (h₀₀ : #{i | case i = false ∧ obs i = false} = 479) :
+    let θ : Fin 1144 → ℝ := fun i ↦
+      Real.log (pvwOddsRatio (univ.erase i) case obs examplePPV exampleNPV)
+    let OR := pvwOddsRatio univ case obs examplePPV exampleNPV
+    (0.0758 < √(jackknifeVariance θ) ∧ √(jackknifeVariance θ) < 0.0763) ∧
+      (0.995 < Real.exp (Real.log OR - 1.96 * √(jackknifeVariance θ)) ∧
+        Real.exp (Real.log OR - 1.96 * √(jackknifeVariance θ)) < 1.005) ∧
+      (1.345 < Real.exp (Real.log OR + 1.96 * √(jackknifeVariance θ)) ∧
+        Real.exp (Real.log OR + 1.96 * √(jackknifeVariance θ)) < 1.355) := by
+  intro θ OR
+  obtain ⟨hfull, hloo⟩ := pvwOddsRatio_example case obs h₁₁ h₁₀ h₀₁ h₀₀
+  have hE₁ : (1.16307 : ℝ) < exampleWeightedOR 122 442 101 479 := by
+    norm_num [exampleWeightedOR, pvwExposed, pvwUnexposed]
+  have hE₂ : exampleWeightedOR 122 442 101 479 < 1.16308 := by
+    norm_num [exampleWeightedOR, pvwExposed, pvwUnexposed]
+  have hloopos : ∀ d o, 0 < exampleLooOR d o := by
+    intro d o
+    cases d <;> cases o <;>
+      norm_num [exampleLooOR, exampleWeightedOR, pvwExposed, pvwUnexposed]
+  obtain ⟨l₁, u₁⟩ := exampleLoo_bound_tt
+  obtain ⟨l₂, u₂⟩ := exampleLoo_bound_tf
+  obtain ⟨l₃, u₃⟩ := exampleLoo_bound_ft
+  obtain ⟨l₄, u₄⟩ := exampleLoo_bound_ff
+  set E := exampleWeightedOR 122 442 101 479 with hE
+  have hEpos : 0 < E := by linarith
+  have hθ : ∀ i, θ i - Real.log E =
+      Real.log (exampleLooOR (case i) (obs i) / E) := by
+    intro i
+    simp only [θ, hloo i]
+    rw [Real.log_div (hloopos _ _).ne' hEpos.ne']
+  have hJ : jackknifeVariance θ = ((1144 : ℝ) - 1) / 1144 *
+      (122 * Real.log (exampleLooOR true true / E) ^ 2 +
+        442 * Real.log (exampleLooOR true false / E) ^ 2 +
+        101 * Real.log (exampleLooOR false true / E) ^ 2 +
+        479 * Real.log (exampleLooOR false false / E) ^ 2 -
+        (122 * Real.log (exampleLooOR true true / E) +
+          442 * Real.log (exampleLooOR true false / E) +
+          101 * Real.log (exampleLooOR false true / E) +
+          479 * Real.log (exampleLooOR false false / E)) ^ 2 / 1144) := by
+    rw [jackknifeVariance_eq_centered (by norm_num) θ (Real.log E)]
+    simp_rw [hθ]
+    rw [sum_comp_class case obs (fun d o ↦ Real.log (exampleLooOR d o / E) ^ 2),
+      sum_comp_class case obs (fun d o ↦ Real.log (exampleLooOR d o / E))]
+    simp only [Fintype.sum_bool, h₁₁, h₁₀, h₀₁, h₀₀]
+    push_cast
+    ring
+  rw [show OR = E from hfull]
+  exact jackknife_example_numeric hE₁ hE₂ l₁ u₁ l₂ u₂ l₃ u₃ l₄ u₄ hJ
 
 end Examples
 
