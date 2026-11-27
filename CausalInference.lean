@@ -144,3 +144,5 @@ public import CausalInference.Designs.Panel.DifferenceInDifferences
 public import CausalInference.Designs.Panel.FixedEffects
 public import CausalInference.Surrogacy.Criteria
 public import CausalInference.Surrogacy.Counterexamples
+public import CausalInference.Survival.MultiState
+public import CausalInference.Survival.PostProgression
