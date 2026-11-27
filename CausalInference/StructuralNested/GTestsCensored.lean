@@ -36,6 +36,14 @@ sum runs over the distinct observed times; times with no event contribute zero.
 * `switchWeighted_swap`: the switching-weighted statistic is **symmetric**, not antisymmetric,
   under swapping the arms: the weight changes sign together with observed minus expected.
 * `switchWeighted_eq_zero_of_equiv`: zero for equal samples.
+* `absSwitchWeighted_swap`, `absSwitchWeighted_eq_zero_of_equiv`: the unsigned reading (absolute
+  value of the difference of proportions) is antisymmetric and zero for equal samples;
+  `SwitchExample.abs_sign_pattern`: it has the sign pattern of the log-rank statistic there.
+* `switchGStat`: the switching-weighted g-statistic at a candidate `ψ`, on the recensored
+  candidate records with the treatment status `statusAt ψ` on the scale of `U(ψ)`;
+  `switchGStat_congr`: a function of the observed records `CensoredTrial.pathRecord` and `ψ`;
+  `switchGStat_eq_of_constant`: with paths that are empty or the whole follow-up it is
+  `switchWeighted` with constant status.
 * `SwitchExample.sign_pattern`: on the candidate untreated times of
   `GTestExample.NoRoot` the log-rank statistic is positive at `ψ = log (1/4)` and negative at
   `ψ = log 2`, while the switching-weighted statistic is negative and positive.
@@ -181,7 +189,10 @@ noncomputable def propOnTreatment (S : Fin m → ℝ × Bool) (Z : Fin m → ℝ
 
 /-- The weight at `t`: the proportion on the experimental treatment among those at risk in the
 experimental arm minus that in the control arm. This is a reading of the description of the
-weights of Bowden et al. in TSD 24, Section 4.2.1.1, not a formula printed there. -/
+weights of Bowden et al. in TSD 24, Section 4.2.1.1, not a formula printed there. The signed
+weight loses the direction of the comparison: the resulting statistic is symmetric in the arms
+(`switchWeighted_swap`), so its sign does not say which arm does better. The unsigned reading
+`absSwitchWeight` keeps it (`absSwitchWeighted_swap`). -/
 noncomputable def switchWeight (E : Fin m → ℝ × Bool) (ZE : Fin m → ℝ → Bool)
     (C : Fin n → ℝ × Bool) (ZC : Fin n → ℝ → Bool) (t : ℝ) : ℝ :=
   propOnTreatment E ZE t - propOnTreatment C ZC t
@@ -217,6 +228,54 @@ theorem switchWeight_eq_zero_of_equiv (E : Fin m → ℝ × Bool) (ZE : Fin m �
   have hn : onTreatment C ZC t = onTreatment E ZE t :=
     (card_equiv σ fun i ↦ by simp [hσ, hZ]).symm
   rw [switchWeight, propOnTreatment, propOnTreatment, hr, hn, sub_self]
+
+/-- **The unsigned reading of the weights**: the absolute value of the difference between the two
+arms of the proportions on the experimental treatment among those at risk. This is also a
+reading of the description in TSD 24, Section 4.2.1.1, not a formula printed there. -/
+noncomputable def absSwitchWeight (E : Fin m → ℝ × Bool) (ZE : Fin m → ℝ → Bool)
+    (C : Fin n → ℝ × Bool) (ZC : Fin n → ℝ → Bool) (t : ℝ) : ℝ :=
+  |propOnTreatment E ZE t - propOnTreatment C ZC t|
+
+/-- The weighted log-rank statistic with the weights `absSwitchWeight`. -/
+noncomputable def absSwitchWeighted (E : Fin m → ℝ × Bool) (ZE : Fin m → ℝ → Bool)
+    (C : Fin n → ℝ × Bool) (ZC : Fin n → ℝ → Bool) : ℝ :=
+  weightedLogRankC (absSwitchWeight E ZE C ZC) E C
+
+/-- **The unsigned version is antisymmetric**: its weight does not depend on the order of the
+arms, so swapping the arms changes the sign of the statistic. -/
+theorem absSwitchWeighted_swap (E : Fin m → ℝ × Bool) (ZE : Fin m → ℝ → Bool)
+    (C : Fin n → ℝ × Bool) (ZC : Fin n → ℝ → Bool) :
+    absSwitchWeighted C ZC E ZE = -absSwitchWeighted E ZE C ZC := by
+  have hw : absSwitchWeight C ZC E ZE = absSwitchWeight E ZE C ZC :=
+    funext fun _ ↦ abs_sub_comm _ _
+  rw [absSwitchWeighted, absSwitchWeighted, hw, weightedLogRankC_swap]
+
+/-- The unsigned version is zero for equal samples, whatever the treatment status. -/
+theorem absSwitchWeighted_eq_zero_of_equiv (E : Fin m → ℝ × Bool) (ZE : Fin m → ℝ → Bool)
+    (C : Fin n → ℝ × Bool) (ZC : Fin n → ℝ → Bool) (σ : Fin m ≃ Fin n)
+    (hσ : ∀ i, C (σ i) = E i) : absSwitchWeighted E ZE C ZC = 0 :=
+  weightedLogRankC_eq_zero_of_equiv _ E C σ hσ
+
+/-- The switching-weighted statistics use the treatment status only at the event times at which
+the patient is at risk. -/
+theorem onTreatment_congr {S : Fin m → ℝ × Bool} {Z Z' : Fin m → ℝ → Bool} {t : ℝ}
+    (h : ∀ i, t ≤ (S i).1 → Z i t = Z' i t) : onTreatment S Z t = onTreatment S Z' t := by
+  classical
+  unfold onTreatment
+  congr 1
+  ext i
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  exact and_congr_right fun hi ↦ by rw [h i hi]
+
+theorem switchWeighted_congr_status {E : Fin m → ℝ × Bool} {ZE ZE' : Fin m → ℝ → Bool}
+    {C : Fin n → ℝ × Bool} {ZC ZC' : Fin n → ℝ → Bool}
+    (hE : ∀ t ∈ eventTimes (times E) (times C), ∀ i, t ≤ (E i).1 → ZE i t = ZE' i t)
+    (hC : ∀ t ∈ eventTimes (times E) (times C), ∀ j, t ≤ (C j).1 → ZC j t = ZC' j t) :
+    switchWeighted E ZE C ZC = switchWeighted E ZE' C ZC' := by
+  rw [switchWeighted, switchWeighted, weightedLogRankC, weightedLogRankC]
+  refine Finset.sum_congr rfl fun t ht ↦ ?_
+  rw [switchWeight, switchWeight, propOnTreatment, propOnTreatment, propOnTreatment,
+    propOnTreatment, onTreatment_congr (hE t ht), onTreatment_congr (hC t ht)]
 
 theorem atRiskC_eq_sum (S : Fin m → ℝ × Bool) (t : ℝ) :
     (atRiskC S t : ℝ) = ∑ i, if t ≤ (S i).1 then 1 else 0 := by
@@ -295,6 +354,29 @@ theorem switch_high : switchWeighted expHigh statusE ctrl statusC = 1 / 3 := by
     statusE, statusC]
   norm_num
 
+theorem abs_low : absSwitchWeighted expLow statusE ctrl statusC = 2 / 3 := by
+  rw [absSwitchWeighted, weightedLogRankC, sum_eventTimes_eq]
+  simp only [absSwitchWeight, propOnTreatment, onTreatment_eq_sum, oeC, atRiskC_eq_sum,
+    deathsC_eq_sum, deaths_eq_sum, Fin.sum_univ_two, Fin.sum_univ_one, times, expLow, ctrl,
+    statusE, statusC]
+  norm_num [abs_div]
+
+theorem abs_high : absSwitchWeighted expHigh statusE ctrl statusC = -1 / 3 := by
+  rw [absSwitchWeighted, weightedLogRankC, sum_eventTimes_eq]
+  simp only [absSwitchWeight, propOnTreatment, onTreatment_eq_sum, oeC, atRiskC_eq_sum,
+    deathsC_eq_sum, deaths_eq_sum, Fin.sum_univ_two, Fin.sum_univ_one, times, expHigh, ctrl,
+    statusE, statusC]
+  norm_num [abs_div]
+
+/-- **The unsigned version keeps the direction.** On the same samples it is positive at
+`ψ = log (1/4)` and negative at `ψ = log 2`, with the sign pattern of the log-rank statistic,
+where the signed version has the opposite pattern (`sign_pattern`). -/
+theorem abs_sign_pattern :
+    0 < absSwitchWeighted expLow statusE ctrl statusC ∧
+      absSwitchWeighted expHigh statusE ctrl statusC < 0 := by
+  rw [abs_low, abs_high]
+  norm_num
+
 /-- **A different sign pattern.** At `ψ = log (1/4)` and `ψ = log 2` the log-rank statistic is
 positive then negative, the switching-weighted statistic negative then positive. -/
 theorem sign_pattern :
@@ -342,6 +424,140 @@ theorem recensoredGStat_congr {Ω' : Type*} (stat : (Fin m → ℝ × Bool) → 
   have e2 : (fun j ↦ M.recensored ψ (pC j)) = fun j ↦ M'.recensored ψ (pC' j) :=
     funext fun j ↦ key _ _ (hC j)
   rw [recensoredGStat, recensoredGStat, e1, e2]
+
+/-! ### The switching-weighted g-statistic at a candidate `ψ` -/
+
+open Classical in
+/-- **Treatment status on the scale of the candidate untreated time.** A patient with observed
+treatment path `B` is on the experimental treatment at the time `u` of the scale of `U(ψ)` when
+`u = untreatedTime ψ B s` for an original time `s ∈ B`. For a measurable path that `s` is unique,
+since `untreatedTime ψ B` is strictly increasing (`untreatedTime_strictMono`). The status is
+defined here directly from the path. -/
+noncomputable def statusAt (ψ : ℝ) (B : Set ℝ) (u : ℝ) : Bool :=
+  decide (∃ s ∈ B, untreatedTime ψ B s = u)
+
+/-- The candidate record at `ψ` of an observed record `(x, δ, B, c)`: follow-up `x`, event
+indicator `δ`, observed treatment path `B` and administrative censoring time `c`. It is the
+recensored record, computed with the time `timeOn B x` on treatment. -/
+noncomputable def candidateRecord (ψ : ℝ) (r : ℝ × Bool × Set ℝ × ℝ) : ℝ × Bool :=
+  recensorData ψ r.1 r.2.1 (timeOn r.2.2.1 r.1) r.2.2.2
+
+/-- **The switching-weighted g-statistic at a candidate `ψ`**: the statistic `switchWeighted` on
+the candidate records, with the risk sets of the candidate records and the treatment status
+`statusAt ψ` on the scale of `U(ψ)`. It is defined on the observed records, so it is a function
+of the observed records and `ψ`. -/
+noncomputable def switchGStat (E : Fin m → ℝ × Bool × Set ℝ × ℝ)
+    (C : Fin n → ℝ × Bool × Set ℝ × ℝ) (ψ : ℝ) : ℝ :=
+  switchWeighted (fun i ↦ candidateRecord ψ (E i)) (fun i ↦ statusAt ψ (E i).2.2.1)
+    (fun j ↦ candidateRecord ψ (C j)) (fun j ↦ statusAt ψ (C j).2.2.1)
+
+/-- The observed record of a patient of a censored trial: follow-up, event indicator, treatment
+path up to the follow-up, administrative censoring time. Every component is observed. -/
+noncomputable def _root_.CausalInference.StructuralNested.CensoredTrial.pathRecord
+    (M : CensoredTrial Ω) (ω : Ω) : ℝ × Bool × Set ℝ × ℝ :=
+  (M.obsTime ω, M.event ω, M.A ω ∩ Set.Iic (M.obsTime ω), M.C ω)
+
+/-- **The switching-weighted g-statistic is a function of the observed records and `ψ`.** -/
+theorem switchGStat_congr {Ω' : Type*} {M : CensoredTrial Ω} {M' : CensoredTrial Ω'}
+    {pE : Fin m → Ω} {pC : Fin n → Ω} {pE' : Fin m → Ω'} {pC' : Fin n → Ω'}
+    (hE : ∀ i, M.pathRecord (pE i) = M'.pathRecord (pE' i))
+    (hC : ∀ j, M.pathRecord (pC j) = M'.pathRecord (pC' j)) (ψ : ℝ) :
+    switchGStat (fun i ↦ M.pathRecord (pE i)) (fun j ↦ M.pathRecord (pC j)) ψ =
+      switchGStat (fun i ↦ M'.pathRecord (pE' i)) (fun j ↦ M'.pathRecord (pC' j)) ψ := by
+  simp only [hE, hC]
+
+theorem timeOn_inter_Iic (A : Set ℝ) {x : ℝ} (hx : 0 ≤ x) :
+    timeOn (A ∩ Set.Iic x) x = timeOn A x := by
+  unfold timeOn
+  refine intervalIntegral.integral_congr fun s hs ↦ ?_
+  rw [Set.uIcc_of_le hx] at hs
+  by_cases h : s ∈ A <;> simp [h, hs.2]
+
+/-- The candidate record of the observed record is the recensored record of the trial. -/
+theorem candidateRecord_pathRecord {M : CensoredTrial Ω} (hwf : M.WellFormed) (ψ : ℝ) (ω : Ω) :
+    candidateRecord ψ (M.pathRecord ω) = M.recensored ψ ω := by
+  have hx : 0 ≤ M.obsTime ω := le_min (hwf.T_nonneg ω) (hwf.C_nonneg ω)
+  simp only [candidateRecord, CensoredTrial.pathRecord, CensoredTrial.recensored,
+    CensoredTrial.obsTimeOn, timeOn_inter_Iic _ hx]
+
+theorem statusAt_empty (ψ u : ℝ) : statusAt ψ ∅ u = false := by
+  simp [statusAt]
+
+/-- A patient on the experimental treatment throughout follow-up `(0, x]` is on it at every time
+`u ∈ (0, exp ψ x]` of the candidate scale. -/
+theorem statusAt_Ioc {ψ x u : ℝ} (hu : 0 < u) (hux : u ≤ Real.exp ψ * x) :
+    statusAt ψ (Set.Ioc 0 x) u = true := by
+  have he := Real.exp_pos ψ
+  have hs0 : 0 < u / Real.exp ψ := div_pos hu he
+  have hsx : u / Real.exp ψ ≤ x := (div_le_iff₀' he).2 hux
+  simp only [statusAt, decide_eq_true_eq]
+  refine ⟨u / Real.exp ψ, ⟨hs0, hsx⟩, ?_⟩
+  rw [untreatedTime_eq measurableSet_Ioc, show Set.Ioc (0 : ℝ) x = onTreatmentPath 0 x from rfl,
+    timeOn_onTreatmentPath le_rfl (hs0.le.trans hsx) hs0.le, min_eq_right hsx,
+    min_eq_left hs0.le]
+  field_simp
+  ring
+
+/-- The candidate time of a record that is never treated (`b = false`, path `∅`) or treated
+throughout follow-up (`b = true`, path `(0, x]`) is positive and, if treated, at most
+`exp ψ x`. -/
+theorem candidateRecord_bounds (ψ : ℝ) {x c : ℝ} (hx : 0 < x) (hc : 0 < c) (δ b : Bool) :
+    0 < (candidateRecord ψ (x, δ, if b then Set.Ioc 0 x else ∅, c)).1 ∧
+      (b = true → (candidateRecord ψ (x, δ, if b then Set.Ioc 0 x else ∅, c)).1 ≤
+        Real.exp ψ * x) := by
+  have he := Real.exp_pos ψ
+  have hD : 0 < recensoringTime ψ c := lt_min hc (mul_pos he hc)
+  cases b
+  · have : timeOn (∅ : Set ℝ) x = 0 := by simp [timeOn]
+    simp only [candidateRecord, recensorData, Bool.false_eq_true, ite_false, this, mul_zero,
+      sub_zero, add_zero]
+    exact ⟨lt_min hx hD, fun h ↦ h.elim⟩
+  · have : timeOn (Set.Ioc (0 : ℝ) x) x = x := by
+      rw [show Set.Ioc (0 : ℝ) x = onTreatmentPath 0 x from rfl,
+        timeOn_onTreatmentPath le_rfl hx.le hx.le, min_self, min_eq_left hx.le, sub_zero]
+    simp only [candidateRecord, recensorData, ite_true, this, sub_self, zero_add]
+    exact ⟨lt_min (mul_pos he hx) hD, fun _ ↦ min_le_left _ _⟩
+
+/-- **Reduction to `switchWeighted` with constant status.** If every patient is either never
+treated (path `∅`) or treated throughout follow-up (path `(0, x]`), with positive follow-up and
+censoring times, the g-statistic is `switchWeighted` on the candidate records with the constant
+status `b_i` of each patient (the case of `SwitchExample`). -/
+theorem switchGStat_eq_of_constant (E : Fin m → ℝ × Bool × Set ℝ × ℝ)
+    (C : Fin n → ℝ × Bool × Set ℝ × ℝ) (ψ : ℝ) (bE : Fin m → Bool) (bC : Fin n → Bool)
+    (hE : ∀ i, (E i).2.2.1 = if bE i then Set.Ioc 0 (E i).1 else ∅)
+    (hC : ∀ j, (C j).2.2.1 = if bC j then Set.Ioc 0 (C j).1 else ∅)
+    (hEx : ∀ i, 0 < (E i).1) (hCx : ∀ j, 0 < (C j).1)
+    (hEc : ∀ i, 0 < (E i).2.2.2) (hCc : ∀ j, 0 < (C j).2.2.2) :
+    switchGStat E C ψ = switchWeighted (fun i ↦ candidateRecord ψ (E i)) (fun i _ ↦ bE i)
+      (fun j ↦ candidateRecord ψ (C j)) (fun j _ ↦ bC j) := by
+  -- every record is of the stated form
+  have fE : ∀ i, E i = ((E i).1, (E i).2.1, if bE i then Set.Ioc 0 (E i).1 else ∅, (E i).2.2.2) :=
+    fun i ↦ by rw [← hE i]
+  have fC : ∀ j, C j = ((C j).1, (C j).2.1, if bC j then Set.Ioc 0 (C j).1 else ∅, (C j).2.2.2) :=
+    fun j ↦ by rw [← hC j]
+  -- the status of one record at a positive time at which it is at risk
+  have key : ∀ (r : ℝ × Bool × Set ℝ × ℝ) (b : Bool),
+      r.2.2.1 = (if b then Set.Ioc 0 r.1 else ∅) → 0 < r.1 → 0 < r.2.2.2 → ∀ t, 0 < t →
+        t ≤ (candidateRecord ψ r).1 → statusAt ψ r.2.2.1 t = b := by
+    rintro ⟨x, δ, B, c⟩ b hB hx hc t ht htr
+    simp only at hB hx hc ⊢
+    subst hB
+    cases b
+    · exact statusAt_empty ψ t
+    · exact statusAt_Ioc ht (htr.trans ((candidateRecord_bounds ψ hx hc δ true).2 rfl))
+  -- every event time is positive
+  have hpos : ∀ t ∈ eventTimes (times fun i ↦ candidateRecord ψ (E i))
+      (times fun j ↦ candidateRecord ψ (C j)), 0 < t := by
+    intro t ht
+    classical
+    simp only [eventTimes, Finset.mem_union, Finset.mem_image, Finset.mem_univ, true_and,
+      times] at ht
+    rcases ht with ⟨i, rfl⟩ | ⟨j, rfl⟩
+    · rw [fE i]; exact (candidateRecord_bounds ψ (hEx i) (hEc i) _ _).1
+    · rw [fC j]; exact (candidateRecord_bounds ψ (hCx j) (hCc j) _ _).1
+  exact switchWeighted_congr_status
+    (fun t ht i hi ↦ key (E i) (bE i) (hE i) (hEx i) (hEc i) t (hpos t ht) hi)
+    (fun t ht j hj ↦ key (C j) (bC j) (hC j) (hCx j) (hCc j) t (hpos t ht) hj)
 
 end Recensoring
 
