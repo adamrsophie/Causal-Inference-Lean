@@ -34,15 +34,25 @@ positivity the ratio needs; no rule holds only because `x / 0 = 0`.
   `do(X ∪ Z)` on events not involving `Z`; the global Markov property applies to it.
 * `SCM.rule3`, `SCM.rule3_div` (insertion or deletion of actions): if `Y` and `Z` are
   d-separated by `X ∪ W` in `G.deleteIncoming (X ∪ Z(W))`, where `Z(W)`
-  (`Digraph.rule3Set`) is the set of vertices of `Z` that are not ancestors of `W` in
-  `G.deleteIncoming X`, then `P(y | do(x), do(z), w) = P(y | do(x), w)`. Proof: no vertex of
+  (`Digraph.rule3Set`, computable form `Digraph.rule3SetFinset`) is the set of vertices of `Z`
+  that are not ancestors of `W` in `G.deleteIncoming X`, then
+  `P(y | do(x), do(z), w) = P(y | do(x), w)`. The division-free form needs no positivity; the
+  ratio form needs only `P(w | do(x)) > 0` and `P(w | do(x, z)) > 0`. Proof: no vertex of
   `Y ∪ W` or of `Z \ Z(W)` descends from `Z(W)` (`Digraph.notMem_descendantsOf_rule3Set`), so
-  the intervention on `Z(W)` does not change their law; Rules 1 and 2 for the intervention set
-  `X ∪ Z(W)` handle `Z \ Z(W)`. This route needs `P(z', w | do(x)) > 0` for the values `z'` on
-  `Z \ Z(W)`, also in the division-free form.
+  the intervention on `Z(W)` does not change their law. The intervention on `B = Z \ Z(W)` is
+  handled by the switch model `SCM.switchModel`: a fair binary root added to the graph
+  (`Digraph.addRoot`) switches each mechanism of `B` between its own equation and the fixed
+  value; the root is d-separated from `Y` (`Digraph.dSep_addRoot`), and the global Markov
+  property of the switch model gives `SCM.margAt_intervene_mul_of_dSep`.
 
-Rules 2 and 3 assume that `Z` is disjoint from `X`, `Y` and `W`, as in Pearl's statement for
-disjoint sets; Rule 1 needs no disjointness. Completeness of the calculus is not treated.
+Rules 2 and 3 assume that `Z` is disjoint from `X` and `W`, and Rule 2 also from `Y`, as in
+Pearl's statement for disjoint sets (in Rule 3 the disjointness of `Y` and `Z` follows from the
+d-separation); Rule 1 needs no disjointness. Completeness of the calculus is not treated.
+The back-door adjustment derived from these rules with the graphical back-door predicate is
+`SCM.effect_eq_sum_of_backDoor` in `CausalInference.SCM.Adjustment`; examples, and a model
+showing that the joint positivity hypothesis of `SCM.rule3_pos` is strictly stronger than the
+positivity of the two denominators of `SCM.rule3_div`, are in
+`CausalInference.SCM.DoCalculusRule3`.
 
 Source: Pearl (2009), *Causality*, 2nd edition, section 3.4, Theorem 3.4.1, equations (3.31)
 to (3.33); Pearl (1995), Causal diagrams for empirical research.
@@ -316,6 +326,19 @@ theorem mem_rule3Set {G : Digraph V} {X Z W : Finset V} {z : V} :
 theorem rule3Set_subset (G : Digraph V) (X Z W : Finset V) : G.rule3Set X Z W ⊆ Z :=
   fun _ hz => (mem_rule3Set.1 hz).1
 
+/-- The set `Z(W)` of Rule 3 computed from the finite ancestral closure: `Z` minus the
+ancestors of `W` in `G.deleteIncoming X`. Unlike `Digraph.rule3Set`, it can be evaluated (for
+example by `decide`) when adjacency is decidable; `Digraph.rule3SetFinset_eq` shows that the two
+agree. -/
+def rule3SetFinset (G : Digraph V) [DecidableRel G.Adj] (X Z W : Finset V) : Finset V :=
+  Z \ (G.deleteIncoming ↑X).ancestorsOfFinset W
+
+theorem rule3SetFinset_eq (G : Digraph V) [DecidableRel G.Adj] (X Z W : Finset V) :
+    G.rule3SetFinset X Z W = G.rule3Set X Z W := by
+  ext z
+  rw [rule3SetFinset, mem_sdiff, mem_rule3Set, ← mem_coe (s := ancestorsOfFinset _ W),
+    coe_ancestorsOfFinset]
+
 /-- No ancestor of `W` in `G.deleteIncoming X` is a descendant of `Z(W)` there. -/
 theorem notMem_descendantsOf_rule3Set_of_mem_ancestorsOf {G : Digraph V} {X Z W : Finset V}
     {u : V} (hu : u ∈ (G.deleteIncoming ↑X).ancestorsOf ↑W) :
@@ -350,6 +373,350 @@ theorem notMem_descendantsOf_rule3Set {G : Digraph V} {X Y Z W : Finset V}
     fun h => hzA ⟨y, h, hzy⟩, c, hc⟩)
 
 end Digraph
+
+/-! ### The graph with an added root -/
+
+namespace Digraph
+
+open Relation Finset
+
+variable {V : Type*}
+
+/-- The graph `H` with one added root: on `Option V`, the vertex `none` is a new root with an
+edge into `some b` for each `b ∈ B`, and the vertices `some u` carry the edges of `H`. -/
+def addRoot (H : Digraph V) (B : Finset V) : Digraph (Option V) where
+  Adj a b := match a, b with
+    | none, some b => b ∈ B
+    | some u, some w => H.Adj u w
+    | _, _ => False
+
+variable {H : Digraph V} {B : Finset V}
+
+instance [DecidableEq V] [DecidableRel H.Adj] : DecidableRel (H.addRoot B).Adj := fun a b =>
+  match a, b with
+  | none, none => inferInstanceAs (Decidable False)
+  | none, some b => inferInstanceAs (Decidable (b ∈ B))
+  | some _, none => inferInstanceAs (Decidable False)
+  | some u, some w => inferInstanceAs (Decidable (H.Adj u w))
+
+@[simp] theorem addRoot_adj_none_some {b : V} : (H.addRoot B).Adj none (some b) ↔ b ∈ B :=
+  Iff.rfl
+
+@[simp] theorem addRoot_adj_some_some {u w : V} :
+    (H.addRoot B).Adj (some u) (some w) ↔ H.Adj u w := Iff.rfl
+
+@[simp] theorem not_addRoot_adj_none {a : Option V} : ¬ (H.addRoot B).Adj a none := by
+  cases a <;> exact id
+
+/-- Adding a root to an acyclic graph keeps it acyclic. -/
+theorem IsAcyclic.addRoot [Finite V] (hH : H.IsAcyclic) (B : Finset V) :
+    (H.addRoot B).IsAcyclic := by
+  obtain ⟨f, hf⟩ := hH.exists_adj_lt
+  refine isAcyclic_of_adj_lt (fun a => Option.elim a 0 fun u => f u + 1) ?_
+  rintro (_ | a) (_ | b) h <;> simp_all [Digraph.addRoot]
+
+/-- A directed path between two old vertices of the graph with an added root is a directed path
+of `H`: the root has no incoming edge. -/
+theorem reflTransGen_of_reflTransGen_addRoot {a c : Option V}
+    (h : ReflTransGen (H.addRoot B).Adj a c) :
+    ∀ u w, a = some u → c = some w → ReflTransGen H.Adj u w := by
+  induction h using ReflTransGen.head_induction_on with
+  | refl =>
+    rintro u w rfl h
+    cases h
+    exact ReflTransGen.refl
+  | @head a b hab _ ih =>
+    rintro u w rfl rfl
+    cases b with
+    | none => exact absurd hab not_addRoot_adj_none
+    | some b => exact ReflTransGen.head hab (ih b w rfl rfl)
+
+theorem mem_ancestorsOf_of_some_mem_ancestorsOf_addRoot {C : Set V} {u : V}
+    (h : some u ∈ (H.addRoot B).ancestorsOf (some '' C)) : u ∈ H.ancestorsOf C := by
+  obtain ⟨_, ⟨c, hc, rfl⟩, huc⟩ := h
+  exact ⟨c, hc, reflTransGen_of_reflTransGen_addRoot huc u c rfl rfl⟩
+
+/-- A step of an active trail between two old vertices of the graph with an added root is a
+step of an active trail in `H`, with the same flags. -/
+theorem bayesBall_adj_of_bayesBall_addRoot {C : Set V} {u w : V} {a d : Bool}
+    (h : ((H.addRoot B).bayesBall (some '' C)).Adj (some u, a) (some w, d)) :
+    (H.bayesBall C).Adj (u, a) (w, d) := by
+  obtain ⟨hadj, hpass⟩ := h
+  refine ⟨by cases d <;> simpa using hadj, ?_⟩
+  unfold Passes at hpass ⊢
+  split_ifs at hpass ⊢
+  · exact mem_ancestorsOf_of_some_mem_ancestorsOf_addRoot hpass
+  · exact fun hu => hpass ⟨u, hu, rfl⟩
+
+/-- An active trail that enters a vertex `w ∉ C` through an arrowhead can be restarted at `w`
+with the arrival flag `false`. -/
+theorem exists_reflTransGen_bayesBall_false {C : Set V} {w y : V} {c : Bool} (hw : w ∉ C)
+    (h : ReflTransGen (H.bayesBall C).Adj (w, true) (y, c)) :
+    ∃ c', ReflTransGen (H.bayesBall C).Adj (w, false) (y, c') := by
+  rcases h.cases_head with h | ⟨⟨x, e⟩, hwx, hxy⟩
+  · cases h
+    exact ⟨false, ReflTransGen.refl⟩
+  · refine ⟨c, ReflTransGen.head ?_ hxy⟩
+    cases e
+    · exact bayesBall_adj_false_false.2 ⟨(bayesBall_adj_true_false.1 hwx).1, hw⟩
+    · exact bayesBall_adj_true.2 (bayesBall_adj_true.1 hwx)
+
+/-- **The graph lemma of the added root.** If `B` is disjoint from `C` and `B` and `Y` are
+d-separated by `C` in `H`, then the added root is d-separated from the copy of `Y` by the copy
+of `C` in `H.addRoot B`: an active trail from the root starts with an edge into some `b ∈ B`,
+and its remainder is an active trail from `b` in `H`. -/
+theorem dSep_addRoot {C Y : Set V} (hBC : Disjoint (↑B : Set V) C) (hsep : H.DSep ↑B Y C) :
+    (H.addRoot B).DSep {none} (some '' Y) (some '' C) := by
+  rintro ⟨_, rfl, _, ⟨y, hy, rfl⟩, -, hyC, e, he⟩
+  have key : ∀ s, ReflTransGen ((H.addRoot B).bayesBall (some '' C)).Adj s (some y, e) →
+      (∃ b ∈ B, ∃ c', ReflTransGen (H.bayesBall C).Adj (b, false) (y, c')) ∨
+        ∃ u, s.1 = some u ∧ ReflTransGen (H.bayesBall C).Adj (u, s.2) (y, e) := by
+    intro s hs
+    induction hs using ReflTransGen.head_induction_on with
+    | refl => exact Or.inr ⟨y, rfl, ReflTransGen.refl⟩
+    | @head s t hst _ ih =>
+      rcases ih with ih | ⟨w, hw, hwy⟩
+      · exact Or.inl ih
+      obtain ⟨o, a⟩ := s
+      obtain ⟨_, d⟩ := t
+      simp only at hw hwy
+      subst hw
+      cases o with
+      | some u =>
+        exact Or.inr ⟨u, rfl, ReflTransGen.head (bayesBall_adj_of_bayesBall_addRoot hst) hwy⟩
+      | none =>
+        cases d
+        · exact absurd hst.1 (by simp)
+        · have hwB : w ∈ B := hst.1
+          obtain ⟨c', hc'⟩ := exists_reflTransGen_bayesBall_false
+            (Set.disjoint_left.1 hBC (mem_coe.2 hwB)) hwy
+          exact Or.inl ⟨w, hwB, c', hc'⟩
+  rcases key _ he with ⟨b, hb, c', hc'⟩ | ⟨u, hu, -⟩
+  · exact hsep ⟨b, mem_coe.2 hb, y, hy, Set.disjoint_left.1 hBC (mem_coe.2 hb),
+      fun h => hyC ⟨y, h, rfl⟩, c', hc'⟩
+  · cases hu
+
+end Digraph
+
+namespace CausalInference
+
+open Finset
+
+namespace FiniteDist
+
+/-- Under a product law on `Option ι`, an event on the coordinate `none` and an event on the other
+coordinates are independent; the second has the probability given by the product of the
+remaining laws. -/
+theorem probOf_pi_option {ι : Type*} [Fintype ι] [DecidableEq ι] {κ : Option ι → Type*}
+    [∀ o, Fintype (κ o)] (p : ∀ o, FiniteDist (κ o)) (P : κ none → Prop) [DecidablePred P]
+    (E : (∀ i, κ (some i)) → Prop) [DecidablePred E] :
+    (pi p).probOf (fun ω => P (ω none) ∧ E fun i => ω (some i)) =
+      (p none).probOf P * (pi fun i => p (some i)).probOf E := by
+  simp only [probOf, prob, sum_filter, pi_apply]
+  rw [← (Equiv.piOptionEquivProd (β := κ)).symm.sum_comp, Fintype.sum_prod_type, sum_mul_sum]
+  refine sum_congr rfl fun a _ => sum_congr rfl fun g _ => ?_
+  simp only [Equiv.piOptionEquivProd, Equiv.coe_fn_symm_mk, Fintype.prod_option, ite_and]
+  split_ifs <;> simp
+
+end FiniteDist
+
+namespace SCM
+
+universe uα uε
+
+variable {V : Type*}
+
+/-! ### The switch model -/
+
+/-- The value types of the switch model: a bit at the added root `none`, and `α u` at `some u`.
+-/
+abbrev switchVal (α : V → Type uα) : Option V → Type uα :=
+  fun o => Option.elim o (ULift Bool) α
+
+/-- The noise types of the switch model: a bit at the added root `none` (the fair coin of the
+switch), and `ε u` at `some u`. -/
+abbrev switchNoise (ε : V → Type uε) : Option V → Type uε :=
+  fun o => Option.elim o (ULift Bool) ε
+
+variable {α : V → Type uα} {ε : V → Type uε}
+
+instance [∀ v, Fintype (α v)] : ∀ o, Fintype (switchVal α o)
+  | none => inferInstanceAs (Fintype (ULift Bool))
+  | some v => inferInstanceAs (Fintype (α v))
+
+instance [∀ v, DecidableEq (α v)] : ∀ o, DecidableEq (switchVal α o)
+  | none => inferInstanceAs (DecidableEq (ULift Bool))
+  | some v => inferInstanceAs (DecidableEq (α v))
+
+instance [∀ v, Fintype (ε v)] : ∀ o, Fintype (switchNoise ε o)
+  | none => inferInstanceAs (Fintype (ULift Bool))
+  | some v => inferInstanceAs (Fintype (ε v))
+
+variable [Fintype V] [DecidableEq V] {H : Digraph V} [DecidableRel H.Adj] [∀ v, Fintype (ε v)]
+
+theorem some_mem_parentsFinset_addRoot {B : Finset V} {u : V} (p : H.parentsFinset u) :
+    some p.1 ∈ (H.addRoot B).parentsFinset (some u) :=
+  Digraph.mem_parentsFinset.2 (Digraph.addRoot_adj_some_some.2 (Digraph.mem_parentsFinset.1 p.2))
+
+theorem none_mem_parentsFinset_addRoot {B : Finset V} {u : V} (hu : u ∈ B) :
+    none ∈ (H.addRoot B).parentsFinset (some u) :=
+  Digraph.mem_parentsFinset.2 hu
+
+/-- The structural functions of the switch model. The root copies its noise bit. A vertex
+`u ∈ B` takes the value `v u` when the root is on and otherwise follows its equation in `N`
+applied to the old parents; every other vertex follows its equation in `N`. -/
+def switchF (N : SCM H α ε) (B : Finset V) (v : ∀ u, α u) :
+    ∀ o, (∀ p : (H.addRoot B).parentsFinset o, switchVal α p) → switchNoise ε o →
+      switchVal α o
+  | none, _, e => ⟨e.down⟩
+  | some u, z, e =>
+    if hu : u ∈ B then
+      (if (z ⟨none, none_mem_parentsFinset_addRoot hu⟩).down then v u else
+        N.f u (fun p => z ⟨some p.1, some_mem_parentsFinset_addRoot p⟩) e)
+    else N.f u (fun p => z ⟨some p.1, some_mem_parentsFinset_addRoot p⟩) e
+
+/-- The noise laws of the switch model: a fair coin at the root, the laws of `N` elsewhere. -/
+noncomputable def switchNoiseLaw (N : SCM H α ε) : ∀ o, FiniteDist (switchNoise ε o)
+  | none => (FiniteDist.uniform : FiniteDist (ULift Bool))
+  | some u => N.noise u
+
+/-- The **switch model** of `N` for a set `B` and values `v`: a model on `H.addRoot B` whose
+added root is a fair coin that switches the mechanisms of the vertices of `B` between their own
+equations in `N` (root off) and the constants `v` (root on, the intervention `do(B := v)`). -/
+noncomputable def switchModel (N : SCM H α ε) (B : Finset V) (v : ∀ u, α u) :
+    SCM (H.addRoot B) (switchVal α) (switchNoise ε) where
+  acyclic := N.acyclic.addRoot B
+  f := switchF N B v
+  noise := switchNoiseLaw N
+
+/-- The noise of `N` read off a noise value of the switch model. -/
+def switchProj (w : ∀ o, switchNoise ε o) : ∀ u, ε u := fun u => w (some u)
+
+/-- The values of the old vertices in the switch model at a noise value: the solution of
+`do(B := v)` in `N` if the root is on, and of `N` itself if it is off. -/
+noncomputable def switchOld (N : SCM H α ε) (B : Finset V) (v : ∀ u, α u)
+    (w : ∀ o, switchNoise ε o) : ∀ u, α u :=
+  if (w none).down then (N.intervene B v).solve (switchProj w) else N.solve (switchProj w)
+
+/-- The configuration of the switch model at a noise value: the root bit at the root, and
+`SCM.switchOld` at the old vertices. -/
+noncomputable def switchConfig (N : SCM H α ε) (B : Finset V) (v : ∀ u, α u)
+    (w : ∀ o, switchNoise ε o) : ∀ o, switchVal α o
+  | none => ⟨(w none).down⟩
+  | some u => switchOld N B v w u
+
+theorem switchModel_solve (N : SCM H α ε) (B : Finset V) (v : ∀ u, α u)
+    (w : ∀ o, switchNoise ε o) : (N.switchModel B v).solve w = switchConfig N B v w := by
+  refine ((N.switchModel B v).eq_solve_of_isSolution fun o => ?_).symm
+  rcases o with _ | u
+  · rfl
+  change switchConfig N B v w (some u) = switchF N B v (some u) _ (w (some u))
+  by_cases hw : (w none).down <;> by_cases hu : u ∈ B
+  · simp [switchConfig, switchOld, switchF, hw, hu, N.solve_intervene_of_mem]
+  · simp only [switchConfig, switchOld, switchF, hw, hu, ↓reduceIte, ↓reduceDIte,
+      Finset.restrict]
+    rw [N.solve_intervene_of_notMem _ hu]
+    rfl
+  · simp only [switchConfig, switchOld, switchF, hw, hu, ↓reduceIte, ↓reduceDIte,
+      Bool.false_eq_true, Finset.restrict]
+    rw [N.solve_eq]
+    rfl
+  · simp only [switchConfig, switchOld, switchF, hw, hu, ↓reduceIte, ↓reduceDIte,
+      Bool.false_eq_true, Finset.restrict]
+    rw [N.solve_eq]
+    rfl
+
+variable (N : SCM H α ε) (B : Finset V) (v : ∀ u, α u)
+
+/-- The root bit of the switch model is a fair coin independent of the noise of `N`. -/
+theorem probOf_noiseDist_switchModel (b : Bool) (E : (∀ u, ε u) → Prop) [DecidablePred E] :
+    (N.switchModel B v).noiseDist.probOf (fun w => (w none).down = b ∧ E (switchProj w)) =
+      1 / 2 * N.noiseDist.probOf E := by
+  have hcoin : (switchNoiseLaw N none).probOf (fun a => a.down = b) = 1 / 2 := by
+    change (FiniteDist.uniform : FiniteDist (ULift Bool)).probOf (fun a => a.down = b) = 1 / 2
+    have hcard : (univ.filter fun a : ULift Bool => a.down = b).card = 1 :=
+      card_eq_one.2 ⟨⟨b⟩, by ext a; simp [ULift.ext_iff]⟩
+    simp only [FiniteDist.probOf, FiniteDist.prob, FiniteDist.uniform_apply, sum_const,
+      nsmul_eq_mul]
+    rw [hcard]
+    simp
+  have h := @FiniteDist.probOf_pi_option _ _ _ _ _ (switchNoiseLaw N) (fun a => a.down = b) _
+    E ‹_›
+  rw [hcoin] at h
+  exact h
+
+variable [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)]
+
+theorem probOf_switchConfig (b : Bool) (T : Finset V) :
+    (N.switchModel B v).noiseDist.probOf
+        (fun w => (w none).down = b ∧ ∀ u ∈ T, switchOld N B v w u = v u) =
+      1 / 2 * (if b then (N.intervene B v).dist.margAt T v else N.dist.margAt T v) := by
+  cases b
+  · simp only [Bool.false_eq_true, ↓reduceIte]
+    rw [margAt_dist N, ← probOf_noiseDist_switchModel N B v false]
+    refine FiniteDist.probOf_congr _ fun w => and_congr_right fun hw => ?_
+    simp [switchOld, hw]
+  · simp only [↓reduceIte]
+    rw [margAt_dist (N.intervene B v), noiseDist_intervene,
+      ← probOf_noiseDist_switchModel N B v true]
+    refine FiniteDist.probOf_congr _ fun w => and_congr_right fun hw => ?_
+    simp [switchOld, hw]
+
+/-- The configuration of the switch model with root bit `b` and the values `v` elsewhere. -/
+def switchCfg (v : ∀ u, α u) (b : Bool) : ∀ o, switchVal α o
+  | none => ⟨b⟩
+  | some u => v u
+
+/-- The marginal of the switch model on the root and the copy of `T`, at root bit `b` and the
+values `v`: half the marginal of `do(B := v)` (if `b = true`) or of `N` (if `b = false`). -/
+theorem margAt_switchModel_insert (b : Bool) (T : Finset V) :
+    (N.switchModel B v).dist.margAt (insert none (T.map .some)) (switchCfg v b) =
+      1 / 2 * (if b then (N.intervene B v).dist.margAt T v else N.dist.margAt T v) := by
+  rw [margAt_dist, ← probOf_switchConfig N B v b T]
+  refine FiniteDist.probOf_congr _ fun w => ?_
+  rw [switchModel_solve]
+  simp [switchConfig, switchCfg, ULift.ext_iff]
+
+/-- The marginal of the switch model on the copy of `T`, at the values `v`: the average of the
+marginals of `do(B := v)` and of `N`. -/
+theorem margAt_switchModel_map (b : Bool) (T : Finset V) :
+    (N.switchModel B v).dist.margAt (T.map .some) (switchCfg v b) =
+      1 / 2 * (N.intervene B v).dist.margAt T v + 1 / 2 * N.dist.margAt T v := by
+  have h1 := probOf_switchConfig N B v true T
+  have h0 := probOf_switchConfig N B v false T
+  simp only [↓reduceIte, Bool.false_eq_true] at h1 h0
+  rw [← h1, ← h0, margAt_dist, (N.switchModel B v).noiseDist.probOf_eq_sum_univ
+    (fun w : ∀ o, switchNoise ε o => (w none).down), Fintype.sum_bool]
+  congr 1 <;> refine FiniteDist.probOf_congr _ fun w => ?_ <;> rw [switchModel_solve] <;>
+    simp [switchConfig, switchCfg, and_comm]
+
+/-- **Exchange of an intervention through a fair switch.** If `B` is disjoint from `C` and `B`
+and `Y` are d-separated by `C` in `H`, then for every model `N` on `H`
+`P(y, c | do(b)) * P(c) = P(y, c) * P(c | do(b))`, all values read off `v`. No positivity is
+needed. Proof: the switch model `N.switchModel B v` is a model on `H.addRoot B` in which the root
+is d-separated from `Y` by `C` (`Digraph.dSep_addRoot`); its global Markov property gives the
+identity, since conditioning on the root bit gives `do(B := v)` and `N`. -/
+theorem margAt_intervene_mul_of_dSep {Y C : Finset V} (hBC : Disjoint B C)
+    (hsep : H.DSep ↑B ↑Y ↑C) :
+    (N.intervene B v).dist.margAt (Y ∪ C) v * N.dist.margAt C v =
+      N.dist.margAt (Y ∪ C) v * (N.intervene B v).dist.margAt C v := by
+  have hsep' : (H.addRoot B).DSep ↑({none} : Finset (Option V)) ↑(Y.map .some)
+      ↑(C.map .some) := by
+    rw [coe_singleton, coe_map, coe_map]
+    exact Digraph.dSep_addRoot (disjoint_coe.2 hBC) hsep
+  have h := ((N.switchModel B v).factorizes.condIndep_of_dSep (N.switchModel B v).acyclic
+    hsep').margAt_mul (switchCfg v true)
+  rw [show ({none} : Finset (Option V)) ∪ Y.map .some ∪ C.map .some =
+      insert none ((Y ∪ C).map .some) by rw [map_union, union_assoc]; rfl,
+    show ({none} : Finset (Option V)) ∪ C.map .some = insert none (C.map .some) from rfl,
+    ← map_union, margAt_switchModel_insert, margAt_switchModel_insert, margAt_switchModel_map,
+    margAt_switchModel_map] at h
+  simp only [↓reduceIte] at h
+  linear_combination 4 * h
+
+end SCM
+
+end CausalInference
 
 namespace CausalInference
 
@@ -428,7 +795,10 @@ theorem dSep_rule3_sdiff {X Y Z W : Finset V}
   simp only [coe_union, Set.mem_union, mem_coe]
   tauto
 
-/-- Under the hypotheses of Rule 3, `P(w | do(x, z)) > 0`. -/
+/-- Under the graphical premise of Rule 3 and `P(z', w | do(x)) > 0`, where `z'` are the values
+on `Z \ Z(W)`, the denominator `P(w | do(x, z))` is positive. This joint positivity is a
+sufficient condition for both denominators of `SCM.rule3_div`; it is not necessary
+(`SCM.Rule3PositivityExample.premises_hold_joint_mass_zero`). -/
 theorem rule3_pos {X Y Z W : Finset V} (v : ∀ u, α u) (hXZ : Disjoint X Z) (hWZ : Disjoint W Z)
     (hsep : (G.deleteIncoming ↑(X ∪ G.rule3Set X Z W)).DSep ↑Y ↑Z ↑(X ∪ W))
     (hpos : 0 < (M.intervene X v).dist.margAt ((Z \ G.rule3Set X Z W) ∪ W) v) :
@@ -439,54 +809,61 @@ theorem rule3_pos {X Y Z W : Finset V} (v : ∀ u, α u) (hXZ : Disjoint X Z) (h
     (union_subset (subset_union_right.trans subset_union_left) subset_union_right)] at h
   exact hpos.trans_le h
 
+omit [Fintype V] [DecidableRel G.Adj] in
+theorem rule3_aux_union (S X A W : Finset V) : S ∪ (X ∪ A ∪ W) = S ∪ W ∪ (X ∪ A) := by
+  ext; simp only [mem_union]; tauto
+
 /-- **Rule 3 of do-calculus** (insertion or deletion of actions; Pearl 2009, Theorem 3.4.1,
-equation (3.33)), division-free form. Let `Z` be disjoint from `X`, `Y` and `W`, and let
+equation (3.33)), division-free form. Let `Z` be disjoint from `X` and `W`, and let
 `Z(W) = Digraph.rule3Set G X Z W` be the vertices of `Z` that are not ancestors of `W` in
 `G.deleteIncoming X`. If `Y` and `Z` are d-separated by `X ∪ W` in
 `G.deleteIncoming (X ∪ Z(W))`, then
 `P(y, w | do(x, z)) * P(w | do(x)) = P(y, w | do(x)) * P(w | do(x, z))`, all values read off
-`v`; that is, `P(y | do(x), do(z), w) = P(y | do(x), w)`.
+`v`; that is, `P(y | do(x), do(z), w) = P(y | do(x), w)`. No positivity is needed. The
+disjointness of `Y` and `Z` is not assumed: it follows from the d-separation and the
+disjointness of `Z` from `X ∪ W`.
 
-This version assumes `P(z', w | do(x)) > 0`, where `z'` are the values on `Z \ Z(W)`. The
-textbook division-free statement has no positivity hypothesis; the hypothesis is used here to
-cancel a common factor when Rule 3 is derived from Rules 1 and 2 applied to the intervention set
-`X ∪ Z(W)`, after showing that `Y ∪ W` and `Z \ Z(W)` are not descendants of `Z(W)` in
-`G.deleteIncoming X`. The ratio form `SCM.rule3_div` needs a positivity hypothesis anyway. -/
-theorem rule3 {X Y Z W : Finset V} (v : ∀ u, α u) (hXZ : Disjoint X Z) (hYZ : Disjoint Y Z)
-    (hWZ : Disjoint W Z)
-    (hsep : (G.deleteIncoming ↑(X ∪ G.rule3Set X Z W)).DSep ↑Y ↑Z ↑(X ∪ W))
-    (hpos : 0 < (M.intervene X v).dist.margAt ((Z \ G.rule3Set X Z W) ∪ W) v) :
+Proof: write `A = Z(W)` and `B = Z \ A`. Under `do(X ∪ A)`, the d-separation of `Y` and `B` by
+`X ∪ A ∪ W` (`SCM.dSep_rule3_sdiff`) gives, through the switch model
+(`SCM.margAt_intervene_mul_of_dSep`), the identity between `do(X ∪ A)` and `do(X ∪ Z)`; the
+intervention on `A` changes no marginal of `Y ∪ W`
+(`SCM.margAt_intervene_union_rule3Set_of_subset`). -/
+theorem rule3 {X Y Z W : Finset V} (v : ∀ u, α u) (hXZ : Disjoint X Z) (hWZ : Disjoint W Z)
+    (hsep : (G.deleteIncoming ↑(X ∪ G.rule3Set X Z W)).DSep ↑Y ↑Z ↑(X ∪ W)) :
     (M.intervene (X ∪ Z) v).dist.margAt (Y ∪ W) v * (M.intervene X v).dist.margAt W v =
       (M.intervene X v).dist.margAt (Y ∪ W) v * (M.intervene (X ∪ Z) v).dist.margAt W v := by
-  have hsep1 := dSep_rule3_sdiff hsep
-  have hX'Z₁ : Disjoint (X ∪ G.rule3Set X Z W) (Z \ G.rule3Set X Z W) :=
-    disjoint_union_left.2 ⟨hXZ.mono_right sdiff_subset, disjoint_sdiff⟩
-  have r2 := M.rule2 v hX'Z₁ (hYZ.mono_right sdiff_subset) (hWZ.mono_right sdiff_subset)
-    (hsep1.deleteOutgoing (W := ↑(Z \ G.rule3Set X Z W)))
-  have r1 := M.rule1 v hsep1
-  rw [← union_rule3Set_union_sdiff] at r2
+  have hBC : Disjoint (Z \ G.rule3Set X Z W) (X ∪ G.rule3Set X Z W ∪ W) :=
+    disjoint_union_right.2 ⟨disjoint_union_right.2 ⟨(hXZ.mono_right sdiff_subset).symm,
+      sdiff_disjoint⟩, (hWZ.mono_right sdiff_subset).symm⟩
+  have h := (M.intervene (X ∪ G.rule3Set X Z W) v).margAt_intervene_mul_of_dSep
+    (Z \ G.rule3Set X Z W) v hBC (dSep_rule3_sdiff hsep).symm
+  have hd : ((M.intervene (X ∪ G.rule3Set X Z W) v).intervene (Z \ G.rule3Set X Z W) v).dist =
+      (M.intervene (X ∪ Z) v).dist := by
+    rw [M.dist_intervene_intervene]
+    simp only [ite_self]
+    rw [← union_rule3Set_union_sdiff G X Z W]
   have e := fun {S : Finset V} (hS : S ⊆ Y ∪ (Z \ G.rule3Set X Z W) ∪ W) =>
     M.margAt_intervene_union_rule3Set_of_subset v hXZ hsep hS
-  rw [e (union_subset (subset_union_right.trans subset_union_left) subset_union_right)] at r2 r1
-  rw [e (union_subset (subset_union_left.trans subset_union_left) subset_union_right),
-    e subset_union_right] at r1
-  refine mul_right_cancel₀ hpos.ne' ?_
-  linear_combination (M.intervene X v).dist.margAt W v * r2 +
-    (M.intervene (X ∪ Z) v).dist.margAt W v * r1
+  have hXA : X ∪ G.rule3Set X Z W ⊆ X ∪ Z :=
+    union_subset_union_right (G.rule3Set_subset X Z W)
+  rw [hd, rule3_aux_union, union_comm (X ∪ G.rule3Set X Z W) W] at h
+  rw [M.margAt_union_intervene hXA, M.margAt_union_intervene hXA,
+    M.margAt_union_intervene subset_rfl, M.margAt_union_intervene subset_rfl,
+    e (union_subset (subset_union_left.trans subset_union_left) subset_union_right),
+    e subset_union_right] at h
+  exact h
 
-/-- **Rule 3 of do-calculus**, ratio form: under the hypotheses of `SCM.rule3`,
-`P(y | do(x), do(z), w) = P(y | do(x), w)`. Both denominators are positive. -/
-theorem rule3_div {X Y Z W : Finset V} (v : ∀ u, α u) (hXZ : Disjoint X Z) (hYZ : Disjoint Y Z)
-    (hWZ : Disjoint W Z)
+/-- **Rule 3 of do-calculus**, ratio form: under the hypotheses of `SCM.rule3`, if
+`P(w | do(x)) > 0` and `P(w | do(x, z)) > 0`, then `P(y | do(x), do(z), w) = P(y | do(x), w)`.
+-/
+theorem rule3_div {X Y Z W : Finset V} (v : ∀ u, α u) (hXZ : Disjoint X Z) (hWZ : Disjoint W Z)
     (hsep : (G.deleteIncoming ↑(X ∪ G.rule3Set X Z W)).DSep ↑Y ↑Z ↑(X ∪ W))
-    (hpos : 0 < (M.intervene X v).dist.margAt ((Z \ G.rule3Set X Z W) ∪ W) v) :
+    (hp : 0 < (M.intervene X v).dist.margAt W v)
+    (hq : 0 < (M.intervene (X ∪ Z) v).dist.margAt W v) :
     (M.intervene (X ∪ Z) v).dist.margAt (Y ∪ W) v / (M.intervene (X ∪ Z) v).dist.margAt W v =
       (M.intervene X v).dist.margAt (Y ∪ W) v / (M.intervene X v).dist.margAt W v := by
-  have hq := M.rule3_pos v hXZ hWZ hsep hpos
-  have hp : 0 < (M.intervene X v).dist.margAt W v :=
-    hpos.trans_le ((M.intervene X v).dist.margAt_anti subset_union_right v)
   rw [div_eq_div_iff hq.ne' hp.ne']
-  exact M.rule3 v hXZ hYZ hWZ hsep hpos
+  exact M.rule3 v hXZ hWZ hsep
 
 end SCM
 

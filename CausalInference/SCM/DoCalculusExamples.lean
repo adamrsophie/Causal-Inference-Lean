@@ -168,8 +168,7 @@ theorem frontdoor_formula (M : SCM frontdoor α ε) (v : ∀ u, α u)
   simp only [union_empty, FiniteDist.margAt_empty, mul_one] at t2
   -- Rule 3: `P(y | do(z), do(x)) = P(y | do(z))`
   have t3 := M.rule3 (X := {2}) (Y := {3}) (Z := {1}) (W := ∅) c (by decide) (by decide)
-    (by decide) (by rw [Digraph.rule3Set_empty_right]; decide)
-    (by simp [Digraph.rule3Set_empty_right])
+    (by rw [Digraph.rule3Set_empty_right]; decide)
   simp only [union_empty, FiniteDist.margAt_empty, mul_one] at t3
   rw [M.dist_intervene_of_eq (union_comm {2} {1})] at t3
   -- the back-door adjustment for `P(y | do(z))`, adjusting for `X`
@@ -240,8 +239,8 @@ theorem copyModel_intervene_margAt :
   exact h u
 
 /-- **Rule 3 fails without its graphical condition.** In the copy model on `0 → 1`, with
-`X = W = ∅`, `Y = {1}`, `Z = {0}` (pairwise disjoint, so `Z(W) = Z` and the positivity
-hypothesis of `SCM.rule3` holds trivially), `Y` and `Z` are d-connected in
+`X = W = ∅`, `Y = {1}`, `Z = {0}` (pairwise disjoint, so `Z(W) = Z`), `Y` and `Z` are
+d-connected in
 `G.deleteIncoming Z`, and `P(y | do(z)) = 1` differs from `P(y) = 1/2`. -/
 theorem rule3_fails :
     ¬ (arrow.deleteIncoming ↑((∅ : Finset (Fin 2)) ∪ arrow.rule3Set ∅ {0} ∅)).DSep
