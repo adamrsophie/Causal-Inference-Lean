@@ -69,3 +69,7 @@ public import CausalInference.Interaction.ExcessFraction
 public import CausalInference.Interaction.ResponseTypes
 public import CausalInference.Interaction.SufficientCauses
 public import CausalInference.Interaction.Synergism
+public import CausalInference.Measures.Collapsibility
+public import CausalInference.Measures.EffectMeasures
+public import CausalInference.Measures.Examples
+public import CausalInference.Measures.Simpson

@@ -22,6 +22,7 @@ The project is at an early stage. Modules are added only when they contain check
 | `CausalInference/Interference` | Partial interference, direct and indirect effects, two-stage randomization |
 | `CausalInference/Mediation` | Controlled and natural effects, decompositions, the mediation formula, a cross-world counterexample |
 | `CausalInference/Longitudinal` | Time-varying treatments: sequential exchangeability, the g-formula at any finite horizon, inverse probability weighting, treatment-confounder feedback |
+| `CausalInference/Measures` | Risk difference, risk ratio, odds ratio; collapsibility and the odds ratio counterexample; effect modification; the sure-thing principle and Simpson's reversal; paradox examples |
 | `CausalInference/Interaction` | Response types for two treatments, additive interaction, synergism, sufficient causes |
 | `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting, regression identities, a non-identification counterexample |
 | `CausalInference/Sensitivity` | Rosenbaum bounds and bias formulas for unmeasured confounding |
