@@ -137,3 +137,5 @@ public import CausalInference.Designs.DifferenceInDifferences.TrendAdjusted
 public import CausalInference.Designs.DifferenceInDifferences.Scale
 public import CausalInference.Designs.RegressionDiscontinuity.Interpretation
 public import CausalInference.Estimation.InstrumentalVariables
+public import CausalInference.InstrumentalVariables.Heterogeneity
+public import CausalInference.InstrumentalVariables.InvalidInstrument
