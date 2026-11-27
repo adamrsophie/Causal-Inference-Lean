@@ -46,9 +46,10 @@ pairwise independence of the influence functions at the first observation. The i
 variances are hypotheses: for example `pe (1 - pe) / D` for an observed proportion. In the printed
 formulas `D` is the size of the group; the asymptotic variance here is per observation, so the
 printed variance is the asymptotic variance divided by `n` when every input comes from the same
-`n` observations, which is the case `D = 1` here. Inputs from studies of different sizes with a
-fixed ratio need the two-sample extension described in `DeltaMethodMultivariate`, which is not
-formalized.
+`n` observations, which is the case `D = 1` here. Inputs from independent studies of different
+sizes with a fixed ratio are treated in `BiasAnalysis.VarianceSeveralSamples`, through the delta
+method for several samples of `Estimation.DeltaMethodSeveralSamples`; there `D₁` and `D₀` are the
+limit ratios of the group sizes to `n`.
 -/
 
 @[expose] public section
@@ -335,7 +336,8 @@ functions of asymptotic variances `Vᵢ > 0`, and pool them with the inverse-var
 the known `Vᵢ`. Then the pooled estimate is asymptotically linear at `ivPooled θ V` with
 influence function `∑ i, ((1 / Vᵢ) / ∑ⱼ (1 / Vⱼ)) φ i`, and its asymptotic variance is
 `ivPooledVariance V = 1 / ∑ⱼ (1 / Vⱼ)`. The weights are fixed constants here; estimated weights
-are not covered. -/
+(under a common value of the estimates) are treated in
+`VarianceSeveralSamples.ivPooled_estimated_of_sizes`. -/
 theorem ivPooled_asymptotic [IsProbabilityMeasure μ] {k : ℕ} (hk : 0 < k)
     (hO : IsIIDSample O μ) {θhat : Fin k → ℕ → Ω → ℝ} {θ : Fin k → ℝ} {φ : Fin k → 𝒪 → ℝ}
     (h : ∀ i, IsAsymptoticallyLinear (θhat i) (θ i) (φ i) O μ)

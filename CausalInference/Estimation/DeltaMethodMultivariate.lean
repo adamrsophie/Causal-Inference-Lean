@@ -48,13 +48,11 @@ study and a main study) fit this model when each observation is a tuple with one
 component per study, `O k = (A k, B k)`, and the influence function of each estimate depends only
 on its own component. Independence of the components at one observation then makes the cross
 moments `E[φ i (O) φ j (O)]` vanish (`integral_sq_of_indep`, `twoSample_integral_sq`), and only
-there. This covers studies of the same size `n`. Studies of different sizes `n₁ = a n`,
-`n₂ = b n` with a fixed ratio are not covered: they need the estimate of a study of size `a n`
-to be asymptotically linear in the sample of blocks `(A (a k), …, A (a k + a - 1))`, which holds
-with influence function `a⁻¹ ∑_l φ (A_l)` along the subsequence `a n`, and an i.i.d. property of
-the joint blocks of the two studies; neither step is formalized here. In that case the asymptotic
-variance per block is `∑ᵢ cᵢ² σᵢ² / rᵢ`, with `rᵢ` the block length of study `i`, which is the
-printed form `∑ᵢ cᵢ² σᵢ² / nᵢ` after division by `n`.
+there. This covers studies of the same size `n`. Studies of different sizes `N i n` with
+`N i n / n → rᵢ > 0` are covered in `Estimation.DeltaMethodSeveralSamples`
+(`tendstoInDistribution_comp_hasFDerivAt_of_sizes`): mutually independent i.i.d. samples, one per
+study, each estimator asymptotically linear in its own sample at its own size, and the limit
+variance `∑ᵢ cᵢ² σᵢ² / rᵢ`, which is the printed form `∑ᵢ cᵢ² σᵢ² / nᵢ` multiplied by `n`.
 
 Source: A. W. van der Vaart (1998), *Asymptotic Statistics*, chapter 3 (Theorem 3.1 in the
 asymptotically linear form).

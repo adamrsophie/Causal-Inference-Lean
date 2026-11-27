@@ -58,19 +58,22 @@ Main results:
 
 The probabilistic step behind these formulas is in `Estimation.DeltaMethodMultivariate` (the
 multivariate delta method for asymptotically linear estimators of one i.i.d. sample, with the
-asymptotic variance as the quadratic form of the gradient in the covariance matrix of the
-influence functions) and in `BiasAnalysis.VarianceCovariance` (the covariance form
-`quadraticVariance` of `firstOrderVariance` and of `variance_linearization`, and the theorems
-`greenland_nondifferential_asymptotic`, `marshall_asymptotic` and `ivPooled_asymptotic`, which
-show that the Greenland, Marshall and inverse-variance pooled variances are asymptotic
-variances of the plug-in estimators when the inputs have pairwise independent influence
-functions with the stated asymptotic variances). There every input is computed from the same
-`n` observations; inputs from studies of different sizes, which the printed formulas allow
-through the group sizes, are not covered, and for them the identities of this file remain
-algebra about the gradient. Explicit inputs satisfying the hypotheses of the theorems of this
-file are in `BiasAnalysis.VarianceFormulasWitnesses`. The methods are attributed in the chapter
-to Greenland (1988), Marshall (1990), Lyles and colleagues (2010) for predictive value
-weighting, and Rubin for the combination rules of multiple imputation.
+asymptotic variance as the quadratic form of the gradient in the covariance matrix of the influence
+functions) and in `BiasAnalysis.VarianceCovariance` (the covariance form `quadraticVariance` of
+`firstOrderVariance` and of `variance_linearization`, and the theorems
+`greenland_nondifferential_asymptotic`, `marshall_asymptotic` and `ivPooled_asymptotic`, which show
+that the Greenland, Marshall and inverse-variance pooled variances are asymptotic variances of the
+plug-in estimators when the inputs have pairwise independent influence functions with the stated
+asymptotic variances). There every input is computed from the same `n` observations. Inputs from
+independent studies of different sizes in a fixed ratio, which the printed formulas allow through
+the group sizes, are covered in `BiasAnalysis.VarianceSeveralSamples` (Greenland, nondifferential
+and differential, Marshall, and the pooled estimate with known or estimated weights), on top of the
+delta method for several samples `Estimation.DeltaMethodSeveralSamples`; concrete sampling schemes
+meeting all their hypotheses are in `BiasAnalysis.VarianceSeveralSamplesWitnesses`. Explicit inputs
+satisfying the hypotheses of the theorems of this file are in
+`BiasAnalysis.VarianceFormulasWitnesses`. The methods are attributed in the chapter to Greenland
+(1988), Marshall (1990), Lyles and colleagues (2010) for predictive value weighting, and Rubin for
+the combination rules of multiple imputation.
 -/
 
 @[expose] public section
