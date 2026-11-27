@@ -280,17 +280,23 @@ observed marginal as the observation.
 Value types: here the value types `α v` are fixed for all vertices, the unobserved ones
 included, whereas Pearl's Definition 3.2.4 compares any two models with graph `G` whatever the
 domains of the latent variables. The cross-type notion is `SCM.IdentifiableAcross` in
-`CausalInference.SCM.LatentTypes`, and `SCM.identifiableAcross_of_identifiableFrom` reduces it to
-`IdentifiableFrom` at the merged value types `SCM.MergeType O α α'` (`α v` on `O`, `α v ⊕ α' v`
-off `O`, for two families in one universe). The reduction applies when both classes are closed
-under re-typing into the merged types and the query is invariant under re-typing. This holds for
-the effect with classes whose conditions constrain only observed coordinates:
+`CausalInference.SCM.LatentTypes`, for value type families in any two universes.
+`SCM.identifiableAcross_of_identifiableFrom` reduces it to `IdentifiableFrom` at the merged
+value types `SCM.MergeType O α α'` (`α v` on `O`, `α v ⊕ α' v` off `O`), and
+`SCM.identifiableAcross_of_identifiableFrom_ulift` does the same for families in different
+universes through `ULift`. The reduction applies when both classes are closed under re-typing
+into the merged types and the query is invariant under re-typing. This holds for the effect with
+classes whose conditions constrain only observed coordinates:
 `SCM.identifiableAcross_effect_singleton_of_subset`, `SCM.identifiableAcross_effect_of_backDoor`
-and `SCM.identifiableAcross_effect_of_frontDoor` are the cross-type forms of the adjustment for
-direct causes, the back-door and the front-door results. It fails for a class defined by strict
-positivity of the full joint law with a latent vertex, since re-typing gives mass zero outside
-the image of the embedding (`SCM.dist_retype_eq_zero`). With `O = univ` (no latent vertex) and
-for the negative results (which exhibit two models in the class) nothing is lost. -/
+and `SCM.identifiableAcross_effect_of_frontDoor` (and their `_ulift` forms) are the cross-type
+forms of the adjustment for direct causes, the back-door and the front-door results. Re-typing
+does not preserve strict positivity of the full joint law at a latent vertex
+(`SCM.dist_retype_eq_zero`); for those classes the padded merged type `SCM.PadType O α α'`
+(`α v × α' v` off `O`, the extra component driven by independent uniform noise) is used instead,
+with the reduction `SCM.identifiableAcross_pos_of_identifiableFrom` and the effect forms
+`SCM.identifiableAcross_effect_pos` and `SCM.identifiableAcross_effect_pos_ulift`. With
+`O = univ` (no latent vertex) and for the negative results (which exhibit two models in the
+class) nothing is lost. -/
 def IdentifiableFrom (C : Set (Model G α)) (O : Finset V) {β : Type*} (Q : Model G α → β) :
     Prop :=
   PointIdentified C (fun m => m.scm.dist.marginal O) Q
