@@ -281,17 +281,21 @@ namespace SCM
 variable {V : Type*} [Fintype V] [DecidableEq V] {G : Digraph V} [DecidableRel G.Adj]
   {α : V → Type*} {ε : V → Type*} [∀ v, Fintype (ε v)] (M : SCM G α ε)
 
-/-- The response function of the model at the noise value `u`: the world after `do(S := s)`. -/
+/-- The response function of the model at the noise value `u`: the world after `do(S := s)`. It
+is the potential response `SCM.potentialResponse` with the noise value as the first argument,
+the form taken by the abstract definitions of `HPCause` (`SCM.response_eq_potentialResponse`). -/
 noncomputable def response (u : ∀ v, ε v) (S : Finset V) (s : ∀ v, α v) : ∀ v, α v :=
-  (M.intervene S s).solve u
+  M.potentialResponse S s u
+
+/-- The response function is the potential response: `M.response u S s = V_s(u)`. -/
+theorem response_eq_potentialResponse (u : ∀ v, ε v) (S : Finset V) (s : ∀ v, α v) :
+    M.response u S s = M.potentialResponse S s u := rfl
 
 /-- The response to an intervention depends only on the values assigned to the intervened
 set. -/
 theorem response_congr (u : ∀ v, ε v) (S : Finset V) (s s' : ∀ v, α v)
-    (h : ∀ v ∈ S, s v = s' v) : M.response u S s = M.response u S s' :=
-  (M.intervene S s').eq_solve_of_isSolution (M.isSolution_intervene_iff.2
-    ⟨fun v hv => (M.solve_intervene_of_mem u hv).trans (h v hv), fun _ hv =>
-      M.solve_intervene_of_notMem u hv⟩)
+    (h : ∀ v ∈ S, s v = s' v) : M.response u S s = M.response u S s' := by
+  rw [response, response, potentialResponse_eq, potentialResponse_eq, M.solve_intervene_congr h]
 
 /-- **Actual causation in a structural model** (Halpern and Pearl 2005; Pearl 2009,
 Definition 10.4.2): in the world `(M, u)`, `X = x` is an actual cause of the effect `φ`. -/

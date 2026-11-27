@@ -187,3 +187,4 @@ public import CausalInference.StructuralNested.TwoStageGEstimation
 public import CausalInference.StructuralNested.TwoStageCounterexamples
 public import CausalInference.LinearSEM.InstrumentCriterion
 public import CausalInference.SCM.InstrumentCounterfactual
+public import CausalInference.SCM.LatentTypes

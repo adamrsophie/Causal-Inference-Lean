@@ -53,7 +53,8 @@ public import CausalInference.PartialIdentification.IdentifiedSet
   positive joint law of all three vertices and every arrow active, and effects `1/2` and `5/8`.
 
 The models of `SCM.Model G α` have fixed value types `α v` at every vertex, the latent ones
-included; see `SCM.IdentifiableFrom` for what this means for the positive results.
+included. `CausalInference.SCM.LatentTypes` lifts the positive results with latent vertices to
+models with different latent value types; see `SCM.IdentifiableFrom`.
 
 Sources: Pearl (2009), *Causality*, 2nd edition, sections 3.2.1 to 3.2.4 and 3.5.
 -/
@@ -276,13 +277,20 @@ vertices `O`: two models of `C` with the same marginal law of the vertices in `O
 value of `Q` (Pearl 2009, Definitions 3.2.3 and 3.2.4). This is `PointIdentified` with the
 observed marginal as the observation.
 
-Limitation: the value types `α v` are fixed for all vertices, the unobserved ones included,
-whereas Pearl's Definition 3.2.4 compares any two models with graph `G` whatever the domains of
-the latent variables. When `O` is not all of `V`, a positive result stated with
-`IdentifiableFrom` therefore compares only models whose latent vertices have the same value
-types; it holds for every choice of those types, but it does not compare models with different
-latent types. With `O = univ` (no latent vertex) and for the negative results (which exhibit
-two models in the class) nothing is lost. -/
+Value types: here the value types `α v` are fixed for all vertices, the unobserved ones
+included, whereas Pearl's Definition 3.2.4 compares any two models with graph `G` whatever the
+domains of the latent variables. The cross-type notion is `SCM.IdentifiableAcross` in
+`CausalInference.SCM.LatentTypes`, and `SCM.identifiableAcross_of_identifiableFrom` reduces it to
+`IdentifiableFrom` at the merged value types `SCM.MergeType O α α'` (`α v` on `O`, `α v ⊕ α' v`
+off `O`, for two families in one universe). The reduction applies when both classes are closed
+under re-typing into the merged types and the query is invariant under re-typing. This holds for
+the effect with classes whose conditions constrain only observed coordinates:
+`SCM.identifiableAcross_effect_singleton_of_subset`, `SCM.identifiableAcross_effect_of_backDoor`
+and `SCM.identifiableAcross_effect_of_frontDoor` are the cross-type forms of the adjustment for
+direct causes, the back-door and the front-door results. It fails for a class defined by strict
+positivity of the full joint law with a latent vertex, since re-typing gives mass zero outside
+the image of the embedding (`SCM.dist_retype_eq_zero`). With `O = univ` (no latent vertex) and
+for the negative results (which exhibit two models in the class) nothing is lost. -/
 def IdentifiableFrom (C : Set (Model G α)) (O : Finset V) {β : Type*} (Q : Model G α → β) :
     Prop :=
   PointIdentified C (fun m => m.scm.dist.marginal O) Q
@@ -367,8 +375,8 @@ formula is the adjustment for direct causes, `SCM.effect_singleton_eq_sum`.
 
 Pearl's class is the models with strictly positive observed law; the overlap condition is
 weaker. Pearl states the theorem for a set `X` and its parents `PA_X`; this is the case of one
-vertex. The value types of the latent vertices are fixed by the model type (see
-`SCM.IdentifiableFrom`). -/
+vertex. The value types of the latent vertices are fixed by the model type; the form across
+latent value types is `SCM.identifiableAcross_effect_singleton_of_subset`. -/
 theorem identifiableFrom_effect_singleton_of_subset (i : V) (x : ∀ v, α v) (Y : Finset V)
     (y : ∀ v, α v) {O : Finset V} (hO : insert i (G.parentsFinset i) ∪ Y ⊆ O) :
     IdentifiableFrom {m : Model G α | ∀ z : (∀ u : G.parentsFinset i, α u),
