@@ -39,22 +39,26 @@ death state.
 * `aliveMass_succ`: the cohort is conserved: `aliveMass (t + 1) = aliveMass t - deathMass t`.
 * `deathHazard_eq_sum_stateShare`, `deathHazard_eq_sum_stateShare_of_pos`: the marginal death
   hazard is the average of the state-specific death probabilities weighted by the occupancy
-  shares among the living; the weights are a probability distribution when the alive mass is
-  positive.
+  shares among the living; when the alive mass is positive and every row of transition
+  probabilities sums to at most one, the weights are a probability distribution and the hazard
+  lies in `[0, 1]`.
 * `hazard_deathLaw`, `survival_deathLaw`: for `t < N`, the discrete hazard `P(T = t | T ≥ t)`
   of the death period is the marginal death hazard, and `P(T > t)` is `aliveMass (t + 1)`.
 * `illnessDeath_hazard_eq`: in the illness-death model,
   `h t = (b * P₁ t + c * P₂ t) / (P₁ t + P₂ t)` with `P₁ = progFree`, `P₂ = progressed`;
-  `illnessDeath_hazard_deathLaw`: this is the library's `hazard` of the death period.
+  `illnessDeath_hazard_deathLaw`: this is the library's `hazard` of the death period, and
+  `illnessDeath_hazard_deathLaw_of_pos`: with positive alive mass it is the conditional
+  probability `P(T = t | T ≥ t)` and lies in `[0, 1]`.
 * `illnessDeath_tendsto_hazard`: with constant transition probabilities, `0 < a`,
   `a + b < 1` and `c ≤ 1`, the marginal death hazard converges to `min c (a + b)`.
-  `illnessDeath_hazard_monotone`: if `b ≤ c` it is nondecreasing.
+  `illnessDeath_tendsto_hazard_of_valid`: with `0 ≤ b` and `0 ≤ c` the hazards and the limit
+  lie in `[0, 1]`. `illnessDeath_hazard_monotone`: if `b ≤ c` it is nondecreasing.
 * `illnessDeath_limit_ne`: a model in which the limit is not the progressed death
   probability `c`.
 
 ## Source
 
-NICE Decision Support Unit, Technical Support Document 19, H. Woods, E. Sideris, S. Palmer,
+NICE Decision Support Unit, Technical Support Document 19, B. Woods, E. Sideris, S. Palmer,
 N. Latimer and M. Soares, *Partitioned survival analysis for decision modelling in health care:
 a critical review* (2017), Section 2.3 (Figure 3, the three-state model of advanced cancer, and
 state membership by cohort simulation in discrete time) and Section 4.1.2
@@ -142,15 +146,23 @@ theorem deathHazard_eq_sum_stateShare (t : ℕ) :
     deathHazard π P t = ∑ s, stateShare π P t s * deathProb P s := by
   simp only [deathHazard, deathMass, stateShare, div_mul_eq_mul_div, ← Finset.sum_div]
 
-/-- The probability form of `deathHazard_eq_sum_stateShare`: when the alive mass at the start
-of period `t` is positive, the state shares among the living are nonnegative and sum to one,
-and the marginal death hazard is their average of the state-specific death probabilities. -/
+/-- The probability form of `deathHazard_eq_sum_stateShare`: for a nonnegative initial
+distribution and nonnegative transition probabilities whose rows sum to at most one, when the
+alive mass at the start of period `t` is positive, the state shares among the living are
+nonnegative and sum to one, the marginal death hazard is their average of the state-specific
+death probabilities, and it lies in `[0, 1]`. -/
 theorem deathHazard_eq_sum_stateShare_of_pos (hπ : ∀ s, 0 ≤ π s) (hP : ∀ s s', 0 ≤ P s s')
-    (t : ℕ) (ht : 0 < aliveMass π P t) :
+    (hrow : ∀ s, ∑ s', P s s' ≤ 1) (t : ℕ) (ht : 0 < aliveMass π P t) :
     (∀ s, 0 ≤ stateShare π P t s) ∧ ∑ s, stateShare π P t s = 1 ∧
-      deathHazard π P t = ∑ s, stateShare π P t s * deathProb P s := by
+      deathHazard π P t = ∑ s, stateShare π P t s * deathProb P s ∧
+      0 ≤ deathHazard π P t ∧ deathHazard π P t ≤ 1 := by
+  have hd := deathMass_nonneg π P hπ hP hrow t
+  have hle : deathMass π P t ≤ aliveMass π P t := by
+    have := aliveMass_nonneg π P hπ hP (t + 1)
+    rw [aliveMass_succ] at this
+    linarith
   refine ⟨fun s => div_nonneg (occupancy_nonneg π P hπ hP t s) ht.le, ?_,
-    deathHazard_eq_sum_stateShare π P t⟩
+    deathHazard_eq_sum_stateShare π P t, div_nonneg hd ht.le, (div_le_one ht).2 hle⟩
   simp only [stateShare, ← Finset.sum_div]
   exact div_self ht.ne'
 
@@ -424,7 +436,9 @@ Section 4.1.2, Figure 4, discrete-time version). With constant per-period probab
 `0 < a` (progression possible), `a + b < 1` and `c ≤ 1`, the marginal death hazard
 converges to `min c (a + b)`. It levels off at the progressed death probability `c` exactly
 when `c ≤ a + b`; when `a + b < c` the progressed share among the living converges to
-`a / (c - b) < 1` and the hazard levels off at `a + b`. -/
+`a / (c - b) < 1` and the hazard levels off at `a + b`. This is a statement about the
+algebraic recursion and needs no sign condition on `b` or `c`; the probability reading, with
+`0 ≤ b` and `0 ≤ c`, is `illnessDeath_tendsto_hazard_of_valid`. -/
 theorem illnessDeath_tendsto_hazard (ha : 0 < a) (hab : a + b < 1) (hc : c ≤ 1) :
     Tendsto (idHazard a b c) atTop (𝓝 (min c (a + b))) := by
   have hx : 0 < 1 - a - b := by linarith
@@ -478,15 +492,61 @@ theorem illnessDeath_valid (ha : 0 ≤ a) (hb : 0 ≤ b) (hab : a + b ≤ 1) (hc
   · cases s <;> cases s' <;> simp only [idTrans] <;> linarith
   · cases s <;> simp only [Fintype.sum_bool, idTrans] <;> linarith
 
-/-- In the illness-death model, the library's discrete hazard `P(T = t | T ≥ t)` of the death
-period `T` (with law `deathLaw idInit (idTrans a b c) N`, a probability measure) is the
-marginal death hazard `idHazard a b c t`, for every period `t` before the horizon `N`. -/
+/-- In the illness-death model, the library's discrete hazard of the death period `T` (with law
+`deathLaw idInit (idTrans a b c) N`, a probability measure) is the marginal death hazard
+`idHazard a b c t`, for every period `t` before the horizon `N`. This is an identity of the
+quotients `P(T = t) / P(T ≥ t)`: when everybody has died before period `t` both sides are the
+conventional value `0`. The reading as the conditional probability `P(T = t | T ≥ t)` is
+`illnessDeath_hazard_deathLaw_of_pos`. -/
 theorem illnessDeath_hazard_deathLaw (ha : 0 ≤ a) (hb : 0 ≤ b) (hab : a + b ≤ 1) (hc0 : 0 ≤ c)
     (hc : c ≤ 1) {N t : ℕ} (ht : t < N) :
     IsProbabilityMeasure (deathLaw idInit (idTrans a b c) N) ∧
       hazard (deathLaw idInit (idTrans a b c) N) id t = idHazard a b c t := by
   obtain ⟨h1, h2, h3, h4⟩ := illnessDeath_valid ha hb hab hc0 hc
   exact ⟨isProbabilityMeasure_deathLaw _ _ h1 h2 h3 h4 N, hazard_deathLaw _ _ h1 h2 h3 ht⟩
+
+/-- In the illness-death model with `0 ≤ a` and `a + b < 1` somebody is alive at the start of
+every period: the progression-free proportion `(1 - a - b) ^ t` is positive. -/
+theorem aliveMass_idTrans_pos (ha : 0 ≤ a) (hab : a + b < 1) (hc : c ≤ 1) (t : ℕ) :
+    0 < aliveMass idInit (idTrans a b c) t := by
+  have h1 := progFree_pos (c := c) hab t
+  have h2 := progressed_nonneg ha hab hc t
+  rw [aliveMass, Fintype.sum_bool]
+  change 0 < progressed a b c t + progFree a b c t
+  linarith
+
+/-- The probability form of `illnessDeath_hazard_deathLaw`: if the alive mass at the start of
+period `t < N` is positive, then the death period is at risk at `t` with positive probability,
+the library's hazard is the conditional probability `P(T = t | T ≥ t)` and equals
+`idHazard a b c t`, and this hazard lies in `[0, 1]`. -/
+theorem illnessDeath_hazard_deathLaw_of_pos (ha : 0 ≤ a) (hb : 0 ≤ b) (hab : a + b ≤ 1)
+    (hc0 : 0 ≤ c) (hc : c ≤ 1) {N t : ℕ} (ht : t < N)
+    (hpos : 0 < aliveMass idInit (idTrans a b c) t) :
+    IsProbabilityMeasure (deathLaw idInit (idTrans a b c) N) ∧
+      0 < atRisk (deathLaw idInit (idTrans a b c) N) id t ∧
+      hazard (deathLaw idInit (idTrans a b c) N) id t = idHazard a b c t ∧
+      0 ≤ idHazard a b c t ∧ idHazard a b c t ≤ 1 := by
+  obtain ⟨h1, h2, h3, h4⟩ := illnessDeath_valid ha hb hab hc0 hc
+  obtain ⟨hP, hH⟩ := illnessDeath_hazard_deathLaw ha hb hab hc0 hc ht
+  obtain ⟨-, -, -, h5, h6⟩ := deathHazard_eq_sum_stateShare_of_pos _ _ h1 h2 h3 t hpos
+  refine ⟨hP, ?_, hH, h5, h6⟩
+  simp only [atRisk, id]
+  rwa [deathLaw_real_le _ _ h1 h2 h3 ht.le]
+
+/-- The probability reading of `illnessDeath_tendsto_hazard`. For a valid illness-death model
+(`0 < a`, `0 ≤ b`, `a + b < 1`, `0 ≤ c ≤ 1`), the marginal death hazard is a probability in
+every period, it converges to `min c (a + b)`, and this limit lies in `[0, 1]`. -/
+theorem illnessDeath_tendsto_hazard_of_valid (ha : 0 < a) (hb : 0 ≤ b) (hab : a + b < 1)
+    (hc0 : 0 ≤ c) (hc : c ≤ 1) :
+    (∀ t, 0 ≤ idHazard a b c t ∧ idHazard a b c t ≤ 1) ∧
+      Tendsto (idHazard a b c) atTop (𝓝 (min c (a + b))) ∧
+      0 ≤ min c (a + b) ∧ min c (a + b) ≤ 1 := by
+  obtain ⟨h1, h2, h3, -⟩ := illnessDeath_valid ha.le hb hab.le hc0 hc
+  refine ⟨fun t => ?_, illnessDeath_tendsto_hazard ha hab hc,
+    le_min hc0 (by linarith), (min_le_left _ _).trans hc⟩
+  obtain ⟨-, -, -, h5, h6⟩ := deathHazard_eq_sum_stateShare_of_pos _ _ h1 h2 h3 t
+    (aliveMass_idTrans_pos ha.le hab hc t)
+  exact ⟨h5, h6⟩
 
 end MultiState
 
