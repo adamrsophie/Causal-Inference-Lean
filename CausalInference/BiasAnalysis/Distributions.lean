@@ -11,6 +11,7 @@ public import Mathlib.Analysis.MeanInequalities
 public import Mathlib.Probability.CDF
 public import Mathlib.Order.Monotone.Union
 public import Mathlib.Probability.Distributions.Gaussian.Real
+public import Mathlib.Analysis.SpecialFunctions.Sigmoid
 public import CausalInference.Estimation.ConfidenceInterval
 
 /-!
@@ -33,33 +34,43 @@ law and the distribution function `cdf`; this file adds what the chapter uses on
   `α, β` from a mean and a standard deviation). The mode formula is not printed in the book.
 * Uniform distribution: `uniformPDF_Icc` (density `1/(max - min)`), `map_affine_cond_Icc` and
   `IsUniform.affine` (the draw `min + u (max - min)`).
-* Normal distribution: `hasLaw_normal_draw` (Equation 7.3) and `se_eq_of_waldIntervalSE`
-  (Equation 7.4, inverting a Wald interval built with `waldIntervalSE`).
+* Normal distribution: `hasLaw_normal_draw` (Equation 7.3), `se_eq_of_waldIntervalSE`
+  (Equation 7.4, inverting a Wald interval built with `waldIntervalSE`) and
+  `cdf_gaussianReal_affine` (standardization `F(m + s z) = Φ(z)`).
 * Inverse distribution function sampling (Equations 7.1 and 7.2): the generalized inverse
   `quantile`, its Galois property `quantile_le_iff`, `map_quantile_uniform` and
   `IsUniform.hasLaw_quantile`; the probability integral transform `map_cdf_eq_uniform` for a
   continuous distribution function, with the counterexample `map_cdf_dirac_ne_uniform` for a
-  point mass; `quantile_map` (quantiles commute with continuous strictly
-  increasing maps such as the logit back transformation); `hasLaw_quantile_cdf` and
-  `hasLaw_quantile_cdf_gaussian`, the marginal step of the NORTA construction of "Correlated
-  Distributions" (Equation 7.7).
-* Trapezoidal distribution: the distribution function `trapezoidCDF`, density `trapezoidPDF`
-  (`hasDerivAt_trapezoidCDF`), the printed sampling rule `trapezoidSample`, and the law
-  `trapezoidMeasure` it produces from a standard uniform draw. `trapezoidSample_spec` and
-  `quantile_trapezoidMeasure` show that the printed rule is exactly the quantile function, and
-  `cdf_trapezoidMeasure` identifies the distribution function; that the law has density
-  `trapezoidPDF` is shown only through the derivative on the open pieces. Special cases:
-  `trapezoidMeasure_uniform` (`a = b`, `c = d` gives the uniform law),
-  `trapezoidPDF_eq_triangularPDF` (`b = c` gives the triangular density) and
-  `integral_id_trapezoidMeasure` (a symmetric trapezoid has mean `(b + c)/2`).
+  point mass; `quantile_map` (quantiles commute with continuous strictly increasing maps such as
+  the logit back transformation), `quantile_cdf_of_absolutelyContinuous` and
+  `quantile_logitNormal` (the quantile of a logit normal law at level `Φ(z)` is
+  `expit(m + s z)`).
+* Correlated distributions (NORTA, Equation 7.7): the marginal step `hasLaw_quantile_cdf` and
+  `hasLaw_quantile_cdf_gaussian`, and the joint law `measure_quantile_pair_le`,
+  `measure_quantile_cdf_pair_le`, `measure_quantile_cdf_gaussian_pair_le`: the joint
+  distribution function of the transformed pair is the copula of the inputs evaluated at the
+  target marginal distribution functions, also for targets with atoms.
+* Trapezoidal distribution: the distribution function `trapezoidCDF`, density `trapezoidPDF`,
+  the printed sampling rule `trapezoidSample`, and the law `trapezoidMeasure` it produces from a
+  standard uniform draw. `trapezoidSample_spec` and `quantile_trapezoidMeasure` show that the
+  printed rule is exactly the quantile function, `cdf_trapezoidMeasure` identifies the
+  distribution function, and `trapezoidMeasure_eq_withDensity` shows that the law has density
+  `trapezoidPDF` for all ordered endpoints with `a < d`, collapsed ramps included
+  (`integral_trapezoidPDF_eq_one`: the density integrates to one; `trapezoidPDF_le_mode`: the
+  height `2/D` is the maximum). Special cases: `trapezoidMeasure_uniform` (`a = b`, `c = d` gives
+  the uniform law), `trapezoidMeasure_eq_withDensity_triangularPDF` (`b = c` gives the triangular
+  law) and `integral_id_trapezoidMeasure` (a symmetric trapezoid has mean `(b + c)/2`).
 * `Examples`: the uniform density `4` on `[0.70, 0.95]`, `Beta(15, 2)` and `Beta(16, 3)`
-  (means and standard deviations printed in the chapter) and the choice `α ≈ 17.3`,
-  `β ≈ 2.4` from the range `[0.70, 0.98]`.
+  (means and standard deviations printed in the chapter), the choice `α ≈ 17.3`, `β ≈ 2.4` from
+  the range `[0.70, 0.98]`, and certified bounds for the log normal and logit normal examples:
+  `logNormal_sd_example` (`sd = 0.21`), `logitNormal_parameters_example` (`2.94` and `0.48`) and
+  `logitNormal_quantiles_example` (the quantiles `0.88`, `0.95`, `0.98` at the levels `Φ(-1.96)`,
+  `Φ(0)`, `Φ(1.96)`).
 
-The bivariate normal correlation of the NORTA construction only enters through the marginals;
-the size of the induced correlation is not formalized. The printed numerical quantiles of the
-logit normal and log normal examples (for instance `logit(0.95) = 2.94`, `sd = 0.21`) involve
-logarithms and are not checked here.
+The size of the correlation induced by the NORTA construction is not formalized, and the
+bivariate normal law is not defined here: the Gaussian copula enters only through the joint law
+of `(Φ(Z₁), Φ(Z₂))`. The book's simulated quantiles are checked at the levels `Φ(±1.96)`, not at
+exactly `0.025` and `0.975`. The beta mode for zero validation counts is not treated.
 -/
 
 @[expose] public section
@@ -491,8 +502,8 @@ theorem continuous_cdf_of_measure_singleton (μ : Measure ℝ) [IsProbabilityMea
 Equation 7.7): if `Z` has a law `ν` with continuous distribution function `G` (for instance a
 coordinate of a bivariate normal vector, whose marginal is standard normal), then
 `X = Q_μ(G(Z))` has law `μ`. Applied to each coordinate of a correlated pair, it shows that the
-transformed pair has the target marginals whatever the dependence of `(Z₁, Z₂)`. The size of the
-induced correlation is not a theorem here. -/
+transformed pair has the target marginals whatever the dependence of `(Z₁, Z₂)`; the joint law is
+`measure_quantile_cdf_pair_le`. The size of the induced correlation is not a theorem here. -/
 theorem hasLaw_quantile_cdf {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω} {Z : Ω → ℝ}
     {ν : Measure ℝ} [IsProbabilityMeasure ν] (hZ : HasLaw Z ν P) (hG : Continuous (cdf ν))
     (μ : Measure ℝ) [IsProbabilityMeasure μ] :
@@ -550,6 +561,135 @@ theorem quantile_map {g : ℝ → ℝ} (hg : StrictMono g) (hgc : Continuous g)
         not_le.1 fun h => absurd ((quantile_le_iff hu d).2 h) (not_le.2 (hDq d hdD))
       linarith
 
+/-- A random variable with the uniform law on `(0, 1)` lies in `(0, 1)` almost surely. -/
+lemma ae_mem_Ioo_of_hasLaw_uniform {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω} {U : Ω → ℝ}
+    (hU : HasLaw U (volume.restrict (Ioo (0 : ℝ) 1)) P) : ∀ᵐ ω ∂P, U ω ∈ Ioo (0 : ℝ) 1 := by
+  have h : ∀ᵐ x ∂(P.map U), x ∈ Ioo (0 : ℝ) 1 := by
+    rw [hU.map_eq]; exact ae_restrict_mem measurableSet_Ioo
+  exact ae_of_ae_map hU.aemeasurable h
+
+/-- The probability integral transform for random variables: if `Z` has a law `ν` with
+continuous distribution function `G`, then `G(Z)` is uniform on `(0, 1)`. -/
+theorem hasLaw_cdf_uniform {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω} {Z : Ω → ℝ}
+    {ν : Measure ℝ} [IsProbabilityMeasure ν] (hZ : HasLaw Z ν P) (hG : Continuous (cdf ν)) :
+    HasLaw (fun ω => cdf ν (Z ω)) (volume.restrict (Ioo (0 : ℝ) 1)) P :=
+  HasLaw.comp (X := Z) (Y := cdf ν) ⟨(cdf ν).mono.measurable.aemeasurable,
+    map_cdf_eq_uniform ν hG⟩ hZ
+
+/-- Joint law of two quantile transformed uniforms (Chapter 7, "Correlated Distributions"): if
+`U₁` and `U₂` each have the uniform law on `(0, 1)`, with any dependence between them, then
+`P(Q₁(U₁) ≤ x, Q₂(U₂) ≤ y) = P(U₁ ≤ F₁(x), U₂ ≤ F₂(y))`, where `Qᵢ` and `Fᵢ` are the quantile
+and distribution functions of the target laws `μᵢ`. The right side is the copula of `(U₁, U₂)`
+(their joint distribution function) evaluated at `(F₁(x), F₂(y))`, so the dependence of the
+transformed pair is that copula, also when a target law has atoms. -/
+theorem measure_quantile_pair_le {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω}
+    {U₁ U₂ : Ω → ℝ} (hU₁ : HasLaw U₁ (volume.restrict (Ioo (0 : ℝ) 1)) P)
+    (hU₂ : HasLaw U₂ (volume.restrict (Ioo (0 : ℝ) 1)) P) (μ₁ μ₂ : Measure ℝ) (x y : ℝ) :
+    P {ω | quantile μ₁ (U₁ ω) ≤ x ∧ quantile μ₂ (U₂ ω) ≤ y} =
+      P {ω | U₁ ω ≤ cdf μ₁ x ∧ U₂ ω ≤ cdf μ₂ y} := by
+  refine measure_congr ?_
+  filter_upwards [ae_mem_Ioo_of_hasLaw_uniform hU₁, ae_mem_Ioo_of_hasLaw_uniform hU₂]
+    with ω h1 h2
+  rw [quantile_le_iff h1, quantile_le_iff h2]
+
+/-- The joint distribution function of the NORTA pair (Chapter 7, "Correlated Distributions",
+Equation 7.7): if `Zᵢ` has a law `νᵢ` with continuous distribution function `Gᵢ` and
+`Xᵢ = Q_{μᵢ}(Gᵢ(Zᵢ))`, then `P(X₁ ≤ x, X₂ ≤ y) = P(G₁(Z₁) ≤ F₁(x), G₂(Z₂) ≤ F₂(y))`: the copula
+of `(Z₁, Z₂)` at the target marginal distribution functions. -/
+theorem measure_quantile_cdf_pair_le {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω}
+    {Z₁ Z₂ : Ω → ℝ} {ν₁ ν₂ : Measure ℝ} [IsProbabilityMeasure ν₁] [IsProbabilityMeasure ν₂]
+    (hZ₁ : HasLaw Z₁ ν₁ P) (hZ₂ : HasLaw Z₂ ν₂ P) (hG₁ : Continuous (cdf ν₁))
+    (hG₂ : Continuous (cdf ν₂)) (μ₁ μ₂ : Measure ℝ) (x y : ℝ) :
+    P {ω | quantile μ₁ (cdf ν₁ (Z₁ ω)) ≤ x ∧ quantile μ₂ (cdf ν₂ (Z₂ ω)) ≤ y} =
+      P {ω | cdf ν₁ (Z₁ ω) ≤ cdf μ₁ x ∧ cdf ν₂ (Z₂ ω) ≤ cdf μ₂ y} :=
+  measure_quantile_pair_le (hasLaw_cdf_uniform hZ₁ hG₁) (hasLaw_cdf_uniform hZ₂ hG₂) μ₁ μ₂ x y
+
+/-- The standard normal distribution function `Φ` is continuous. -/
+lemma continuous_cdf_gaussianReal_zero_one : Continuous (cdf (gaussianReal 0 1)) := by
+  have : NullSingletonClass (gaussianReal 0 1) := nullSingletonClass_gaussianReal one_ne_zero
+  exact continuous_cdf_of_measure_singleton _ fun x => measure_singleton x
+
+/-- The NORTA pair with standard normal coordinates: if `Z₁, Z₂ ~ N(0, 1)` (any joint law) then
+`P(Q₁(Φ(Z₁)) ≤ x, Q₂(Φ(Z₂)) ≤ y) = P(Φ(Z₁) ≤ F₁(x), Φ(Z₂) ≤ F₂(y))`. When `(Z₁, Z₂)` is
+standard bivariate normal with correlation `ρ`, the right side is by definition the Gaussian
+copula `C_ρ(F₁(x), F₂(y))`; the bivariate normal law itself is not formalized here. -/
+theorem measure_quantile_cdf_gaussian_pair_le {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω}
+    {Z₁ Z₂ : Ω → ℝ} (hZ₁ : HasLaw Z₁ (gaussianReal 0 1) P) (hZ₂ : HasLaw Z₂ (gaussianReal 0 1) P)
+    (μ₁ μ₂ : Measure ℝ) (x y : ℝ) :
+    P {ω | quantile μ₁ (cdf (gaussianReal 0 1) (Z₁ ω)) ≤ x ∧
+        quantile μ₂ (cdf (gaussianReal 0 1) (Z₂ ω)) ≤ y} =
+      P {ω | cdf (gaussianReal 0 1) (Z₁ ω) ≤ cdf μ₁ x ∧
+        cdf (gaussianReal 0 1) (Z₂ ω) ≤ cdf μ₂ y} :=
+  measure_quantile_cdf_pair_le hZ₁ hZ₂ continuous_cdf_gaussianReal_zero_one
+    continuous_cdf_gaussianReal_zero_one μ₁ μ₂ x y
+
+/-- If Lebesgue measure is absolutely continuous with respect to a probability measure `μ`
+(every interval has positive `μ` mass), then `0 < F(x) < 1` for every `x`. -/
+lemma cdf_mem_Ioo_of_absolutelyContinuous [IsProbabilityMeasure μ] (hμ : volume ≪ μ) (x : ℝ) :
+    cdf μ x ∈ Ioo (0 : ℝ) 1 := by
+  constructor
+  · by_contra h
+    rw [not_lt] at h
+    have h0 : μ (Iic x) = 0 := by rw [← ofReal_cdf]; exact ENNReal.ofReal_eq_zero.2 h
+    have := hμ h0
+    simp at this
+  · by_contra h
+    rw [not_lt] at h
+    have h1 : μ (Ioi x) = 0 := by
+      rw [← compl_Iic, measure_compl measurableSet_Iic (measure_ne_top _ _), measure_univ,
+        ← ofReal_cdf]
+      exact tsub_eq_zero_of_le (by rw [← ENNReal.ofReal_one]; exact ENNReal.ofReal_le_ofReal h)
+    have := hμ h1
+    simp at this
+
+/-- If Lebesgue measure is absolutely continuous with respect to `μ`, the quantile function
+inverts the distribution function: `Q(F(x)) = x`. -/
+theorem quantile_cdf_of_absolutelyContinuous [IsProbabilityMeasure μ] (hμ : volume ≪ μ)
+    (x : ℝ) : quantile μ (cdf μ x) = x := by
+  have hx := cdf_mem_Ioo_of_absolutelyContinuous hμ x
+  refine le_antisymm ((quantile_le_iff hx x).2 le_rfl) (not_lt.1 fun hlt => ?_)
+  set q := quantile μ (cdf μ x) with hq
+  have h1 : cdf μ x ≤ cdf μ q := le_cdf_quantile hx
+  have h2 := (cdf μ).measure_Ioc q x
+  rw [measure_cdf, ENNReal.ofReal_eq_zero.2 (by linarith)] at h2
+  have := hμ h2
+  rw [Real.volume_Ioc, ENNReal.ofReal_eq_zero] at this
+  linarith
+
+/-- Standardizing the normal distribution function: for `s > 0` and variance `v = s²`, the
+`N(m, v)` distribution function at `m + s z` is the standard normal distribution function
+`Φ(z)`. -/
+theorem cdf_gaussianReal_affine (m : ℝ) {s : ℝ} (hs : 0 < s) {v : NNReal} (hv : (v : ℝ) = s ^ 2)
+    (z : ℝ) : cdf (gaussianReal m v) (m + s * z) = cdf (gaussianReal 0 1) z := by
+  have hlaw := hasLaw_normal_draw (P := gaussianReal 0 1) (Z := id) (HasLaw.id) m (-s)
+  have hv' : (⟨(-s) ^ 2, sq_nonneg (-s)⟩ : NNReal) = v := NNReal.eq (by
+    change (-s) ^ 2 = (v : ℝ); rw [hv, neg_sq])
+  rw [hv'] at hlaw
+  have hf : Measurable fun ω : ℝ => m - id ω * -s := by fun_prop
+  rw [cdf_eq_real, cdf_eq_real, ← hlaw.map_eq, map_measureReal_apply hf measurableSet_Iic]
+  congr 1
+  ext w
+  simp only [mem_preimage, mem_Iic, id]
+  constructor
+  · intro h; nlinarith
+  · intro h; nlinarith
+
+/-- Quantiles of the logit normal law (Chapter 7, "Normal Distribution"): if `logit(p)` has law
+`N(m, v)` with `v = s²`, `s > 0`, the quantile of `p = expit(logit(p))` at level `Φ(z)` is
+`expit(m + s z)`. Here `Real.sigmoid` is the expit function. -/
+theorem quantile_logitNormal (m : ℝ) {s : ℝ} (hs : 0 < s) {v : NNReal} (hv : (v : ℝ) = s ^ 2)
+    (z : ℝ) :
+    quantile ((gaussianReal m v).map Real.sigmoid) (cdf (gaussianReal 0 1) z) =
+      Real.sigmoid (m + s * z) := by
+  have hv0 : v ≠ 0 := fun h => by
+    rw [h, NNReal.coe_zero] at hv
+    exact (pow_pos hs 2).ne' hv.symm
+  have hac := gaussianReal_absolutelyContinuous' m hv0
+  rw [← cdf_gaussianReal_affine m hs hv z,
+    quantile_map Real.sigmoid_strictMono continuous_sigmoid _
+      (cdf_mem_Ioo_of_absolutelyContinuous hac _),
+    quantile_cdf_of_absolutelyContinuous hac]
+
 /-- Continuity of the distribution function cannot be dropped from `map_cdf_eq_uniform`: for
 the point mass at `0`, `F` pushes the law to the point mass at `F(0)`, which charges the point
 `F(0)` while the uniform law does not. -/
@@ -573,7 +713,8 @@ section Trapezoid
 Minimum `a`, lower mode `b`, upper mode `c`, maximum `d`, with `a ≤ b ≤ c ≤ d` and `a < d`
 (Fox, MacLehose and Lash 2021, Chapter 7, "Trapezoidal Distribution"). The normalizing length is
 `D = d + c - a - b`, so the height of the density is `2 / D`. When `a = b` (or `c = d`) the
-rising (or falling) ramp is empty and its formula is never evaluated. -/
+rising (or falling) ramp is a single point; the ramp formulas are stated only for positive
+width, and the endpoint values `F(a) = 0`, `F(d) = 1` hold for all admissible parameters. -/
 
 /-- The trapezoidal distribution function, piecewise: `0` up to `a`, `(x - a)²/((b - a) D)` on
 `[a, b]`, `(2x - a - b)/D` on `[b, c]`, `1 - (d - x)²/((d - c) D)` on `[c, d]`, and `1` after
@@ -586,9 +727,11 @@ noncomputable def trapezoidCDF (a b c d x : ℝ) : ℝ :=
   else 1
 
 /-- The trapezoidal density: height `h = 2 / D` between the modes, rising linearly from `a` to
-`b` and falling linearly from `c` to `d`. -/
+`b` and falling linearly from `c` to `d`, and `0` off `[a, d]`. The value on `[b, c]` is the
+height also at the endpoints, so that the mode is attained when a ramp is collapsed
+(`trapezoidPDF_le_mode`). -/
 noncomputable def trapezoidPDF (a b c d x : ℝ) : ℝ :=
-  if x ≤ a then 0
+  if x < a then 0
   else if x < b then 2 / (d + c - a - b) * ((x - a) / (b - a))
   else if x ≤ c then 2 / (d + c - a - b)
   else if x < d then 2 / (d + c - a - b) * ((d - x) / (d - c))
@@ -605,7 +748,10 @@ noncomputable def trapezoidSample (a b c d u : ℝ) : ℝ :=
 
 variable {a b c d : ℝ}
 
-lemma trapezoidCDF_lower {x : ℝ} (hx : x ∈ Icc a b) :
+/-- The rising ramp of the distribution function: on `[a, b]` with `a < b`,
+`F(x) = (x - a)²/((b - a) D)`. The positive width `b - a` keeps the quotient meaningful; at a
+collapsed ramp `a = b` the only point is `a`, where `F(a) = 0` (`trapezoidCDF_left`). -/
+lemma trapezoidCDF_lower (_hab : a < b) {x : ℝ} (hx : x ∈ Icc a b) :
     trapezoidCDF a b c d x = (x - a) ^ 2 / ((b - a) * (d + c - a - b)) := by
   obtain ⟨h1, h2⟩ := hx
   unfold trapezoidCDF
@@ -614,6 +760,7 @@ lemma trapezoidCDF_lower {x : ℝ} (hx : x ∈ Icc a b) :
     subst this; simp
   · rw [ite_eq_right hxa, ite_eq_left h2]
 
+/-- The flat part of the distribution function: on `[b, c]`, `F(x) = (2x - a - b)/D`. -/
 lemma trapezoidCDF_mid (hab : a ≤ b) (hbc : b ≤ c) (had : a < d) {x : ℝ}
     (hx : x ∈ Icc b c) :
     trapezoidCDF a b c d x = (2 * x - a - b) / (d + c - a - b) := by
@@ -635,22 +782,22 @@ lemma trapezoidCDF_mid (hab : a ≤ b) (hbc : b ≤ c) (had : a < d) {x : ℝ}
       ring
     · rw [ite_eq_right hxb, ite_eq_left h2]
 
-lemma trapezoidCDF_upper (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d) {x : ℝ}
+/-- The falling ramp of the distribution function: on `[c, d]` with `c < d`,
+`F(x) = 1 - (d - x)²/((d - c) D)`. At a collapsed ramp `c = d`, `F(d) = 1`
+(`trapezoidCDF_right`). -/
+lemma trapezoidCDF_upper (hab : a ≤ b) (hbc : b ≤ c) (hcd : c < d) {x : ℝ}
     (hx : x ∈ Icc c d) :
     trapezoidCDF a b c d x = 1 - (d - x) ^ 2 / ((d - c) * (d + c - a - b)) := by
   obtain ⟨h1, h2⟩ := hx
+  have had : a < d := by linarith
   have hD : 0 < d + c - a - b := by linarith
   by_cases hxc : x ≤ c
   · have hxc' : x = c := le_antisymm hxc h1
     subst hxc'
     rw [trapezoidCDF_mid hab hbc had ⟨hbc, le_rfl⟩]
-    rcases hcd.lt_or_eq with hlt | heq
-    · have : 0 < d - x := sub_pos.2 hlt
-      field_simp
-      ring
-    · subst heq
-      have : (2 * x - a - b) / (x + x - a - b) = 1 := by rw [div_eq_one_iff_eq hD.ne']; ring
-      rw [this]; simp
+    have : 0 < d - x := sub_pos.2 hcd
+    field_simp
+    ring
   · unfold trapezoidCDF
     rw [ite_eq_right (by linarith : ¬ x ≤ a), ite_eq_right (by linarith : ¬ x ≤ b),
       ite_eq_right hxc, ite_eq_left h2]
@@ -664,7 +811,20 @@ lemma trapezoidCDF_of_ge (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : 
   · unfold trapezoidCDF
     rw [ite_eq_right (by linarith : ¬ x ≤ a), ite_eq_right (by linarith : ¬ x ≤ b),
       ite_eq_right (by linarith : ¬ x ≤ c), ite_eq_right (by linarith : ¬ x ≤ d)]
-  · rw [trapezoidCDF_upper hab hbc hcd had ⟨by linarith, heq.ge⟩, heq]; simp
+  · subst heq
+    rcases hcd.lt_or_eq with hlt | hce
+    · rw [trapezoidCDF_upper hab hbc hlt ⟨hlt.le, le_rfl⟩]; simp
+    · subst hce
+      rw [trapezoidCDF_mid hab hbc had ⟨hbc, le_rfl⟩, div_eq_one_iff_eq (by linarith)]
+      ring
+
+/-- The trapezoidal distribution function vanishes at the minimum, for all parameters. -/
+lemma trapezoidCDF_left : trapezoidCDF a b c d a = 0 := trapezoidCDF_of_le le_rfl
+
+/-- The trapezoidal distribution function equals one at the maximum, for all admissible
+parameters, collapsed ramps included. -/
+lemma trapezoidCDF_right (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d) :
+    trapezoidCDF a b c d d = 1 := trapezoidCDF_of_ge hab hbc hcd had le_rfl
 
 /-- The trapezoidal distribution function is strictly increasing on `[a, d]`. -/
 theorem trapezoidCDF_strictMonoOn (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d) :
@@ -672,8 +832,8 @@ theorem trapezoidCDF_strictMonoOn (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d
   have hD : 0 < d + c - a - b := by linarith
   have h1 : StrictMonoOn (trapezoidCDF a b c d) (Icc a b) := by
     intro x hx y hy hxy
-    rw [trapezoidCDF_lower hx, trapezoidCDF_lower hy]
     have hba : 0 < b - a := by linarith [hx.1, hy.2]
+    rw [trapezoidCDF_lower (sub_pos.1 hba) hx, trapezoidCDF_lower (sub_pos.1 hba) hy]
     apply div_lt_div_of_pos_right _ (by positivity)
     nlinarith [hx.1]
   have h2 : StrictMonoOn (trapezoidCDF a b c d) (Icc b c) := by
@@ -683,8 +843,9 @@ theorem trapezoidCDF_strictMonoOn (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d
     linarith
   have h3 : StrictMonoOn (trapezoidCDF a b c d) (Icc c d) := by
     intro x hx y hy hxy
-    rw [trapezoidCDF_upper hab hbc hcd had hx, trapezoidCDF_upper hab hbc hcd had hy]
     have hdc : 0 < d - c := by linarith [hx.1, hy.2]
+    rw [trapezoidCDF_upper hab hbc (sub_pos.1 hdc) hx,
+      trapezoidCDF_upper hab hbc (sub_pos.1 hdc) hy]
     have : (d - y) ^ 2 / ((d - c) * (d + c - a - b)) <
         (d - x) ^ 2 / ((d - c) * (d + c - a - b)) := by
       apply div_lt_div_of_pos_right _ (by positivity)
@@ -746,7 +907,8 @@ theorem trapezoidSample_spec (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (ha
       rw [Real.sqrt_le_left hba.le]; rw [hr]; nlinarith
     have hmem : a + Real.sqrt r ∈ Icc a b := ⟨by linarith [Real.sqrt_nonneg r], by linarith⟩
     refine ⟨⟨hmem.1, by linarith [hmem.2]⟩, ?_⟩
-    rw [trapezoidCDF_lower hmem, add_sub_cancel_left, Real.sq_sqrt hr0, hr, ← hDdef, h2s]
+    rw [trapezoidCDF_lower (sub_pos.1 hba) hmem, add_sub_cancel_left, Real.sq_sqrt hr0, hr,
+      ← hDdef, h2s]
     field_simp
   · rw [ite_eq_right h1]
     by_cases h2 : s < c
@@ -762,16 +924,18 @@ theorem trapezoidSample_spec (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (ha
       have hmem : d - Real.sqrt r ∈ Icc c d :=
         ⟨by linarith, by linarith [Real.sqrt_nonneg r]⟩
       refine ⟨⟨by linarith [hmem.1], hmem.2⟩, ?_⟩
-      rw [trapezoidCDF_upper hab hbc hcd had hmem, sub_sub_cancel, Real.sq_sqrt hr0, hr, ← hDdef]
       rcases hcd.lt_or_eq with hlt | heq
-      · have : 0 < d - c := sub_pos.2 hlt
+      · rw [trapezoidCDF_upper hab hbc hlt hmem, sub_sub_cancel, Real.sq_sqrt hr0, hr, ← hDdef]
+        have : 0 < d - c := sub_pos.2 hlt
         field_simp
         linear_combination (-1 : ℝ) * h2s
       · have hsd : 2 * s = c + d := by linarith [not_lt.1 h2]
         have : u * D = D := by rw [← h2s, hDdef]; linarith
         have hu' : u = 1 := by
           have := mul_right_cancel₀ hD.ne' (this.trans (one_mul D).symm); exact this
-        rw [hu', ← heq]; simp
+        have hr' : Real.sqrt r = 0 := by rw [hr, heq, sub_self, zero_mul, Real.sqrt_zero]
+        rw [hu', hr', sub_zero]
+        exact trapezoidCDF_right hab hbc hcd had
 
 /-- The Galois property of the sampling rule: for `u ∈ (0, 1)`,
 `trap(u) ≤ x ↔ u ≤ F(x)`. -/
@@ -798,9 +962,8 @@ lemma measurable_trapezoidSample (a b c d : ℝ) : Measurable (trapezoidSample a
       (by fun_prop))
 
 /-- The trapezoidal distribution, defined as the law of the printed sampling rule applied to a
-standard uniform draw. Its distribution function is `trapezoidCDF` (`cdf_trapezoidMeasure`),
-whose derivative on the open pieces is `trapezoidPDF` (`hasDerivAt_trapezoidCDF`); that the
-measure equals Lebesgue measure with density `trapezoidPDF` is not stated here. -/
+standard uniform draw. Its distribution function is `trapezoidCDF` (`cdf_trapezoidMeasure`), and
+it is Lebesgue measure with density `trapezoidPDF` (`trapezoidMeasure_eq_withDensity`). -/
 noncomputable def trapezoidMeasure (a b c d : ℝ) : Measure ℝ :=
   (volume.restrict (Ioo (0 : ℝ) 1)).map (trapezoidSample a b c d)
 
@@ -869,7 +1032,7 @@ theorem quantile_trapezoidMeasure (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d
 
 /-- The trapezoidal density is the derivative of the trapezoidal distribution function on each
 open piece `(a, b)`, `(b, c)`, `(c, d)`. -/
-theorem hasDerivAt_trapezoidCDF (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d)
+theorem hasDerivAt_trapezoidCDF (hab : a ≤ b) (hbc : b ≤ c) (_hcd : c ≤ d) (had : a < d)
     {x : ℝ} (hx : x ∈ Ioo a b ∪ Ioo b c ∪ Ioo c d) :
     HasDerivAt (trapezoidCDF a b c d) (trapezoidPDF a b c d x) x := by
   have hD : 0 < d + c - a - b := by linarith
@@ -880,16 +1043,16 @@ theorem hasDerivAt_trapezoidCDF (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) 
       (((hasDerivAt_id x).sub_const a).pow 2).div_const _
     have hpdf : trapezoidPDF a b c d x = (2 : ℕ) * (x - a) ^ (2 - 1) * 1 /
         ((b - a) * (d + c - a - b)) := by
-      rw [trapezoidPDF, ite_eq_right (not_le.2 hx.1), ite_eq_left hx.2]
+      rw [trapezoidPDF, ite_eq_right (not_lt.2 hx.1.le), ite_eq_left hx.2]
       field_simp; ring
     rw [hpdf]
     exact hg.congr_of_eventuallyEq (Filter.eventually_of_mem (Ioo_mem_nhds hx.1 hx.2)
-      fun y hy => trapezoidCDF_lower ⟨hy.1.le, hy.2.le⟩)
+      fun y hy => trapezoidCDF_lower (sub_pos.1 hba) ⟨hy.1.le, hy.2.le⟩)
   · have hg : HasDerivAt (fun y => (2 * y - a - b) / (d + c - a - b))
         (2 * 1 / (d + c - a - b)) x :=
       ((((hasDerivAt_id x).const_mul 2).sub_const a).sub_const b).div_const _
     have hpdf : trapezoidPDF a b c d x = 2 * 1 / (d + c - a - b) := by
-      rw [trapezoidPDF, ite_eq_right (by linarith [hx.1] : ¬ x ≤ a),
+      rw [trapezoidPDF, ite_eq_right (by linarith [hx.1] : ¬ x < a),
         ite_eq_right (not_lt.2 hx.1.le), ite_eq_left hx.2.le]
       ring
     rw [hpdf]
@@ -901,13 +1064,140 @@ theorem hasDerivAt_trapezoidCDF (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) 
       (((((hasDerivAt_id x).const_sub d).pow 2).div_const _).const_sub 1)
     have hpdf : trapezoidPDF a b c d x =
         -((2 : ℕ) * (d - x) ^ (2 - 1) * (-1) / ((d - c) * (d + c - a - b))) := by
-      rw [trapezoidPDF, ite_eq_right (by linarith [hx.1] : ¬ x ≤ a),
+      rw [trapezoidPDF, ite_eq_right (by linarith [hx.1] : ¬ x < a),
         ite_eq_right (by linarith [hx.1] : ¬ x < b), ite_eq_right (not_le.2 hx.1),
         ite_eq_left hx.2]
       field_simp; ring
     rw [hpdf]
     exact hg.congr_of_eventuallyEq (Filter.eventually_of_mem (Ioo_mem_nhds hx.1 hx.2)
-      fun y hy => trapezoidCDF_upper hab hbc hcd had ⟨hy.1.le, hy.2.le⟩)
+      fun y hy => trapezoidCDF_upper hab hbc (sub_pos.1 hdc) ⟨hy.1.le, hy.2.le⟩)
+
+/-- The trapezoidal density is nonnegative for admissible parameters. -/
+lemma trapezoidPDF_nonneg (hbc : b ≤ c) (had : a < d) (x : ℝ) :
+    0 ≤ trapezoidPDF a b c d x := by
+  have hh : 0 < 2 / (d + c - a - b) := div_pos two_pos (by linarith)
+  unfold trapezoidPDF
+  split_ifs with h1 h2 h3 h4
+  · exact le_rfl
+  · exact mul_nonneg hh.le (div_nonneg (by linarith) (by linarith))
+  · exact hh.le
+  · exact mul_nonneg hh.le (div_nonneg (by linarith) (by linarith))
+  · exact le_rfl
+
+/-- The trapezoidal density is bounded by its height `2 / D`. -/
+lemma trapezoidPDF_le (hbc : b ≤ c) (had : a < d) (x : ℝ) :
+    trapezoidPDF a b c d x ≤ 2 / (d + c - a - b) := by
+  have hh : 0 < 2 / (d + c - a - b) := div_pos two_pos (by linarith)
+  unfold trapezoidPDF
+  split_ifs with h1 h2 h3 h4
+  · exact hh.le
+  · exact mul_le_of_le_one_right hh.le ((div_le_one (by linarith)).2 (by linarith))
+  · exact le_rfl
+  · exact mul_le_of_le_one_right hh.le ((div_le_one (by linarith)).2 (by linarith))
+  · exact hh.le
+
+/-- Between the modes the trapezoidal density equals its height `2 / D`, endpoints included. -/
+lemma trapezoidPDF_of_mem_Icc (hab : a ≤ b) {x : ℝ} (hx : x ∈ Icc b c) :
+    trapezoidPDF a b c d x = 2 / (d + c - a - b) := by
+  rw [trapezoidPDF, ite_eq_right (by linarith [hx.1] : ¬ x < a), ite_eq_right (not_lt.2 hx.1),
+    ite_eq_left hx.2]
+
+/-- The maximum of the trapezoidal density is attained at every point of `[b, c]`, collapsed ramps
+included: with `a = b = c` the mode `a` is attained. -/
+theorem trapezoidPDF_le_mode (hab : a ≤ b) (hbc : b ≤ c) (had : a < d) (x : ℝ)
+    {y : ℝ} (hy : y ∈ Icc b c) : trapezoidPDF a b c d x ≤ trapezoidPDF a b c d y := by
+  rw [trapezoidPDF_of_mem_Icc hab hy]
+  exact trapezoidPDF_le hbc had x
+
+lemma measurable_trapezoidPDF (a b c d : ℝ) : Measurable (trapezoidPDF a b c d) := by
+  unfold trapezoidPDF
+  refine Measurable.ite (measurableSet_lt measurable_id measurable_const) measurable_const
+    (Measurable.ite (measurableSet_lt measurable_id measurable_const) (by fun_prop)
+      (Measurable.ite (measurableSet_le measurable_id measurable_const) measurable_const
+        (Measurable.ite (measurableSet_lt measurable_id measurable_const) (by fun_prop)
+          measurable_const)))
+
+/-- The trapezoidal density is integrable on every bounded interval `(s, t]`. -/
+lemma integrableOn_trapezoidPDF (hbc : b ≤ c) (had : a < d)
+    (s t : ℝ) : IntegrableOn (trapezoidPDF a b c d) (Ioc s t) :=
+  IntegrableOn.of_bound (by simp) (measurable_trapezoidPDF a b c d).aestronglyMeasurable
+    (2 / (d + c - a - b)) (ae_of_all _ fun x => by
+      rw [Real.norm_eq_abs, abs_of_nonneg (trapezoidPDF_nonneg hbc had x)]
+      exact trapezoidPDF_le hbc had x)
+
+/-- The trapezoidal distribution function is continuous, collapsed ramps included: the law has no
+atoms, since the sampling rule meets each value at most at one level `u = F(x)`. -/
+theorem continuous_trapezoidCDF (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d) :
+    Continuous (trapezoidCDF a b c d) := by
+  rw [← cdf_trapezoidMeasure hab hbc hcd had]
+  refine continuous_cdf_of_measure_singleton _ fun x => ?_
+  have hm := measurable_trapezoidSample a b c d
+  rw [trapezoidMeasure, Measure.map_apply hm (measurableSet_singleton x),
+    Measure.restrict_apply (hm (measurableSet_singleton x))]
+  refine measure_mono_null (t := {trapezoidCDF a b c d x}) ?_ (measure_singleton _)
+  rintro u ⟨hu1, hu2⟩
+  have h := (trapezoidSample_spec hab hbc hcd had ⟨hu2.1.le, hu2.2.le⟩).2
+  rw [mem_preimage, mem_singleton_iff] at hu1
+  rw [hu1] at h
+  exact mem_singleton_iff.2 h.symm
+
+/-- Away from the four break points the trapezoidal density is the derivative of the
+distribution function (it is `0` outside `[a, d]`). -/
+lemma hasDerivAt_trapezoidCDF_of_ne (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d)
+    {x : ℝ} (ha : x ≠ a) (hb : x ≠ b) (hc : x ≠ c) (hd : x ≠ d) :
+    HasDerivAt (trapezoidCDF a b c d) (trapezoidPDF a b c d x) x := by
+  rcases lt_or_gt_of_ne ha with hxa | hxa
+  · have hp : trapezoidPDF a b c d x = 0 := by rw [trapezoidPDF, ite_eq_left hxa]
+    rw [hp]
+    exact (hasDerivAt_const x (0 : ℝ)).congr_of_eventuallyEq
+      (Filter.eventually_of_mem (Iio_mem_nhds hxa) fun y hy => trapezoidCDF_of_le (le_of_lt hy))
+  rcases lt_or_gt_of_ne hd with hxd | hxd
+  · apply hasDerivAt_trapezoidCDF hab hbc hcd had
+    rcases lt_or_gt_of_ne hb with hxb | hxb
+    · exact Or.inl (Or.inl ⟨hxa, hxb⟩)
+    rcases lt_or_gt_of_ne hc with hxc | hxc
+    · exact Or.inl (Or.inr ⟨hxb, hxc⟩)
+    · exact Or.inr ⟨hxc, hxd⟩
+  · have hp : trapezoidPDF a b c d x = 0 := by
+      rw [trapezoidPDF, ite_eq_right (by linarith : ¬ x < a), ite_eq_right (by linarith : ¬ x < b),
+        ite_eq_right (by linarith : ¬ x ≤ c), ite_eq_right (by linarith : ¬ x < d)]
+    rw [hp]
+    exact (hasDerivAt_const x (1 : ℝ)).congr_of_eventuallyEq
+      (Filter.eventually_of_mem (Ioi_mem_nhds hxd) fun y hy =>
+        trapezoidCDF_of_ge hab hbc hcd had (le_of_lt hy))
+
+/-- The trapezoidal density integrates to the increments of the distribution function:
+`∫_s^t f = F(t) - F(s)` for `s ≤ t`. -/
+theorem integral_trapezoidPDF (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d)
+    {s t : ℝ} (hst : s ≤ t) :
+    ∫ x in s..t, trapezoidPDF a b c d x = trapezoidCDF a b c d t - trapezoidCDF a b c d s := by
+  refine integral_eq_of_hasDerivAt_off_countable_of_le _ _ hst (s := {a, b, c, d})
+    ((((countable_singleton d).insert c).insert b).insert a)
+    (continuous_trapezoidCDF hab hbc hcd had).continuousOn (fun x hx => ?_)
+    ((intervalIntegrable_iff_integrableOn_Ioc_of_le hst).2
+      (integrableOn_trapezoidPDF hbc had s t))
+  have h := hx.2
+  simp only [mem_insert_iff, mem_singleton_iff, not_or] at h
+  exact hasDerivAt_trapezoidCDF_of_ne hab hbc hcd had h.1 h.2.1 h.2.2.1 h.2.2.2
+
+/-- The trapezoidal density integrates to one. -/
+theorem integral_trapezoidPDF_eq_one (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d) :
+    ∫ x in a..d, trapezoidPDF a b c d x = 1 := by
+  rw [integral_trapezoidPDF hab hbc hcd had had.le, trapezoidCDF_right hab hbc hcd had,
+    trapezoidCDF_left, sub_zero]
+
+/-- The law produced by the printed sampling rule is Lebesgue measure with density `trapezoidPDF`
+(Chapter 7, "Trapezoidal Distribution"), for all ordered endpoints with `a < d`, collapsed ramps
+included. -/
+theorem trapezoidMeasure_eq_withDensity (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d) :
+    trapezoidMeasure a b c d =
+      volume.withDensity (fun x => ENNReal.ofReal (trapezoidPDF a b c d x)) := by
+  refine Measure.ext_of_Ioc _ _ fun s t hst => ?_
+  rw [← measure_cdf (trapezoidMeasure a b c d), StieltjesFunction.measure_Ioc,
+    cdf_trapezoidMeasure hab hbc hcd had, withDensity_apply _ measurableSet_Ioc,
+    ← ofReal_integral_eq_lintegral_ofReal (integrableOn_trapezoidPDF hbc had s t)
+      (ae_of_all _ fun x => trapezoidPDF_nonneg hbc had x),
+    ← intervalIntegral.integral_of_le hst.le, integral_trapezoidPDF hab hbc hcd had hst.le]
 
 /-- Special case (Chapter 7): with `a = b` and `c = d` the printed rule is the affine draw
 `a + u (d - a)` of the uniform distribution. -/
@@ -932,9 +1222,9 @@ theorem trapezoidMeasure_uniform (had : a < d) : trapezoidMeasure a a d d = volu
 
 /-- The triangular density with minimum `a`, mode `m` and maximum `d` (Chapter 7, "Triangular
 Distribution"): rising linearly from `0` at `a` to the peak `2 / (d - a)` at `m`, then falling
-linearly to `0` at `d`. -/
+linearly to `0` at `d`; the peak value is taken at `m` also when `m = a` or `m = d`. -/
 noncomputable def triangularPDF (a m d x : ℝ) : ℝ :=
-  if x ≤ a then 0
+  if x < a then 0
   else if x < m then 2 * (x - a) / ((d - a) * (m - a))
   else if x ≤ m then 2 / (d - a)
   else if x < d then 2 * (d - x) / ((d - a) * (d - m))
@@ -949,6 +1239,16 @@ theorem trapezoidPDF_eq_triangularPDF (a m d x : ℝ) :
   rw [hD]
   split_ifs <;> first | rfl | rw [div_mul_div_comm]
 
+/-- The triangular law (Chapter 7, "Triangular Distribution"): for `a ≤ m ≤ d` with `a < d`, the
+trapezoidal law with equal modes `b = c = m` is Lebesgue measure with the triangular density,
+including the right triangles `m = a` and `m = d`. -/
+theorem trapezoidMeasure_eq_withDensity_triangularPDF {m : ℝ} (ham : a ≤ m) (hmd : m ≤ d)
+    (had : a < d) :
+    trapezoidMeasure a m m d =
+      volume.withDensity (fun x => ENNReal.ofReal (triangularPDF a m d x)) := by
+  rw [trapezoidMeasure_eq_withDensity ham le_rfl hmd had]
+  simp_rw [trapezoidPDF_eq_triangularPDF]
+
 /-- Symmetry of the trapezoidal distribution function when `b - a = d - c`:
 `F(a + d - x) = 1 - F(x)` on `[a, d]`. -/
 lemma trapezoidCDF_symm (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a < d)
@@ -957,15 +1257,21 @@ lemma trapezoidCDF_symm (hab : a ≤ b) (hbc : b ≤ c) (hcd : c ≤ d) (had : a
   have hD : 0 < d + c - a - b := by linarith
   obtain ⟨h1, h2⟩ := hx
   by_cases hxb : x ≤ b
-  · rw [trapezoidCDF_upper hab hbc hcd had ⟨by linarith, by linarith⟩,
-      trapezoidCDF_lower ⟨h1, hxb⟩, show d - (a + d - x) = x - a by ring, ← hsym]
+  · rcases hab.lt_or_eq with hlt | hab'
+    · rw [trapezoidCDF_upper hab hbc (by linarith) ⟨by linarith, by linarith⟩,
+        trapezoidCDF_lower hlt ⟨h1, hxb⟩, show d - (a + d - x) = x - a by ring, ← hsym]
+    · have hxa : x = a := by linarith
+      rw [hxa, show a + d - a = d by ring, trapezoidCDF_right hab hbc hcd had,
+        trapezoidCDF_left]
+      ring
   by_cases hxc : x ≤ c
   · rw [trapezoidCDF_mid hab hbc had ⟨by linarith, by linarith⟩,
       trapezoidCDF_mid hab hbc had ⟨by linarith, hxc⟩]
     field_simp
     linarith
-  · rw [trapezoidCDF_lower ⟨by linarith, by linarith⟩,
-      trapezoidCDF_upper hab hbc hcd had ⟨by linarith, h2⟩, show a + d - x - a = d - x by ring,
+  · rw [trapezoidCDF_lower (by linarith) ⟨by linarith, by linarith⟩,
+      trapezoidCDF_upper hab hbc (by linarith) ⟨by linarith, h2⟩,
+      show a + d - x - a = d - x by ring,
       hsym]
     ring
 
@@ -1063,6 +1369,136 @@ theorem beta_parameters_example :
       (18 : ℝ) < 0.88 * (0.88 * (1 - 0.88) / 0.07 ^ 2 - 1) ∧
       2.45 < (1 - 0.88) * (0.88 * (1 - 0.88) / 0.07 ^ 2 - (1 : ℝ)) := by
   norm_num
+
+/-- The partial sum `∑_{m < 10} y^m / m!` of the exponential series, used for certified bounds. -/
+noncomputable def expPartialSum (y : ℝ) : ℝ := ∑ m ∈ Finset.range 10, y ^ m / m.factorial
+
+lemma expPartialSum_le_exp {y : ℝ} (hy : 0 ≤ y) : expPartialSum y ≤ Real.exp y :=
+  Real.sum_le_exp_of_nonneg hy 10
+
+lemma exp_le_expPartialSum_add {y : ℝ} (h0 : 0 ≤ y) (h1 : y ≤ 1) :
+    Real.exp y ≤ expPartialSum y + y ^ 10 * (10 + 1) / (Nat.factorial 10 * 10) := by
+  have h := Real.exp_bound' h0 h1 (n := 10) (by norm_num)
+  simpa [expPartialSum] using h
+
+lemma expPartialSum_nonneg {y : ℝ} (hy : 0 ≤ y) : 0 ≤ expPartialSum y :=
+  Finset.sum_nonneg fun _ _ => by positivity
+
+lemma exp_four_mul_le {y : ℝ} (h0 : 0 ≤ y) (h1 : y ≤ 1) :
+    Real.exp (4 * y) ≤ (expPartialSum y + y ^ 10 * (10 + 1) / (Nat.factorial 10 * 10)) ^ 4 := by
+  rw [show (4 : ℝ) * y = ((4 : ℕ) : ℝ) * y by norm_num, Real.exp_nat_mul]
+  exact pow_le_pow_left₀ (Real.exp_pos y).le (exp_le_expPartialSum_add h0 h1) 4
+
+lemma expPartialSum_pow_le {y : ℝ} (h0 : 0 ≤ y) : expPartialSum y ^ 4 ≤ Real.exp (4 * y) := by
+  rw [show (4 : ℝ) * y = ((4 : ℕ) : ℝ) * y by norm_num, Real.exp_nat_mul]
+  exact pow_le_pow_left₀ (expPartialSum_nonneg h0) (expPartialSum_le_exp h0) 4
+
+/-- `t < expit(x)` as soon as `t / (1 - t) < exp x`. -/
+lemma lt_sigmoid_of_lt_exp {x t : ℝ} (ht1 : t < 1) (h : t / (1 - t) < Real.exp x) :
+    t < Real.sigmoid x := by
+  have hE := Real.exp_pos x
+  rw [div_lt_iff₀ (by linarith)] at h
+  rw [Real.sigmoid_def, Real.exp_neg,
+    show (1 + (Real.exp x)⁻¹) = (Real.exp x + 1) / Real.exp x by
+      rw [add_div, div_self hE.ne', one_div],
+    inv_div, lt_div_iff₀ (by positivity)]
+  nlinarith
+
+/-- `expit(x) < t` as soon as `exp x < t / (1 - t)`. -/
+lemma sigmoid_lt_of_exp_lt {x t : ℝ} (ht1 : t < 1) (h : Real.exp x < t / (1 - t)) :
+    Real.sigmoid x < t := by
+  have hE := Real.exp_pos x
+  rw [lt_div_iff₀ (by linarith)] at h
+  rw [Real.sigmoid_def, Real.exp_neg,
+    show (1 + (Real.exp x)⁻¹) = (Real.exp x + 1) / Real.exp x by
+      rw [add_div, div_self hE.ne', one_div],
+    inv_div, div_lt_iff₀ (by positivity)]
+  nlinarith
+
+/-- Chapter 7, "Normal Distribution": the odds ratio `0.61` with 95% interval `[0.40, 0.92]`
+gives, by Equation 7.4 on the log scale, `sd = (ln 0.92 - ln 0.40)/(2 · 1.96)`, with value in
+`(0.21247, 0.21248)`, printed as `0.21`. -/
+theorem logNormal_sd_example :
+    0.21247 < (Real.log 0.92 - Real.log 0.40) / (2 * 1.96) ∧
+      (Real.log 0.92 - Real.log 0.40) / (2 * 1.96) < 0.21248 := by
+  have hlog : Real.log 0.92 - Real.log 0.40 = Real.log 2.3 := by
+    rw [← Real.log_div (by norm_num) (by norm_num)]; norm_num
+  rw [hlog, lt_div_iff₀ (by norm_num), div_lt_iff₀ (by norm_num),
+    Real.lt_log_iff_exp_lt (by norm_num), Real.log_lt_iff_lt_exp (by norm_num)]
+  constructor
+  · refine lt_of_le_of_lt (exp_le_expPartialSum_add (by norm_num) (by norm_num)) ?_
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · refine lt_of_lt_of_le ?_ (expPartialSum_le_exp (by norm_num))
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+
+/-- Chapter 7, "Normal Distribution": the positive predictive value `0.95` with 95% interval
+`[0.88, 0.98]` gives the logit scale mean `logit(0.95) = ln 19`, printed as `2.94`, and by
+Equation 7.4 `sd = (logit(0.98) - logit(0.88))/(2 · 1.96)`, printed as `0.48`. -/
+theorem logitNormal_parameters_example :
+    2.94 < Real.log (0.95 / (1 - 0.95)) ∧ Real.log (0.95 / (1 - 0.95)) < 2.95 ∧
+      0.48 < (Real.log (0.98 / (1 - 0.98)) - Real.log (0.88 / (1 - 0.88))) / (2 * 1.96) ∧
+      (Real.log (0.98 / (1 - 0.98)) - Real.log (0.88 / (1 - 0.88))) / (2 * 1.96) < 0.49 := by
+  have hsd : Real.log (0.98 / (1 - 0.98)) - Real.log (0.88 / (1 - 0.88)) =
+      Real.log (147 / 22) := by
+    rw [← Real.log_div (by norm_num) (by norm_num)]; norm_num
+  rw [hsd, lt_div_iff₀ (by norm_num), div_lt_iff₀ (by norm_num),
+    Real.lt_log_iff_exp_lt (by norm_num), Real.log_lt_iff_lt_exp (by norm_num),
+    Real.lt_log_iff_exp_lt (by norm_num), Real.log_lt_iff_lt_exp (by norm_num)]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [show (2.94 : ℝ) = 4 * 0.735 by norm_num]
+    refine lt_of_le_of_lt (exp_four_mul_le (by norm_num) (by norm_num)) ?_
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · rw [show (2.95 : ℝ) = 4 * 0.7375 by norm_num]
+    refine lt_of_lt_of_le ?_ (expPartialSum_pow_le (by norm_num))
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · rw [show (0.48 : ℝ) * (2 * 1.96) = 4 * 0.47040 by norm_num]
+    refine lt_of_le_of_lt (exp_four_mul_le (by norm_num) (by norm_num)) ?_
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · rw [show (0.49 : ℝ) * (2 * 1.96) = 4 * 0.48020 by norm_num]
+    refine lt_of_lt_of_le ?_ (expPartialSum_pow_le (by norm_num))
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+
+/-- Chapter 7, "Normal Distribution": for `logit(PPV) ~ N(2.94, 0.48²)` the quantiles of the
+positive predictive value at the levels `Φ(-1.96)`, `Φ(0)` and `Φ(1.96)` (about 2.5%, 50% and
+97.5%) are `expit(2.94 + 0.48 z)`, in `(0.8807, 0.8808)`, `(0.9497, 0.9498)` and
+`(0.9797, 0.9798)`; the book prints `0.88`, `0.95` and `0.98` from simulation. The levels are the
+exact values `Φ(±1.96)`, not `0.025` and `0.975`. -/
+theorem logitNormal_quantiles_example :
+    let μ := (gaussianReal 2.94 (Real.toNNReal (0.48 ^ 2))).map Real.sigmoid
+    (0.8807 < quantile μ (cdf (gaussianReal 0 1) (-1.96)) ∧
+      quantile μ (cdf (gaussianReal 0 1) (-1.96)) < 0.8808) ∧
+    (0.9497 < quantile μ (cdf (gaussianReal 0 1) 0) ∧
+      quantile μ (cdf (gaussianReal 0 1) 0) < 0.9498) ∧
+    (0.9797 < quantile μ (cdf (gaussianReal 0 1) 1.96) ∧
+      quantile μ (cdf (gaussianReal 0 1) 1.96) < 0.9798) := by
+  intro μ
+  simp only [μ, quantile_logitNormal 2.94 (by norm_num : (0 : ℝ) < 0.48)
+    (Real.coe_toNNReal _ (by positivity))]
+  refine ⟨⟨?_, ?_⟩, ⟨?_, ?_⟩, ⟨?_, ?_⟩⟩
+  · refine lt_sigmoid_of_lt_exp (by norm_num) (lt_of_lt_of_le ?_
+      ((show (2.94 : ℝ) + 0.48 * -1.96 = 4 * 0.4998 by norm_num) ▸
+        expPartialSum_pow_le (by norm_num)))
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · refine sigmoid_lt_of_exp_lt (by norm_num) (lt_of_le_of_lt
+      ((show (2.94 : ℝ) + 0.48 * -1.96 = 4 * 0.4998 by norm_num) ▸
+        exp_four_mul_le (by norm_num) (by norm_num)) ?_)
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · refine lt_sigmoid_of_lt_exp (by norm_num) (lt_of_lt_of_le ?_
+      ((show (2.94 : ℝ) + 0.48 * 0 = 4 * 0.735 by norm_num) ▸
+        expPartialSum_pow_le (by norm_num)))
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · refine sigmoid_lt_of_exp_lt (by norm_num) (lt_of_le_of_lt
+      ((show (2.94 : ℝ) + 0.48 * 0 = 4 * 0.735 by norm_num) ▸
+        exp_four_mul_le (by norm_num) (by norm_num)) ?_)
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · refine lt_sigmoid_of_lt_exp (by norm_num) (lt_of_lt_of_le ?_
+      ((show (2.94 : ℝ) + 0.48 * 1.96 = 4 * 0.9702 by norm_num) ▸
+        expPartialSum_pow_le (by norm_num)))
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
+  · refine sigmoid_lt_of_exp_lt (by norm_num) (lt_of_le_of_lt
+      ((show (2.94 : ℝ) + 0.48 * 1.96 = 4 * 0.9702 by norm_num) ▸
+        exp_four_mul_le (by norm_num) (by norm_num)) ?_)
+    norm_num [expPartialSum, Finset.sum_range_succ, Nat.factorial]
 
 end Examples
 
