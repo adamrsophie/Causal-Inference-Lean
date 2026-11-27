@@ -30,6 +30,9 @@ All declarations live in the namespace `CausalInference.Randomized`.
 * `PotentialOutcomes.stratumDiffInMeans`, `PotentialOutcomes.stratifiedEstimator`: the
   difference in means within a stratum and the stratified estimator.
 * `PotentialOutcomes.restrict`: the potential outcomes of one stratum as a population.
+* `stratumAssign`: the assignment of one stratum induced by an assignment of the population.
+* `PotentialOutcomes.stratifiedVarEst`: the observable variance estimator
+  `Σ_k (N_k / N)² (s1k²/n1k + s0k²/n0k)`.
 
 ## Main results
 
@@ -38,11 +41,18 @@ All declarations live in the namespace `CausalInference.Randomized`.
   `k` is its stratum.
 * `stratifiedDesign_pairInclusionProb_of_eq`, `stratifiedDesign_pairInclusionProb_of_ne`:
   second order inclusion probabilities within a stratum and, by independence, across strata.
-* `stratified_estimator_unbiased`: the stratified estimator is unbiased for the average
-  treatment effect.
+* `card_stratifiedSupport`: the design has `∏_k (N_k choose n1 k)` assignments.
+* `stratifiedDesign_expect_prod`, `stratifiedDesign_expect_stratum`,
+  `stratifiedDesign_expect_prod_eq_prod_expect`: independence across strata; the expectation of
+  a product of statistics of distinct strata factorizes, and each stratum is completely
+  randomized.
+* `stratified_estimator_unbiased`: in a nonempty population the stratified estimator is unbiased
+  for the average treatment effect; empty strata are allowed.
 * `stratified_estimator_variance`: its variance is `Σ_k (N_k / N)² V_k`.
-* `stratifiedDesign_unit`, `stratifiedEstimator_unit`: with one stratum, the design is complete
-  randomization and the estimator is the difference in means.
+* `stratified_varEst_expect`: the observable variance estimator has expectation equal to the
+  variance plus `Σ_k (N_k / N)² Sτk²/N_k`.
+* `stratifiedDesign_unique`, `stratifiedEstimator_unique`: with one stratum, the design is
+  complete randomization and the estimator is the difference in means.
 * `stratified_fisher_pValue_valid`: Fisher's randomization test is valid under this design.
 -/
 
@@ -115,8 +125,8 @@ theorem stratifiedSupport_nonempty {s : ι → σ} {n1 : σ → ℕ}
 
 /-- Stratified randomization: within every stratum `k`, exactly `n1 k` of its `N_k` units are
 treated, independently across strata. It is the uniform design on the assignments with the
-prescribed number of treated units in every stratum; independence across strata is proved at
-the level of inclusion probabilities in `stratifiedDesign_pairInclusionProb_of_ne`. -/
+prescribed number of treated units in every stratum; independence across strata is proved in
+`stratifiedDesign_expect_prod`. -/
 noncomputable def stratifiedDesign (s : ι → σ) (n1 : σ → ℕ) (h : ∀ k, n1 k ≤ stratumSize s k) :
     Design ι :=
   Design.uniform (stratifiedSupport s n1) (stratifiedSupport_nonempty h)
@@ -255,6 +265,111 @@ theorem stratifiedDesign_pairInclusionProb_of_ne (s : ι → σ) (n1 : σ → �
   field_simp
   linarith
 
+omit [DecidableEq ι] [Fintype σ] in
+/-- The stratum `k`, viewed as a type, has `N_k` elements. -/
+theorem card_stratum_subtype (s : ι → σ) (k : σ) :
+    Fintype.card {i // s i = k} = stratumSize s k :=
+  Fintype.card_subtype _
+
+/-! ### Product structure across strata -/
+
+/-- The assignment of the units of the stratum `k` induced by an assignment `a` of the whole
+population. -/
+def stratumAssign (s : ι → σ) (a : ι → Bool) (k : σ) : {i // s i = k} → Bool := fun i => a i
+
+omit [DecidableEq ι] [Fintype σ] in
+/-- The number of treated units of the induced stratum assignment is the number of treated units
+of the stratum. -/
+theorem numTreated_stratumAssign (s : ι → σ) (a : ι → Bool) (k : σ) :
+    numTreated (stratumAssign s a k) = numTreatedIn s k a := by
+  have h : (numTreated (stratumAssign s a k) : ℝ) = numTreatedIn s k a := by
+    rw [numTreated_eq_sum, numTreatedIn_eq_sum, sum_subtype (stratum s k) (fun _ => mem_stratum)]
+    rfl
+  exact_mod_cast h
+
+/-- Sums over the stratified support are sums over the product of the complete-randomization
+supports of the strata: `a ↦ (stratumAssign s a k)_k` is a bijection between the two. -/
+theorem sum_stratifiedSupport (s : ι → σ) (n1 : σ → ℕ)
+    (F : (∀ k, {i // s i = k} → Bool) → ℝ) :
+    ∑ a ∈ stratifiedSupport s n1, F (stratumAssign s a) =
+      ∑ x ∈ Fintype.piFinset fun k => completeSupport (ι := {i // s i = k}) (n1 k), F x := by
+  refine sum_nbij' (fun a => stratumAssign s a) (fun x i => x (s i) ⟨i, rfl⟩) ?_ ?_ ?_ ?_
+    (fun _ _ => rfl)
+  · intro a ha
+    simp only [Fintype.mem_piFinset, mem_completeSupport, numTreated_stratumAssign]
+    exact mem_stratifiedSupport.mp ha
+  · intro x hx
+    rw [Fintype.mem_piFinset] at hx
+    refine mem_stratifiedSupport.mpr fun k => ?_
+    rw [← numTreated_stratumAssign, ← mem_completeSupport.mp (hx k)]
+    congr 1
+    funext ⟨i, hi⟩
+    subst hi
+    rfl
+  · intro a _
+    rfl
+  · intro x _
+    funext k ⟨i, hi⟩
+    subst hi
+    rfl
+
+/-- The number of assignments of stratified randomization is the product over the strata of the
+numbers of assignments of complete randomization within each stratum, as a real number. -/
+theorem card_stratifiedSupport_eq_prod (s : ι → σ) (n1 : σ → ℕ) :
+    (#(stratifiedSupport s n1) : ℝ) =
+      ∏ k, (#(completeSupport (ι := {i // s i = k}) (n1 k)) : ℝ) := by
+  have := sum_stratifiedSupport s n1 fun _ => 1
+  simp only [sum_const, nsmul_eq_mul, mul_one, Fintype.card_piFinset, Nat.cast_prod] at this
+  exact this
+
+/-- **The size of the stratified support.** The number of assignments treating exactly `n1 k`
+units of every stratum `k` is `∏_k (N_k choose n1 k)`. -/
+theorem card_stratifiedSupport (s : ι → σ) (n1 : σ → ℕ) :
+    #(stratifiedSupport s n1) = ∏ k, (stratumSize s k).choose (n1 k) := by
+  have := card_stratifiedSupport_eq_prod s n1
+  simp only [card_completeSupport, card_stratum_subtype] at this
+  exact_mod_cast this
+
+/-- **Independence across strata.** Under stratified randomization, the expectation of a product
+`∏_k f_k (A|_k)` of statistics each depending only on the assignment of one stratum is the
+product of the expectations `E_k[f_k]`, each computed under complete randomization of `n1 k`
+units within the stratum `k`. -/
+theorem stratifiedDesign_expect_prod (s : ι → σ) (n1 : σ → ℕ)
+    (h : ∀ k, n1 k ≤ stratumSize s k) (f : ∀ k, ({i // s i = k} → Bool) → ℝ) :
+    (stratifiedDesign s n1 h).expect (fun a => ∏ k, f k (stratumAssign s a k)) =
+      ∏ k, (completeDesign (n1 k) (by rw [card_stratum_subtype]; exact h k)).expect (f k) := by
+  simp only [stratifiedDesign, completeDesign, Design.uniform_expect]
+  rw [sum_stratifiedSupport s n1 fun x => ∏ k, f k (x k), ← prod_univ_sum,
+    card_stratifiedSupport_eq_prod, prod_mul_distrib, prod_inv_distrib]
+
+/-- **The marginal law of one stratum.** Under stratified randomization, a statistic depending
+only on the assignment of the stratum `k` has the expectation it has under complete
+randomization of `n1 k` units within that stratum. -/
+theorem stratifiedDesign_expect_stratum (s : ι → σ) (n1 : σ → ℕ)
+    (h : ∀ k, n1 k ≤ stratumSize s k) (k : σ) (g : ({i // s i = k} → Bool) → ℝ) :
+    (stratifiedDesign s n1 h).expect (fun a => g (stratumAssign s a k)) =
+      (completeDesign (n1 k) (by rw [card_stratum_subtype]; exact h k)).expect g := by
+  let f : ∀ l, ({i // s i = l} → Bool) → ℝ := fun l =>
+    if hl : l = k then hl ▸ g else fun _ => 1
+  have hf : ∀ a, ∏ l, f l (stratumAssign s a l) = g (stratumAssign s a k) := fun a => by
+    rw [prod_eq_single k (fun l _ hl => by simp [f, hl]) (fun hk => absurd (mem_univ k) hk)]
+    simp [f]
+  have := stratifiedDesign_expect_prod s n1 h f
+  simp only [hf] at this
+  rw [this, prod_eq_single k (fun l _ hl => by simp [f, hl, Design.expect_const])
+    (fun hk => absurd (mem_univ k) hk)]
+  simp [f]
+
+/-- **Independence across strata, within the design.** Under stratified randomization, the
+expectation of a product of statistics each depending only on the assignment of one stratum is
+the product of their expectations. -/
+theorem stratifiedDesign_expect_prod_eq_prod_expect (s : ι → σ) (n1 : σ → ℕ)
+    (h : ∀ k, n1 k ≤ stratumSize s k) (f : ∀ k, ({i // s i = k} → Bool) → ℝ) :
+    (stratifiedDesign s n1 h).expect (fun a => ∏ k, f k (stratumAssign s a k)) =
+      ∏ k, (stratifiedDesign s n1 h).expect (fun a => f k (stratumAssign s a k)) := by
+  rw [stratifiedDesign_expect_prod]
+  exact prod_congr rfl fun k _ => (stratifiedDesign_expect_stratum s n1 h k (f k)).symm
+
 /-! ### The stratified estimator -/
 
 namespace PotentialOutcomes
@@ -305,13 +420,14 @@ theorem stratifiedEstimator_eq_linear (po : PotentialOutcomes ι) (s : ι → σ
 
 end PotentialOutcomes
 
-/-- **Unbiasedness of the stratified estimator.** Under stratified randomization with `n1 k`
-treated and `n0 k` control units in every stratum `k`, `n1 k + n0 k = N_k`, `n1 k, n0 k > 0`,
-the stratified estimator `Σ_k (N_k / N) τ̂_k` is unbiased for the population average treatment
-effect. The positivity hypotheses force every stratum to contain at least two units; strata
-without units must not be listed in `σ`. -/
-theorem stratified_estimator_unbiased (po : PotentialOutcomes ι) (s : ι → σ) {n1 n0 : σ → ℕ}
-    (hn : ∀ k, n1 k + n0 k = stratumSize s k) (hn1 : ∀ k, 0 < n1 k) (hn0 : ∀ k, 0 < n0 k) :
+/-- **Unbiasedness of the stratified estimator.** In a nonempty population, under stratified
+randomization with `n1 k` treated and `n0 k` control units in every stratum `k`,
+`n1 k + n0 k = N_k`, and `n1 k, n0 k > 0` for every nonempty stratum, the stratified estimator
+`Σ_k (N_k / N) τ̂_k` is unbiased for the population average treatment effect. Empty strata are
+allowed: they have weight `N_k / N = 0`. -/
+theorem stratified_estimator_unbiased [Nonempty ι] (po : PotentialOutcomes ι) (s : ι → σ)
+    {n1 n0 : σ → ℕ} (hn : ∀ k, n1 k + n0 k = stratumSize s k)
+    (hn1 : ∀ k, stratumSize s k ≠ 0 → 0 < n1 k) (hn0 : ∀ k, stratumSize s k ≠ 0 → 0 < n0 k) :
     (stratifiedDesign s n1 (fun k => by have := hn k; omega)).expect
       (po.stratifiedEstimator s n1 n0) = po.ate := by
   set d := stratifiedDesign s n1 (fun k => by have := hn k; omega)
@@ -325,8 +441,9 @@ theorem stratified_estimator_unbiased (po : PotentialOutcomes ι) (s : ι → σ
   rw [stratifiedDesign_inclusionProb]
   have hN : (stratumSize s (s i) : ℝ) = n1 (s i) + n0 (s i) := by
     rw [← hn (s i)]; push_cast; ring
-  have h1 : (n1 (s i) : ℝ) ≠ 0 := by exact_mod_cast (hn1 (s i)).ne'
-  have h0 : (n0 (s i) : ℝ) ≠ 0 := by exact_mod_cast (hn0 (s i)).ne'
+  have hsi : stratumSize s (s i) ≠ 0 := (card_pos.mpr ⟨i, mem_stratum.mpr rfl⟩).ne'
+  have h1 : (n1 (s i) : ℝ) ≠ 0 := by exact_mod_cast (hn1 (s i) hsi).ne'
+  have h0 : (n0 (s i) : ℝ) ≠ 0 := by exact_mod_cast (hn0 (s i) hsi).ne'
   have hNi : (Fintype.card ι : ℝ) ≠ 0 := by
     exact_mod_cast (Fintype.card_pos_iff.mpr ⟨i⟩).ne'
   have hNk : (n1 (s i) : ℝ) + n0 (s i) ≠ 0 := by positivity
@@ -340,19 +457,15 @@ def PotentialOutcomes.restrict (po : PotentialOutcomes ι) (s : ι → σ) (k : 
   y1 := fun i => po.y1 i
   y0 := fun i => po.y0 i
 
-omit [DecidableEq ι] [Fintype σ] in
-/-- The stratum `k`, viewed as a type, has `N_k` elements. -/
-theorem card_stratum_subtype (s : ι → σ) (k : σ) :
-    Fintype.card {i // s i = k} = stratumSize s k :=
-  Fintype.card_subtype _
-
-/-- **Variance of the stratified estimator.** Under stratified randomization with `n1 k` treated
-and `n0 k` control units in every stratum `k`, `n1 k + n0 k = N_k`, `n1 k, n0 k > 0`, the
-variance of the stratified estimator is `Σ_k (N_k / N)² V_k`, where
-`V_k = S1k²/n1 k + S0k²/n0 k - Sτk²/N_k` is Neyman's variance of the difference in means within
-the stratum `k`, computed from the potential outcomes of that stratum alone. -/
-theorem stratified_estimator_variance (po : PotentialOutcomes ι) (s : ι → σ) {n1 n0 : σ → ℕ}
-    (hn : ∀ k, n1 k + n0 k = stratumSize s k) (hn1 : ∀ k, 0 < n1 k) (hn0 : ∀ k, 0 < n0 k) :
+/-- **Variance of the stratified estimator.** In a nonempty population, under stratified
+randomization with `n1 k` treated and `n0 k` control units in every stratum `k`,
+`n1 k + n0 k = N_k`, and `n1 k, n0 k > 0` for every nonempty stratum, the variance of the
+stratified estimator is `Σ_k (N_k / N)² V_k`, where `V_k = S1k²/n1 k + S0k²/n0 k - Sτk²/N_k` is
+Neyman's variance of the difference in means within the stratum `k`, computed from the
+potential outcomes of that stratum alone. An empty stratum contributes `0`. -/
+theorem stratified_estimator_variance [Nonempty ι] (po : PotentialOutcomes ι) (s : ι → σ)
+    {n1 n0 : σ → ℕ} (hn : ∀ k, n1 k + n0 k = stratumSize s k)
+    (hn1 : ∀ k, stratumSize s k ≠ 0 → 0 < n1 k) (hn0 : ∀ k, stratumSize s k ≠ 0 → 0 < n0 k) :
     (stratifiedDesign s n1 (fun k => by have := hn k; omega)).variance
       (po.stratifiedEstimator s n1 n0) =
       ∑ k, ((stratumSize s k : ℝ) / Fintype.card ι) ^ 2 *
@@ -374,12 +487,17 @@ theorem stratified_estimator_variance (po : PotentialOutcomes ι) (s : ι → σ
   rw [show (∑ i ∈ univ with s i = k, ∑ j ∈ stratum s (s i), C i j) =
       ∑ i ∈ stratum s k, ∑ j ∈ stratum s k, C i j from
     sum_congr rfl fun i hi => by rw [(mem_filter.mp hi).2]]
+  by_cases hk0 : stratumSize s k = 0
+  · have he : stratum s k = ∅ := card_eq_zero.mp hk0
+    simp [he, hk0]
+  have hn1k := hn1 k hk0
+  have hn0k := hn0 k hk0
   have hcard := card_stratum_subtype s k
   have hnk : n1 k + n0 k = Fintype.card {i // s i = k} := by rw [hcard]; exact hn k
-  have hN1 : 1 < Fintype.card {i // s i = k} := by have := hn1 k; have := hn0 k; omega
+  have hN1 : 1 < Fintype.card {i // s i = k} := by omega
   set w' : {i // s i = k} → ℝ := fun i => (po.restrict s k).y1 i / n1 k +
     (po.restrict s k).y0 i / n0 k with hw'
-  have hV := neyman_variance (po.restrict s k) hnk (hn1 k) (hn0 k)
+  have hV := neyman_variance (po.restrict s k) hnk hn1k hn0k
   rw [Design.variance_of_linear _ _ _ w' fun a _ => (po.restrict s k).diffInMeans_eq_linear _ _ a,
     hcard] at hV
   rw [← hV, sum_subtype (stratum s k) (fun _ => mem_stratum), mul_sum]
@@ -404,38 +522,78 @@ theorem stratified_estimator_variance (po : PotentialOutcomes ι) (s : ι → σ
       completeDesign_pairInclusionProb _ _ hN1 hij, hπC, hπC, hπS, hπS, hcard, i.2]
     ring
 
+/-! ### The observable variance estimator -/
+
+/-- The observable variance estimator for the stratified estimator:
+`Σ_k (N_k / N)² (s1k²/n1k + s0k²/n0k)`, where `s1k²`, `s0k²` are the within-arm sample variances of
+the stratum `k` and `n1k`, `n0k` its realized arm counts (Neyman's estimator `neymanVarEst`
+computed within each stratum from the observed outcomes of that stratum). It is meaningful only
+when both arms of every nonempty stratum have at least two units. -/
+noncomputable def PotentialOutcomes.stratifiedVarEst (po : PotentialOutcomes ι) (s : ι → σ)
+    (a : ι → Bool) : ℝ :=
+  ∑ k, ((stratumSize s k : ℝ) / Fintype.card ι) ^ 2 *
+    (po.restrict s k).neymanVarEst (stratumAssign s a k)
+
+/-- **Expectation of the stratified variance estimator.** In a nonempty population, under
+stratified randomization with `n1 k` treated and `n0 k` control units in every stratum `k`,
+`n1 k + n0 k = N_k`, and `2 ≤ n1 k`, `2 ≤ n0 k` for every nonempty stratum, the observable
+estimator `Σ_k (N_k / N)² (s1k²/n1k + s0k²/n0k)` has expectation equal to the exact variance of
+the stratified estimator plus `Σ_k (N_k / N)² Sτk²/N_k`, where `Sτk²` is the variance of the unit
+effects within the stratum `k`. In particular it is conservative. -/
+theorem stratified_varEst_expect [Nonempty ι] (po : PotentialOutcomes ι) (s : ι → σ)
+    {n1 n0 : σ → ℕ} (hn : ∀ k, n1 k + n0 k = stratumSize s k)
+    (hn1 : ∀ k, stratumSize s k ≠ 0 → 2 ≤ n1 k) (hn0 : ∀ k, stratumSize s k ≠ 0 → 2 ≤ n0 k) :
+    (stratifiedDesign s n1 (fun k => by have := hn k; omega)).expect (po.stratifiedVarEst s) =
+      (stratifiedDesign s n1 (fun k => by have := hn k; omega)).variance
+        (po.stratifiedEstimator s n1 n0) +
+        ∑ k, ((stratumSize s k : ℝ) / Fintype.card ι) ^ 2 *
+          ((po.restrict s k).varEffect / stratumSize s k) := by
+  rw [stratified_estimator_variance po s hn (fun k hk => by have := hn1 k hk; omega)
+    (fun k hk => by have := hn0 k hk; omega), ← sum_add_distrib,
+    show po.stratifiedVarEst s = fun a => ∑ k, ((stratumSize s k : ℝ) / Fintype.card ι) ^ 2 *
+      (po.restrict s k).neymanVarEst (stratumAssign s a k) from rfl, Design.expect_sum]
+  refine sum_congr rfl fun k _ => ?_
+  rw [Design.expect_mul_left, stratifiedDesign_expect_stratum]
+  by_cases hk0 : stratumSize s k = 0
+  · simp [hk0]
+  have hnk : n1 k + n0 k = Fintype.card {i // s i = k} := by
+    rw [card_stratum_subtype]; exact hn k
+  rw [complete_neymanVarEst_expect (po.restrict s k) hnk (hn1 k hk0) (hn0 k hk0)]
+  ring
+
 /-! ### One stratum and the Fisher test -/
 
-omit [DecidableEq ι] in
+omit [DecidableEq ι] [Fintype σ] in
 /-- With a single stratum, the stratum is the whole population. -/
-theorem stratum_unit (s : ι → Unit) : stratum s () = univ := by
+theorem stratum_unique [Unique σ] (s : ι → σ) (k : σ) : stratum s k = univ := by
   ext i
-  simp [mem_stratum]
+  simp only [mem_stratum, mem_univ, iff_true]
+  exact Subsingleton.elim _ _
 
 /-- **One stratum is complete randomization.** With a single stratum, stratified randomization
 treating `n1` units is the complete randomization treating `n1` units. -/
-theorem stratifiedDesign_unit (s : ι → Unit) (n1 : Unit → ℕ) (h : ∀ k, n1 k ≤ stratumSize s k) :
+theorem stratifiedDesign_unique [Unique σ] (s : ι → σ) (n1 : σ → ℕ)
+    (h : ∀ k, n1 k ≤ stratumSize s k) :
     stratifiedDesign s n1 h =
-      completeDesign (n1 ()) (by simpa [stratumSize, stratum_unit] using h ()) := by
-  have hS : stratifiedSupport s n1 = completeSupport (n1 ()) := by
+      completeDesign (n1 default) (by simpa [stratumSize, stratum_unique] using h default) := by
+  have hS : stratifiedSupport s n1 = completeSupport (n1 default) := by
     ext a
-    have hk : ∀ k : Unit, numTreatedIn s k a = numTreated a := fun k => by
-      cases k
-      simp [numTreatedIn, numTreated, stratum_unit]
+    have hk : ∀ k : σ, numTreatedIn s k a = numTreated a := fun k => by
+      simp [numTreatedIn, numTreated, stratum_unique]
     rw [mem_stratifiedSupport, mem_completeSupport]
     simp only [hk]
-    exact ⟨fun H => H (), fun H _ => H⟩
+    exact ⟨fun H => H default, fun H k => by rw [Unique.eq_default k]; exact H⟩
   unfold stratifiedDesign completeDesign
   congr 1
 
 omit [DecidableEq ι] in
 /-- With a single stratum, the stratified estimator is the difference in means. -/
-theorem stratifiedEstimator_unit (po : PotentialOutcomes ι) (s : ι → Unit) (n1 n0 : Unit → ℕ)
-    (hN : 0 < Fintype.card ι) (a : ι → Bool) :
-    po.stratifiedEstimator s n1 n0 a = po.diffInMeans (n1 ()) (n0 ()) a := by
-  have hN' : (Fintype.card ι : ℝ) ≠ 0 := by exact_mod_cast hN.ne'
+theorem stratifiedEstimator_unique [Unique σ] [Nonempty ι] (po : PotentialOutcomes ι)
+    (s : ι → σ) (n1 n0 : σ → ℕ) (a : ι → Bool) :
+    po.stratifiedEstimator s n1 n0 a = po.diffInMeans (n1 default) (n0 default) a := by
+  have hN' : (Fintype.card ι : ℝ) ≠ 0 := Nat.cast_ne_zero.2 Fintype.card_ne_zero
   simp [PotentialOutcomes.stratifiedEstimator, PotentialOutcomes.stratumDiffInMeans,
-    PotentialOutcomes.diffInMeans, stratumSize, stratum_unit, hN']
+    PotentialOutcomes.diffInMeans, stratumSize, stratum_unique, hN']
 
 /-- **Fisher's test under stratified randomization.** Under the sharp null the Fisher
 randomization p-value computed with the stratified design is valid. -/

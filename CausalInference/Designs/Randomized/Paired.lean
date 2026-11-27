@@ -32,8 +32,13 @@ All declarations live in the namespace `CausalInference.Randomized`.
 
 ## Main results
 
-* `paired_estimator_unbiased`: the paired estimator is unbiased for the average treatment
-  effect.
+* `pairedDesign_expect_prod`, `pairedDesign_expect_prod_eq_prod_expect`: the assignments of
+  distinct pairs are jointly independent.
+* `card_eq_two_mul_of_pairs`: with `J` pairs the population has `2 J` units.
+* `pairedEstimator_eq_stratifiedEstimator`: the paired estimator is the stratified estimator with
+  one treated and one control unit per stratum.
+* `paired_estimator_unbiased`: with at least one pair, the paired estimator is unbiased for the
+  average treatment effect.
 * `paired_estimator_variance`: its variance is `(1/J²) Σ_k pairVar k`.
 * `paired_expect_varEstimator`: the expectation of the variance estimator is the true
   variance plus `(1/(J (J - 1))) Σ_k (τ_k - τ)²`.
@@ -49,15 +54,6 @@ namespace CausalInference.Randomized
 open Finset
 
 variable {ι σ : Type*} [Fintype ι] [DecidableEq ι] [Fintype σ] [DecidableEq σ]
-
-omit [Fintype ι] [DecidableEq ι] in
-/-- For any design, the variance is the mean of the square minus the square of the mean. -/
-theorem Design.variance_eq_expect_sq_sub (d : Design ι) (f : (ι → Bool) → ℝ) :
-    d.variance f = d.expect (fun a => f a ^ 2) - d.expect f ^ 2 := by
-  rw [Design.variance, d.expect_congr (g := fun a => f a ^ 2 - (2 * d.expect f) * f a +
-      d.expect f ^ 2) (fun _ _ => by ring), d.expect_add, d.expect_sub, d.expect_mul_left,
-    d.expect_const]
-  ring
 
 /-- Paired randomization: the strata are pairs (every stratum has exactly two units), and
 within every pair exactly one unit is treated, each with probability `1/2`, independently across
@@ -78,6 +74,37 @@ theorem pairedDesign_pairInclusionProb_of_ne (s : ι → σ) (hs : ∀ k, stratu
   rw [pairedDesign, stratifiedDesign_pairInclusionProb_of_ne _ _ _ hij,
     stratifiedDesign_inclusionProb, stratifiedDesign_inclusionProb, hs, hs]
   norm_num
+
+/-- **Joint independence of the pair assignments.** Under paired randomization, the expectation
+of a product `∏_k f_k (A|_k)` of statistics each depending only on the assignment of one pair is
+the product of the expectations `E_k[f_k]`, each computed under the design that treats one of
+the two units of the pair `k` uniformly at random. -/
+theorem pairedDesign_expect_prod (s : ι → σ) (hs : ∀ k, stratumSize s k = 2)
+    (f : ∀ k, ({i // s i = k} → Bool) → ℝ) :
+    (pairedDesign s hs).expect (fun a => ∏ k, f k (stratumAssign s a k)) =
+      ∏ k, (completeDesign 1 (by rw [card_stratum_subtype, hs k]; norm_num)).expect (f k) :=
+  stratifiedDesign_expect_prod s _ _ f
+
+/-- **Joint independence of the pair assignments, within the design.** Under paired
+randomization, the expectation of a product of statistics each depending only on the assignment
+of one pair is the product of their expectations. -/
+theorem pairedDesign_expect_prod_eq_prod_expect (s : ι → σ) (hs : ∀ k, stratumSize s k = 2)
+    (f : ∀ k, ({i // s i = k} → Bool) → ℝ) :
+    (pairedDesign s hs).expect (fun a => ∏ k, f k (stratumAssign s a k)) =
+      ∏ k, (pairedDesign s hs).expect (fun a => f k (stratumAssign s a k)) :=
+  stratifiedDesign_expect_prod_eq_prod_expect s _ _ f
+
+omit [DecidableEq ι] in
+/-- With `J` pairs of two units, the population has `N = 2 J` units. -/
+theorem card_eq_two_mul_of_pairs (s : ι → σ) (hs : ∀ k, stratumSize s k = 2) :
+    Fintype.card ι = 2 * Fintype.card σ := by
+  have := card_eq_sum_card_fiberwise (s := (univ : Finset ι)) (t := univ) (f := s)
+    (fun _ _ => mem_univ _)
+  simp only [card_univ] at this
+  rw [this]
+  have h2 : ∀ k, #({i ∈ univ | s i = k} : Finset ι) = 2 := hs
+  simp only [h2, sum_const, card_univ, smul_eq_mul]
+  ring
 
 namespace PotentialOutcomes
 
@@ -200,7 +227,7 @@ theorem paired_expect_pairDiff_mul (po : PotentialOutcomes ι) (s : ι → σ)
       (if k = l then po.pairVar s k else 0) + po.pairEffect s k * po.pairEffect s l := by
   by_cases hkl : k = l
   · subst hkl
-    have := (pairedDesign s hs).variance_eq_expect_sq_sub (po.pairDiff s k)
+    have := (pairedDesign s hs).variance_eq (po.pairDiff s k)
     rw [paired_variance_pairDiff, paired_expect_pairDiff] at this
     simp only [ite_true, ← sq]
     linarith
@@ -212,12 +239,7 @@ omit [DecidableEq ι] in
 theorem ate_eq_popMean_pairEffect (po : PotentialOutcomes ι) (s : ι → σ)
     (hs : ∀ k, stratumSize s k = 2) : po.ate = popMean (po.pairEffect s) := by
   have hN : (Fintype.card ι : ℝ) = 2 * Fintype.card σ := by
-    have := card_eq_sum_card_fiberwise (s := (univ : Finset ι)) (t := univ) (f := s)
-      (fun _ _ => mem_univ _)
-    simp only [card_univ] at this
-    rw [this]
-    have h2 : ∀ k, #({i ∈ univ | s i = k} : Finset ι) = 2 := hs
-    simp only [h2, sum_const, card_univ, smul_eq_mul]
+    rw [card_eq_two_mul_of_pairs s hs]
     push_cast
     ring
   rw [PotentialOutcomes.ate, popMean, popMean, hN, ← sum_fiberwise univ s po.unitEffect]
@@ -226,10 +248,10 @@ theorem ate_eq_popMean_pairEffect (po : PotentialOutcomes ι) (s : ι → σ)
   ring_nf
   rfl
 
-/-- **Unbiasedness of the paired estimator.** Under paired randomization the mean of the
-within-pair differences (treated minus control) is unbiased for the average treatment effect.
--/
-theorem paired_estimator_unbiased (po : PotentialOutcomes ι) (s : ι → σ)
+/-- **Unbiasedness of the paired estimator.** Under paired randomization with at least one pair,
+the mean of the within-pair differences (treated minus control) is unbiased for the average
+treatment effect. -/
+theorem paired_estimator_unbiased [Nonempty σ] (po : PotentialOutcomes ι) (s : ι → σ)
     (hs : ∀ k, stratumSize s k = 2) :
     (pairedDesign s hs).expect (po.pairedEstimator s) = po.ate := by
   rw [ate_eq_popMean_pairEffect po s hs]
@@ -246,14 +268,14 @@ theorem paired_expect_sum_sq (po : PotentialOutcomes ι) (s : ι → σ)
   simp only [sq, sum_mul_sum, Design.expect_sum, paired_expect_pairDiff_mul, sum_add_distrib,
     sum_ite_eq, mem_univ, ite_true]
 
-/-- **Exact variance of the paired estimator.** Under paired randomization with `J` pairs, the
-variance of the mean of the within-pair differences is `(1/J²) Σ_k pairVar k`, where for the
+/-- **Exact variance of the paired estimator.** Under paired randomization with `J ≥ 1` pairs,
+the variance of the mean of the within-pair differences is `(1/J²) Σ_k pairVar k`, where for the
 pair `{u, v}`, `pairVar k = ((y1 u + y0 u) - (y1 v + y0 v))² / 4`. -/
-theorem paired_estimator_variance (po : PotentialOutcomes ι) (s : ι → σ)
+theorem paired_estimator_variance [Nonempty σ] (po : PotentialOutcomes ι) (s : ι → σ)
     (hs : ∀ k, stratumSize s k = 2) :
     (pairedDesign s hs).variance (po.pairedEstimator s) =
       ((Fintype.card σ : ℝ) ^ 2)⁻¹ * ∑ k, po.pairVar s k := by
-  rw [Design.variance_eq_expect_sq_sub, paired_estimator_unbiased,
+  rw [Design.variance_eq, paired_estimator_unbiased,
     ate_eq_popMean_pairEffect po s hs,
     show (fun a => po.pairedEstimator s a ^ 2) =
       fun a => ((Fintype.card σ : ℝ)⁻¹) ^ 2 * (∑ k, po.pairDiff s k a) ^ 2 from
@@ -272,6 +294,7 @@ theorem paired_expect_varEstimator (po : PotentialOutcomes ι) (s : ι → σ)
         ((Fintype.card σ : ℝ) * (Fintype.card σ - 1))⁻¹ *
           ∑ k, (po.pairEffect s k - po.ate) ^ 2 := by
   have hJ0 : 0 < Fintype.card σ := by omega
+  have : Nonempty σ := Fintype.card_pos_iff.mp hJ0
   have hJr : (Fintype.card σ : ℝ) ≠ 0 := by exact_mod_cast hJ0.ne'
   have hJ1 : (Fintype.card σ : ℝ) - 1 ≠ 0 := by
     have : (1 : ℝ) < Fintype.card σ := by exact_mod_cast hJ
@@ -323,6 +346,22 @@ theorem paired_expect_varEstimator_eq_of_constant (po : PotentialOutcomes ι) (s
     field_simp
   rw [paired_expect_varEstimator po s hs hJ]
   simp [hc, hate]
+
+omit [DecidableEq ι] in
+/-- **The paired estimator is the stratified estimator.** When every stratum is a pair with one
+treated and one control unit, the paired estimator equals the stratified estimator
+`Σ_k (N_k / N) τ̂_k` with `n1 k = n0 k = 1`, for every assignment. -/
+theorem pairedEstimator_eq_stratifiedEstimator (po : PotentialOutcomes ι) (s : ι → σ)
+    (hs : ∀ k, stratumSize s k = 2) (a : ι → Bool) :
+    po.pairedEstimator s a = po.stratifiedEstimator s (fun _ => 1) (fun _ => 1) a := by
+  have hN : (Fintype.card ι : ℝ) = 2 * Fintype.card σ := by
+    rw [card_eq_two_mul_of_pairs s hs]
+    push_cast
+    ring
+  simp only [PotentialOutcomes.pairedEstimator, PotentialOutcomes.stratifiedEstimator,
+    PotentialOutcomes.stratumDiffInMeans, PotentialOutcomes.pairDiff, popMean, hs, hN, mul_sum,
+    sum_sub_distrib, Nat.cast_one, inv_one, one_mul, Nat.cast_ofNat]
+  rw [div_mul_eq_div_div, div_self two_ne_zero, one_div, ← mul_sum, sum_sub_distrib]
 
 /-- **Fisher's test under paired randomization.** Under the sharp null the Fisher
 randomization p-value computed with the paired design is valid. -/
