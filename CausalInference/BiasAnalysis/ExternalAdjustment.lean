@@ -32,32 +32,46 @@ that its ratios need.
   `(rr p₁ + 1 - p₁) / (rr p₀ + 1 - p₀)` with `rr` the confounder to disease risk ratio among the
   unexposed (Equation 5.8; effect measure modification allowed); `smr_eq_of_noModification` is
   Equations 5.1 and 5.10; `stratumRR_eq_smr`: without modification the strata are homogeneous.
+  Only the unexposed (reference) risks need to be positive, so a zero exposed risk is covered.
 * `smr_eq_polytomous`: the polytomous confounder formula.
 * `rdAdj_eq`, `rdAdj_eq_exposed`: the difference-scale adjustment, as corollaries of the
   library's bias formulas.
-* `splitCases_recovers`: Equation 5.5 returns the true stratified cell counts when the true
-  table has the stated risk (or odds) ratio; `smr_projRisk`: the SMR of the projected table
-  equals the closed form; `splitCases_admissible_iff` and `splitCases_inadmissible`: when the
-  projection has negative cells.
+* `projColumn`, `projTable`: all eight projected cells; `projColumn_nonneg_iff`: the projected
+  table is valid (no negative cell) exactly when `max 1 rr * x ≤ t * mixFactor rr p` in each
+  arm; `projColumn_recovers`, `splitCases_recovers`: Equation 5.5 returns the true stratified
+  table when it has the stated risk (or odds) ratio; `projRisk_mem_Icc`: on the valid region
+  the projected risks are probabilities; `smr_projRisk`: the SMR of the projected table equals
+  the closed form; `splitCases_admissible_iff`, `splitCases_inadmissible`: negative cells.
 * `stratumOR_projected`, `mhOddsRatio_projected`: the case-control (odds ratio) version, whose
   projected strata have a common odds ratio equal to the Mantel and Haenszel summary
-  (Table 12.5).
+  (Table 12.5); `mhOddsRatio_of_homogeneous_of_pos`: the summary of homogeneous nonempty
+  strata.
 * `flandersKhoury`, `smr_mem_flandersKhoury`: the bounding factors of Table 5.9 and the
   resulting interval for the adjusted risk ratio; `oddsRatio_div_mixFactor` identifies the
-  fifth factor with `p₁ / p₀`.
+  fifth factor with `p₁ / p₀`; `biasFactor_range`: the range `[1, rr / mixFactor rr p₀)` when
+  only `rr` and `p₀` are fixed; `boundingFactor_le_min`.
 * `biasFactor_mono_left`, `biasFactor_anti_right`, `biasFactor_along_mono`: monotonicity in the
-  prevalences; `biasFactor_one`, `biasFactor_le_boundingFactor`: the Ding and VanderWeele
-  bounding factor is the value at `p₁ = 1` and the maximum over `p₁`.
+  prevalences; `biasFactor_one`, `biasFactor_le_boundingFactor`,
+  `biasFactor_eq_boundingFactor_iff`: the Ding and VanderWeele bounding factor is the value at
+  `p₁ = 1` and the maximum over `p₁`, attained only at `p₁ = 1` unless `rr = 1` or `K = 1`.
 * `explainAway_iff`, `explainAway_one_iff`: Equations 5.11 and 5.12;
-  `boundingFactor_eValue`, `biasFactor_eValue`: sharpness of the E-value (Equation 5.13);
-  `gValue_root`, `biasFactor_gValue`, `gValue_one`: the G-value is the larger root of its
-  quadratic, explains away the observed risk ratio, and equals the E-value at `p₁ = 1`.
-* `sign_unadjustedBias`, `sign_biasFactor_sub_one`, `smr_lt_crudeRR_iff`: the signed DAG rules
-  of Table 5.10 on both scales; `signed_rule_fails_with_interaction`: the rule fails with an
-  exposure by confounder interaction of opposite signs.
-* `Examples`: Tables 5.5, 5.6, 5.8 and 12.5, Equations 5.1 and 5.8, the polytomous and
-  difference-scale examples, the E-value `3.41` and the G-values `4.56` and `6.70`, each
-  checked by `norm_num`. Table 5.8, row 1, recomputes to `1.10` (printed `1.11`).
+  `one_lt_explainAway_sol_iff`, `explainAway_sol_nonpos`, `exists_explainAway_iff`: the
+  solution is an admissible risk ratio exactly when `RR_obs < RR_EC`.
+* `eValue`: Equation 5.13, extended to protective estimates through `max RR (1 / RR)`;
+  `eValue_of_one_le`, `eValue_inv`, `eValue_le_max`; `boundingFactor_eValue`,
+  `biasFactor_eValue`: sharpness of the E-value; `gValue_root`, `biasFactor_gValue`,
+  `gValue_one`, `eValue_le_gValue`, `eq_gValue_of_root`: the G-value is the only root at least
+  one of its quadratic, explains away the observed risk ratio, equals the E-value at `p₁ = 1`
+  and is at least the E-value.
+* `sign_unadjustedBias`, `sign_unadjustedBias_of_same_sign`, `sign_unadjustedBias_exposed`,
+  `sign_biasFactor_sub_one`, `smr_lt_crudeRR_iff`: the signed DAG rules of Table 5.10 on both
+  scales, under sign agreement of the confounder to disease effects;
+  `signed_rule_fails_with_interaction`: without sign agreement no pair of signs determines the
+  bias for every standard.
+* `Examples`: all cells of Tables 5.5 and 5.6, Tables 5.8 and 12.5, Equations 5.1 and 5.8, the
+  polytomous and difference-scale examples, the Winkelstein example, the E-value `3.41` and
+  the G-values `4.56` and `6.70`, each checked by `norm_num` with rounding intervals. Table 5.8,
+  row 1, recomputes to `1.10` (printed `1.11`).
 
 ## References
 
@@ -69,6 +83,8 @@ that its ratios need.
   and limits on effect of adjusting for covariates*, Epidemiology (1990).
 * P. Ding and T. J. VanderWeele, *Sensitivity analysis without assumptions*, Epidemiology
   (2016).
+* T. J. VanderWeele and P. Ding, *Sensitivity analysis in observational research: introducing
+  the E-value*, Annals of Internal Medicine (2017).
 -/
 
 @[expose] public section
@@ -116,53 +132,56 @@ noncomputable def smr (m : Bool → Bool → ℝ) (π : Bool → ℝ) : ℝ :=
 theorem standardizedMean_exposed (m : Bool → Bool → ℝ) (π : Bool → ℝ) :
     standardizedMean m (π true) true = observedMean m π true := rfl
 
+/-- The reference (unexposed) side of the stratum risk model: with positive unexposed stratum
+risks and `m 0 1 = rr * m 0 0`, the ratio `rr` is positive, and the observed and the
+standardized risks of the unexposed are `m 0 0` times the mixing factors at `π 0` and `π 1`.
+-/
+theorem unexposed_facts {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ}
+    (hm₀ : ∀ c, 0 < m false c) (hrr : m false true = rr * m false false) :
+    0 < rr ∧ observedMean m π false = m false false * mixFactor rr (π false) ∧
+      standardizedMean m (π true) false = m false false * mixFactor rr (π true) := by
+  refine ⟨?_, ?_, ?_⟩
+  · have := hm₀ true
+    rw [hrr] at this
+    exact pos_of_mul_pos_left this (hm₀ false).le
+  · unfold observedMean mixFactor; rw [hrr]; ring
+  · unfold standardizedMean mixFactor; rw [hrr]; ring
+
 /-- **External adjustment under effect measure modification** (Fox, MacLehose and Lash 2021,
-Equations 5.8 and 5.9). Let `m e c > 0` be the stratum risks and `π e ∈ [0, 1]` the confounder
-prevalences. If the confounder to disease risk ratio among the unexposed is `rr`
-(`m 0 1 = rr * m 0 0`), then the relative risk due to confounding, crude risk ratio divided by
-SMR, equals `(rr * π 1 + 1 - π 1) / (rr * π 0 + 1 - π 0)`. The confounder to disease risk ratio
-among the exposed does not enter. -/
-theorem crudeRR_div_smr {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ} (hm : ∀ e c, 0 < m e c)
+Equations 5.8 and 5.9). Let the unexposed stratum risks `m 0 c` be positive, `π e ∈ [0, 1]` the
+confounder prevalences, and the observed risk of the exposed nonzero (the SMR is then nonzero,
+so the quotient below is a real quotient). If the confounder to disease risk ratio among the
+unexposed is `rr` (`m 0 1 = rr * m 0 0`), then the relative risk due to confounding, crude
+risk ratio divided by SMR, equals `(rr * π 1 + 1 - π 1) / (rr * π 0 + 1 - π 0)`. The exposed
+stratum risks, and so the confounder to disease risk ratio among the exposed, do not enter. -/
+theorem crudeRR_div_smr {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ}
+    (hm₀ : ∀ c, 0 < m false c) (hO : observedMean m π true ≠ 0)
     (hπ₀ : 0 ≤ π false) (hπ₀' : π false ≤ 1) (hπ₁ : 0 ≤ π true) (hπ₁' : π true ≤ 1)
     (hrr : m false true = rr * m false false) :
     crudeRR m π / smr m π = biasFactor rr (π true) (π false) := by
-  have h00 := hm false false
-  have hrr0 : 0 < rr := by
-    have := hm false true
-    rw [hrr] at this
-    exact pos_of_mul_pos_left this h00.le
-  have hO1 : 0 < observedMean m π true := convex_comb_pos hπ₁ hπ₁' (hm _ _) (hm _ _)
+  obtain ⟨hrr0, hO0, hS0⟩ := unexposed_facts (π := π) hm₀ hrr
+  have h00 := hm₀ false
   have hg0 := mixFactor_pos hrr0 hπ₀ hπ₀'
   have hg1 := mixFactor_pos hrr0 hπ₁ hπ₁'
-  have hO0 : observedMean m π false = m false false * mixFactor rr (π false) := by
-    unfold observedMean mixFactor; rw [hrr]; ring
-  have hS0 : standardizedMean m (π true) false = m false false * mixFactor rr (π true) := by
-    unfold standardizedMean mixFactor; rw [hrr]; ring
   unfold crudeRR smr biasFactor
   rw [hO0, hS0]
   field_simp
 
 /-- **Equation 5.8** of Fox, MacLehose and Lash (2021) solved for the adjusted estimate:
 `SMR = RR_crude * (rr * π 0 + 1 - π 0) / (rr * π 1 + 1 - π 1)`, with `rr` the confounder to
-disease risk ratio among the unexposed. -/
-theorem smr_eq {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ} (hm : ∀ e c, 0 < m e c)
+disease risk ratio among the unexposed. Only the unexposed stratum risks need to be positive
+(the reference risks in both denominators); the exposed risks are arbitrary, so a zero exposed
+risk, where both risk ratios are zero, is included. -/
+theorem smr_eq {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ} (hm₀ : ∀ c, 0 < m false c)
     (hπ₀ : 0 ≤ π false) (hπ₀' : π false ≤ 1) (hπ₁ : 0 ≤ π true) (hπ₁' : π true ≤ 1)
     (hrr : m false true = rr * m false false) :
     smr m π = crudeRR m π * (mixFactor rr (π false) / mixFactor rr (π true)) := by
-  have h := crudeRR_div_smr hm hπ₀ hπ₀' hπ₁ hπ₁' hrr
-  have hrr0 : 0 < rr := by
-    have := hm false true
-    rw [hrr] at this
-    exact pos_of_mul_pos_left this (hm false false).le
+  obtain ⟨hrr0, hO0, hS0⟩ := unexposed_facts (π := π) hm₀ hrr
+  have h00 := hm₀ false
   have hg0 := mixFactor_pos hrr0 hπ₀ hπ₀'
   have hg1 := mixFactor_pos hrr0 hπ₁ hπ₁'
-  have hS : 0 < smr m π := by
-    unfold smr
-    exact div_pos (convex_comb_pos hπ₁ hπ₁' (hm _ _) (hm _ _))
-      (convex_comb_pos hπ₁ hπ₁' (hm _ _) (hm _ _))
-  unfold biasFactor at h
-  rw [div_eq_iff hS.ne'] at h
-  rw [h]
+  unfold crudeRR smr
+  rw [hO0, hS0]
   field_simp
 
 /-- No effect measure modification of the confounder to disease risk ratio on the ratio scale:
@@ -173,26 +192,25 @@ def NoModification (m : Bool → Bool → ℝ) (rr : ℝ) : Prop :=
 /-- **External adjustment formula** (Fox, MacLehose and Lash 2021, Equations 5.1 and 5.10;
 Schlesselman 1978). With no modification of the confounder to disease risk ratio `rr` across
 exposure groups, `RR_adj = RR_obs * (rr * p₀ + 1 - p₀) / (rr * p₁ + 1 - p₁)`, where `RR_adj` is
-the SMR. -/
+the SMR. Only the unexposed stratum risks need to be positive. -/
 theorem smr_eq_of_noModification {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ}
-    (hm : ∀ e c, 0 < m e c) (hπ₀ : 0 ≤ π false) (hπ₀' : π false ≤ 1) (hπ₁ : 0 ≤ π true)
+    (hm₀ : ∀ c, 0 < m false c) (hπ₀ : 0 ≤ π false) (hπ₀' : π false ≤ 1) (hπ₁ : 0 ≤ π true)
     (hπ₁' : π true ≤ 1) (hmod : NoModification m rr) :
     smr m π = crudeRR m π * (mixFactor rr (π false) / mixFactor rr (π true)) :=
-  smr_eq hm hπ₀ hπ₀' hπ₁ hπ₁' (hmod false)
+  smr_eq hm₀ hπ₀ hπ₀' hπ₁ hπ₁' (hmod false)
 
 /-- **Homogeneous strata.** With no modification of the confounder to disease risk ratio, the
 exposure to disease risk ratios in the two confounder strata are equal and equal to the SMR;
 standardizing to any confounder distribution gives the same value (Fox, MacLehose and Lash
-2021, text after Equation 5.1 and Table 5.5). -/
-theorem stratumRR_eq_smr {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ} (hm : ∀ e c, 0 < m e c)
-    (hπ₁ : 0 ≤ π true) (hπ₁' : π true ≤ 1) (hmod : NoModification m rr) :
+2021, text after Equation 5.1 and Table 5.5). Only the unexposed stratum risks need to be
+positive; the exposed risks may be zero. -/
+theorem stratumRR_eq_smr {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ}
+    (hm₀ : ∀ c, 0 < m false c) (hπ₁ : 0 ≤ π true) (hπ₁' : π true ≤ 1)
+    (hmod : NoModification m rr) :
     m true true / m false true = m true false / m false false ∧
       smr m π = m true false / m false false := by
-  have h00 := hm false false
-  have hrr0 : 0 < rr := by
-    have := hm false true
-    rw [hmod false] at this
-    exact pos_of_mul_pos_left this h00.le
+  have h00 := hm₀ false
+  have hrr0 : 0 < rr := (unexposed_facts (π := π) hm₀ (hmod false)).1
   refine ⟨?_, ?_⟩
   · rw [hmod true, hmod false]
     field_simp
@@ -218,33 +236,35 @@ theorem rrAdj_eq_div_rrConf {rrCrude rrAdj : ℝ} (hc : rrCrude ≠ 0) (ha : rrA
 
 /-- **Polytomous confounder** (Fox, MacLehose and Lash 2021, "Polytomous Confounders"). Let the
 confounder take values in a finite type `V`, with distributions `π e v = P(C = v | E = e)` and
-stratum risks `m e v > 0`. If the risks of the unexposed are `m 0 v = θ * rr v` (a baseline
-risk times category risk ratios `rr v`), then the SMR standardized to the exposed equals
-`RR_crude * (∑ v, rr v π 0 v) / (∑ v, rr v π 1 v)`. Only the risk ratios of the unexposed
-enter, so the formula allows effect measure modification by the exposure. With a reference
-category `v₀` and `rr v₀ = 1` this is the book's display with three religious categories. -/
+stratum risks `m e v`, of which the unexposed ones `m 0 v` are positive (the exposed risks are
+arbitrary, so a zero exposed risk is included). If the risks of the unexposed are
+`m 0 v = θ * rr v` (a baseline risk times category risk ratios `rr v`), then the SMR
+standardized to the exposed equals `RR_crude * (∑ v, rr v π 0 v) / (∑ v, rr v π 1 v)`. Only
+the risk ratios of the unexposed enter, so the formula allows effect measure modification by
+the exposure. With a reference category `v₀` and `rr v₀ = 1` this is the book's display with
+three religious categories. -/
 theorem smr_eq_polytomous {V : Type*} [Fintype V] {m : Bool → V → ℝ} {π : Bool → V → ℝ}
-    {rr : V → ℝ} {θ : ℝ} (hθ : 0 < θ) (hm : ∀ e v, 0 < m e v) (hπ : ∀ e v, 0 ≤ π e v)
+    {rr : V → ℝ} {θ : ℝ} (hθ : 0 < θ) (hm₀ : ∀ v, 0 < m false v) (hπ : ∀ e v, 0 ≤ π e v)
     (hsum : ∀ e, ∑ v, π e v = 1) (hrr : ∀ v, m false v = θ * rr v) :
     (∑ v, π true v * m true v) / (∑ v, π true v * m false v) =
       ((∑ v, π true v * m true v) / (∑ v, π false v * m false v)) *
         ((∑ v, rr v * π false v) / (∑ v, rr v * π true v)) := by
-  have hpos : ∀ e e', 0 < ∑ v, π e v * m e' v := by
-    intro e e'
+  have hpos : ∀ e, 0 < ∑ v, π e v * m false v := by
+    intro e
     obtain ⟨v, hv⟩ : ∃ v, 0 < π e v := by
       by_contra h
       simp only [not_exists, not_lt] at h
       have : ∑ v, π e v = 0 := Finset.sum_eq_zero fun v _ => le_antisymm (h v) (hπ e v)
       rw [hsum e] at this
       exact one_ne_zero this
-    exact lt_of_lt_of_le (mul_pos hv (hm e' v))
-      (Finset.single_le_sum (fun w _ => mul_nonneg (hπ e w) (hm e' w).le) (Finset.mem_univ v))
+    exact lt_of_lt_of_le (mul_pos hv (hm₀ v))
+      (Finset.single_le_sum (fun w _ => mul_nonneg (hπ e w) (hm₀ w).le) (Finset.mem_univ v))
   have e1 : ∀ e, ∑ v, π e v * m false v = θ * ∑ v, rr v * π e v := by
     intro e
     rw [Finset.mul_sum]
     exact Finset.sum_congr rfl fun v _ => by rw [hrr v]; ring
-  have h1 := hpos true false
-  have h0 := hpos false false
+  have h1 := hpos true
+  have h0 := hpos false
   rw [e1] at h1 h0
   rw [e1, e1]
   have a1 : 0 < ∑ v, rr v * π true v := pos_of_mul_pos_right h1 hθ.le
@@ -343,6 +363,104 @@ theorem splitCases_inadmissible :
   unfold splitCases
   norm_num
 
+/-- The four projected cells of one exposure arm (one column of Table 5.1 of Fox, MacLehose and
+Lash 2021, split by the confounder), indexed by the confounder `c` and then the disease `d`. The
+arm has `t` persons and `x` cases; the stratum `C = 1` has `t * p` persons (Equation 5.4) and
+`splitCases rr (t * p) t x` cases (Equation 5.5); the other cells follow by differences, as in
+the book. -/
+noncomputable def projColumn (rr t p x : ℝ) : Bool → Bool → ℝ
+  | true, true => splitCases rr (t * p) t x
+  | false, true => x - splitCases rr (t * p) t x
+  | true, false => t * p - splitCases rr (t * p) t x
+  | false, false => (t - t * p) - (x - splitCases rr (t * p) t x)
+
+/-- The projected stratified table with all eight cells (Tables 5.5 and 5.6 of Fox, MacLehose
+and Lash 2021), indexed by the confounder `c`, the disease `d` and the exposure `e`: the exposed
+arm has `nE` persons, `a` cases, confounder prevalence `p true` and confounder to disease risk
+ratio `rr₁`; the unexposed arm has `nU`, `b`, `p false` and `rr₀`. -/
+noncomputable def projTable (a b nE nU rr₁ rr₀ : ℝ) (p : Bool → ℝ) : Bool → Bool → Bool → ℝ :=
+  fun c d e => if e then projColumn rr₁ nE (p true) a c d else projColumn rr₀ nU (p false) b c d
+
+/-- Closed form of the four projected cells of an arm, with `M = mixFactor rr p`:
+cases `rr p x / M` and `(1 - p) x / M`, noncases `p (t M - rr x) / M` and
+`(1 - p) (t M - x) / M` in the strata `C = 1` and `C = 0`. -/
+theorem projColumn_eq {rr t p x : ℝ} (ht : t ≠ 0) (hM : mixFactor rr p ≠ 0) :
+    projColumn rr t p x true true = rr * p * x / mixFactor rr p ∧
+      projColumn rr t p x false true = (1 - p) * x / mixFactor rr p ∧
+      projColumn rr t p x true false = p * (t * mixFactor rr p - rr * x) / mixFactor rr p ∧
+      projColumn rr t p x false false =
+        (1 - p) * (t * mixFactor rr p - x) / mixFactor rr p := by
+  have hs : splitCases rr (t * p) t x = rr * p * x / mixFactor rr p := by
+    unfold splitCases
+    rw [show rr * (t * p) + t - t * p = t * mixFactor rr p by unfold mixFactor; ring]
+    field_simp
+  simp only [projColumn, hs, true_and]
+  refine ⟨?_, ?_, ?_⟩ <;> field_simp <;> unfold mixFactor <;> ring
+
+/-- **Validity of the projected table.** For an arm with `t > 0` persons, `x ≥ 0` cases, a
+confounder prevalence `0 < p < 1` and a confounder to disease risk ratio `rr ≥ 0`, all four
+projected cells are nonnegative exactly when `max 1 rr * x ≤ t * mixFactor rr p`. The case
+cells are always nonnegative; the noncase cells of the strata `C = 1` and `C = 0` are
+nonnegative exactly when `rr x ≤ t M` and `x ≤ t M` (`splitCases_admissible_iff`). -/
+theorem projColumn_nonneg_iff {rr t p x : ℝ} (ht : 0 < t) (hp : 0 < p) (hp' : p < 1)
+    (hrr : 0 ≤ rr) (hx : 0 ≤ x) :
+    (∀ c d, 0 ≤ projColumn rr t p x c d) ↔ max 1 rr * x ≤ t * mixFactor rr p := by
+  have hM : 0 < mixFactor rr p := by
+    unfold mixFactor; nlinarith [mul_nonneg hrr hp.le]
+  have hq : 0 < 1 - p := by linarith
+  obtain ⟨h11, h01, h10, h00⟩ := projColumn_eq (rr := rr) (x := x) ht.ne' hM.ne'
+  rw [max_mul_of_nonneg _ _ hx, one_mul, max_le_iff]
+  constructor
+  · intro h
+    have a := h true false
+    have b := h false false
+    rw [h10, mul_div_assoc, mul_nonneg_iff_of_pos_left hp, le_div_iff₀ hM, zero_mul] at a
+    rw [h00, mul_div_assoc, mul_nonneg_iff_of_pos_left hq, le_div_iff₀ hM, zero_mul] at b
+    constructor <;> linarith
+  · rintro ⟨h1, h2⟩ c d
+    cases c <;> cases d
+    · rw [h00]; exact div_nonneg (mul_nonneg hq.le (by linarith)) hM.le
+    · rw [h01]; positivity
+    · rw [h10]; exact div_nonneg (mul_nonneg hp.le (by linarith)) hM.le
+    · rw [h11]; positivity
+
+/-- **Validity of the eight cell table**: with positive arm sizes, prevalences in `(0, 1)`,
+nonnegative case counts and nonnegative confounder to disease risk ratios, all eight projected
+cells of `projTable` are nonnegative exactly when both arms satisfy the criterion of
+`projColumn_nonneg_iff`. -/
+theorem projTable_nonneg_iff {a b nE nU rr₁ rr₀ : ℝ} {p : Bool → ℝ} (hnE : 0 < nE)
+    (hnU : 0 < nU) (hp : ∀ e, 0 < p e ∧ p e < 1) (hrr₁ : 0 ≤ rr₁) (hrr₀ : 0 ≤ rr₀)
+    (ha : 0 ≤ a) (hb : 0 ≤ b) :
+    (∀ c d e, 0 ≤ projTable a b nE nU rr₁ rr₀ p c d e) ↔
+      max 1 rr₁ * a ≤ nE * mixFactor rr₁ (p true) ∧
+        max 1 rr₀ * b ≤ nU * mixFactor rr₀ (p false) := by
+  rw [← projColumn_nonneg_iff hnE (hp true).1 (hp true).2 hrr₁ ha,
+    ← projColumn_nonneg_iff hnU (hp false).1 (hp false).2 hrr₀ hb]
+  constructor
+  · intro h
+    exact ⟨fun c d => by simpa [projTable] using h c d true,
+      fun c d => by simpa [projTable] using h c d false⟩
+  · rintro ⟨h1, h0⟩ c d e
+    cases e
+    · simpa [projTable] using h0 c d
+    · simpa [projTable] using h1 c d
+
+/-- **The projected table recovers a true table.** If a true arm has strata of `t₁, t₀ > 0`
+persons with `x₁, x₀` cases whose stratum risks have ratio `rr ≥ 0` (written
+`x₁ * t₀ = rr * t₁ * x₀`), then projecting the collapsed arm (`t₁ + t₀` persons,
+`x₁ + x₀` cases, prevalence `t₁ / (t₁ + t₀)`) returns all four true cells. -/
+theorem projColumn_recovers {rr t₁ t₀ x₁ x₀ : ℝ} (hrr : 0 ≤ rr) (ht₁ : 0 < t₁) (ht₀ : 0 < t₀)
+    (h : x₁ * t₀ = rr * t₁ * x₀) :
+    projColumn rr (t₁ + t₀) (t₁ / (t₁ + t₀)) (x₁ + x₀) =
+      fun c d => if c then (if d then x₁ else t₁ - x₁) else (if d then x₀ else t₀ - x₀) := by
+  have htp : (t₁ + t₀) * (t₁ / (t₁ + t₀)) = t₁ := by
+    have : t₁ + t₀ ≠ 0 := by linarith
+    field_simp
+  have hs := splitCases_recovers hrr ht₁ ht₀ h
+  funext c d
+  cases c <;> cases d <;> simp only [projColumn, htp, hs, Bool.false_eq_true, ite_true,
+    ite_false] <;> ring
+
 /-- The projected stratum risks of Fox, MacLehose and Lash (2021), Table 5.1 and
 Equations 5.4 to 5.6. From the observed exposed cases `a` among `nE` exposed and unexposed cases
 `b` among `nU` unexposed, the confounder prevalences `p e`, and the confounder to disease risk
@@ -414,30 +532,69 @@ theorem projRisk_pos (ha : 0 < a) (hb : 0 < b) (hnE : 0 < nE) (hnU : 0 < nU) (hr
   · rw [h2]; positivity
   · rw [h1]; positivity
 
+/-- The projected risks of the unexposed are positive when the unexposed cases are; no sign
+condition on the exposed cases is needed. -/
+theorem projRisk_pos_unexposed (hb : 0 < b) (hnE : 0 < nE) (hnU : 0 < nU) (hrr₁ : 0 < rr₁)
+    (hrr₀ : 0 < rr₀) (hp : ∀ e, 0 < p e ∧ p e < 1) :
+    ∀ c, 0 < projRisk a b nE nU rr₁ rr₀ p false c := by
+  obtain ⟨-, -, h3, h4⟩ := projRisk_eq (a := a) (b := b) hnE hnU hrr₁ hrr₀ hp
+  have g0 := mixFactor_pos hrr₀ (hp false).1.le (hp false).2.le
+  intro c
+  cases c
+  · rw [h4]; positivity
+  · rw [h3]; positivity
+
 /-- **The SMR of the projected table equals the closed form** (Fox, MacLehose and Lash 2021,
 Table 5.5 and Equation 5.7 against Equations 5.1 and 5.8): the SMR computed from the projected
-stratified table is `(a / nE) / (b / nU) * (rr₀ p₀ + 1 - p₀) / (rr₀ p₁ + 1 - p₁)`. -/
-theorem smr_projRisk (ha : 0 < a) (hb : 0 < b) (hnE : 0 < nE) (hnU : 0 < nU) (hrr₁ : 0 < rr₁)
+stratified table is `(a / nE) / (b / nU) * (rr₀ p₀ + 1 - p₀) / (rr₀ p₁ + 1 - p₁)`. Only the
+unexposed cases need to be positive: the exposed case count `a` is arbitrary, so `a = 0` (both
+risk ratios zero) is included. -/
+theorem smr_projRisk (hb : 0 < b) (hnE : 0 < nE) (hnU : 0 < nU) (hrr₁ : 0 < rr₁)
     (hrr₀ : 0 < rr₀) (hp : ∀ e, 0 < p e ∧ p e < 1) :
     smr (projRisk a b nE nU rr₁ rr₀ p) p =
       (a / nE) / (b / nU) * (mixFactor rr₀ (p false) / mixFactor rr₀ (p true)) := by
-  rw [smr_eq (projRisk_pos ha hb hnE hnU hrr₁ hrr₀ hp) (hp false).1.le (hp false).2.le
+  rw [smr_eq (projRisk_pos_unexposed hb hnE hnU hrr₁ hrr₀ hp) (hp false).1.le (hp false).2.le
     (hp true).1.le (hp true).2.le (projRisk_ratio hnE hnU hrr₁ hrr₀ hp).2]
   unfold crudeRR
   obtain ⟨o1, o0⟩ := observedMean_projRisk (a := a) (b := b) hnE hnU hrr₁ hrr₀ hp
   rw [o1, o0]
 
 /-- With a common confounder to disease risk ratio (`rr₁ = rr₀ = rr`), the projected strata
-have equal exposure to disease risk ratios, both equal to the SMR (Table 5.5). -/
-theorem projRisk_homogeneous {rr : ℝ} (ha : 0 < a) (hb : 0 < b) (hnE : 0 < nE) (hnU : 0 < nU)
+have equal exposure to disease risk ratios, both equal to the SMR (Table 5.5). The exposed case
+count `a` is arbitrary. -/
+theorem projRisk_homogeneous {rr : ℝ} (hb : 0 < b) (hnE : 0 < nE) (hnU : 0 < nU)
     (hrr : 0 < rr) (hp : ∀ e, 0 < p e ∧ p e < 1) :
     projRisk a b nE nU rr rr p true true / projRisk a b nE nU rr rr p false true =
         projRisk a b nE nU rr rr p true false / projRisk a b nE nU rr rr p false false ∧
       smr (projRisk a b nE nU rr rr p) p =
         projRisk a b nE nU rr rr p true false / projRisk a b nE nU rr rr p false false := by
   have hr := projRisk_ratio (a := a) (b := b) hnE hnU hrr hrr hp
-  exact stratumRR_eq_smr (projRisk_pos ha hb hnE hnU hrr hrr hp) (hp true).1.le (hp true).2.le
-    (fun e => by cases e; exacts [hr.2, hr.1])
+  exact stratumRR_eq_smr (projRisk_pos_unexposed hb hnE hnU hrr hrr hp) (hp true).1.le
+    (hp true).2.le (fun e => by cases e; exacts [hr.2, hr.1])
+
+/-- **Projected risks are probabilities on the admissible region.** For nonnegative case
+counts and positive confounder to disease risk ratios, if each exposure arm satisfies the
+admissibility criterion `max 1 rr * x ≤ t * mixFactor rr p` of `projColumn_nonneg_iff`, then
+every projected stratum risk lies in `[0, 1]`. For an inadmissible arm see
+`splitCases_inadmissible` (`6.75` cases among `5` persons, a projected risk of `1.35`). -/
+theorem projRisk_mem_Icc (ha : 0 ≤ a) (hb : 0 ≤ b) (hnE : 0 < nE) (hnU : 0 < nU)
+    (hrr₁ : 0 < rr₁) (hrr₀ : 0 < rr₀) (hp : ∀ e, 0 < p e ∧ p e < 1)
+    (hvE : max 1 rr₁ * a ≤ nE * mixFactor rr₁ (p true))
+    (hvU : max 1 rr₀ * b ≤ nU * mixFactor rr₀ (p false)) :
+    ∀ e c, projRisk a b nE nU rr₁ rr₀ p e c ∈ Set.Icc 0 1 := by
+  obtain ⟨h1, h2, h3, h4⟩ := projRisk_eq (a := a) (b := b) hnE hnU hrr₁ hrr₀ hp
+  have g1 := mul_pos hnE (mixFactor_pos hrr₁ (hp true).1.le (hp true).2.le)
+  have g0 := mul_pos hnU (mixFactor_pos hrr₀ (hp false).1.le (hp false).2.le)
+  have k1 : rr₁ * a ≤ max 1 rr₁ * a := mul_le_mul_of_nonneg_right (le_max_right _ _) ha
+  have k2 : a ≤ max 1 rr₁ * a := le_mul_of_one_le_left ha (le_max_left _ _)
+  have k3 : rr₀ * b ≤ max 1 rr₀ * b := mul_le_mul_of_nonneg_right (le_max_right _ _) hb
+  have k4 : b ≤ max 1 rr₀ * b := le_mul_of_one_le_left hb (le_max_left _ _)
+  intro e c
+  cases e <;> cases c
+  · rw [h4]; exact ⟨by positivity, (div_le_one g0).2 (k4.trans hvU)⟩
+  · rw [h3]; exact ⟨by positivity, (div_le_one g0).2 (k3.trans hvU)⟩
+  · rw [h2]; exact ⟨by positivity, (div_le_one g1).2 (k2.trans hvE)⟩
+  · rw [h1]; exact ⟨by positivity, (div_le_one g1).2 (k1.trans hvE)⟩
 
 end Projection
 
@@ -473,7 +630,10 @@ noncomputable def mhOddsRatio {K : Type*} [Fintype K] (A B C D : K → ℝ) : �
   (∑ k, A k * D k / (A k + B k + C k + D k)) / (∑ k, B k * C k / (A k + B k + C k + D k))
 
 /-- With a common stratum odds ratio `ψ` (written `A k D k = ψ B k C k`), the Mantel and
-Haenszel summary odds ratio equals `ψ`, provided its denominator is positive. -/
+Haenszel summary odds ratio equals `ψ`, provided its outer denominator is positive. This is an
+identity between totalized expressions: a stratum with total `A k + B k + C k + D k = 0`
+contributes `0 / 0 = 0` to both sums. `mhOddsRatio_of_homogeneous_of_pos` is the version in
+which every stratum is nonempty. -/
 theorem mhOddsRatio_of_homogeneous {K : Type*} [Fintype K] {A B C D : K → ℝ} {ψ : ℝ}
     (h : ∀ k, A k * D k = ψ * (B k * C k))
     (hpos : 0 < ∑ k, B k * C k / (A k + B k + C k + D k)) :
@@ -484,6 +644,20 @@ theorem mhOddsRatio_of_homogeneous {K : Type*} [Fintype K] {A B C D : K → ℝ}
     rw [Finset.mul_sum]
     exact Finset.sum_congr rfl fun k _ => by rw [h k]; ring
   rw [e, mul_div_assoc, div_self hpos.ne', mul_one]
+
+/-- **The Mantel and Haenszel summary of homogeneous strata.** Let every stratum be nonempty
+(positive total `A k + B k + C k + D k`), the unexposed cases `B` and exposed controls `C`
+nonnegative, and some stratum have `B k C k > 0` (so the summary is a real quotient). If all
+strata have the common odds ratio `ψ` (written `A k D k = ψ B k C k`), the Mantel and Haenszel
+summary odds ratio equals `ψ`. -/
+theorem mhOddsRatio_of_homogeneous_of_pos {K : Type*} [Fintype K] {A B C D : K → ℝ} {ψ : ℝ}
+    (hB : ∀ k, 0 ≤ B k) (hC : ∀ k, 0 ≤ C k) (hT : ∀ k, 0 < A k + B k + C k + D k)
+    (hBC : ∃ k, 0 < B k * C k) (h : ∀ k, A k * D k = ψ * (B k * C k)) :
+    mhOddsRatio A B C D = ψ := by
+  refine mhOddsRatio_of_homogeneous h (Finset.sum_pos' (fun k _ => ?_) ?_)
+  · exact div_nonneg (mul_nonneg (hB k) (hC k)) (hT k).le
+  · obtain ⟨k, hk⟩ := hBC
+    exact ⟨k, Finset.mem_univ k, div_pos hk (hT k)⟩
 
 /-- **The projected strata are homogeneous, so the Mantel and Haenszel summary equals the
 closed form** (Fox, MacLehose and Lash 2021, Table 12.5: equal stratum odds ratios and an equal
@@ -613,7 +787,8 @@ theorem smr_mem_flandersKhoury {m : Bool → Bool → ℝ} {π : Bool → ℝ} {
     crudeRR m π / parm ≤ smr m π ∧ smr m π ≤ crudeRR m π := by
   have hle := (one_le_oddsRatio_iff hπ₁' hπ₀ hπ₀').1 hOR
   have hπ₁ : 0 < π true := lt_of_lt_of_le hπ₀ hle
-  have hconf := crudeRR_div_smr hm hπ₀.le hπ₀'.le hπ₁.le hπ₁'.le hm0
+  have hconf := crudeRR_div_smr (fun c => hm false c)
+    (convex_comb_pos hπ₁.le hπ₁'.le (hm _ _) (hm _ _)).ne' hπ₀.le hπ₀'.le hπ₁.le hπ₁'.le hm0
   have h1 := (flandersKhoury hrr hπ₁' hπ₀ hπ₀' hOR).1
   have hS : 0 < smr m π := div_pos (convex_comb_pos hπ₁.le hπ₁'.le (hm _ _) (hm _ _))
     (convex_comb_pos hπ₁.le hπ₁'.le (hm _ _) (hm _ _))
@@ -626,6 +801,34 @@ theorem smr_mem_flandersKhoury {m : Bool → Bool → ℝ} {π : Bool → ℝ} {
     rw [div_le_iff₀ hS] at hparm
     linarith
   · rwa [one_le_div hS] at h1
+
+/-- **The joint bounding factor is at most each of its arguments**: for `a, b ≥ 1`,
+`a b / (a + b - 1) ≤ min a b` (Ding and VanderWeele 2016). -/
+theorem boundingFactor_le_min {a b : ℝ} (ha : 1 ≤ a) (hb : 1 ≤ b) :
+    boundingFactor a b ≤ min a b := by
+  have hD : 0 < a + b - 1 := by linarith
+  unfold boundingFactor
+  refine le_min ?_ ?_ <;> rw [div_le_iff₀ hD] <;> nlinarith
+
+/-- **The range of the relative risk due to confounding when only `rr` and `p₀` are fixed.**
+For `rr > 1` and `0 ≤ p₀ < 1`, over the prevalences `p₀ ≤ p₁ < 1` the bias factor takes values
+in `[1, rr / mixFactor rr p₀)`: the lower end is attained at `p₁ = p₀`, and the upper end is
+the value at `p₁ = 1`, which no prevalence below one attains. This is the fourth factor of
+Table 5.9 (Fox, MacLehose and Lash 2021). -/
+theorem biasFactor_range {rr p₀ : ℝ} (hrr : 1 < rr) (hp₀ : 0 ≤ p₀) (hp₀' : p₀ < 1) :
+    (∀ p₁, p₀ ≤ p₁ → p₁ < 1 →
+        1 ≤ biasFactor rr p₁ p₀ ∧ biasFactor rr p₁ p₀ < rr / mixFactor rr p₀) ∧
+      biasFactor rr p₀ p₀ = 1 ∧ biasFactor rr 1 p₀ = rr / mixFactor rr p₀ := by
+  have hg := mixFactor_pos (rr := rr) (by linarith) hp₀ hp₀'.le
+  refine ⟨fun p₁ h h' => ⟨?_, ?_⟩, div_self hg.ne', by unfold biasFactor mixFactor; ring_nf⟩
+  · unfold biasFactor
+    rw [one_le_div hg]
+    unfold mixFactor
+    nlinarith [mul_nonneg (sub_nonneg.2 hrr.le) (sub_nonneg.2 h)]
+  · unfold biasFactor
+    rw [div_lt_div_iff_of_pos_right hg]
+    unfold mixFactor
+    nlinarith [mul_pos (sub_pos.2 hrr) (sub_pos.2 h')]
 
 /-! ### Monotonicity and the conservative case `p₁ = 1` -/
 
@@ -685,12 +888,33 @@ theorem biasFactor_one {rr K : ℝ} (hrr : 1 ≤ rr) (hK : 1 ≤ K) :
   ring
 
 /-- **The E-value assumes `p₁ = 1`**: along `p₀ = p₁ / K` with `0 ≤ p₁ ≤ 1`, the bias factor is
-at most its value at `p₁ = 1`, the joint bounding factor `boundingFactor rr K`. Hence
-`ratio_le_boundingFactor` is attained exactly at the deterministic prevalence `p₁ = 1`. -/
+at most its value at `p₁ = 1`, the joint bounding factor `boundingFactor rr K`. The deterministic
+prevalence `p₁ = 1` attains the bound; by `biasFactor_eq_boundingFactor_iff` it is the only
+prevalence that does when `rr > 1` and `K > 1`, while for `rr = 1` or `K = 1` every prevalence
+attains it. -/
 theorem biasFactor_le_boundingFactor {rr K p : ℝ} (hrr : 1 ≤ rr) (hK : 1 ≤ K) (hp : 0 ≤ p)
     (hp' : p ≤ 1) : biasFactor rr p (p / K) ≤ boundingFactor rr K := by
   rw [← biasFactor_one hrr hK]
   exact biasFactor_along_mono hrr hK hp hp'
+
+/-- **The equality case of `biasFactor_le_boundingFactor`.** For `rr, K ≥ 1` and `p₁ ≥ 0`, the
+bias factor along `p₀ = p₁ / K` equals the joint bounding factor exactly when `p₁ = 1`,
+`rr = 1` or `K = 1`: cross multiplied, the gap is `(rr - 1) (K - 1) (1 - p₁)`. -/
+theorem biasFactor_eq_boundingFactor_iff {rr K p : ℝ} (hrr : 1 ≤ rr) (hK : 1 ≤ K)
+    (hp : 0 ≤ p) : biasFactor rr p (p / K) = boundingFactor rr K ↔ p = 1 ∨ rr = 1 ∨ K = 1 := by
+  have hK0 : 0 < K := by linarith
+  have hg : 0 < mixFactor rr (p / K) := by
+    unfold mixFactor
+    have : 0 ≤ (rr - 1) * (p / K) := mul_nonneg (by linarith) (div_nonneg hp hK0.le)
+    nlinarith
+  have hD : 0 < rr + K - 1 := by linarith
+  have key : mixFactor rr p * (rr + K - 1) - rr * K * mixFactor rr (p / K) =
+      -((rr - 1) * (K - 1) * (1 - p)) := by
+    unfold mixFactor; field_simp; ring
+  unfold biasFactor boundingFactor
+  rw [div_eq_div_iff hg.ne' hD.ne', ← sub_eq_zero, key, neg_eq_zero, mul_eq_zero, mul_eq_zero,
+    sub_eq_zero, sub_eq_zero, sub_eq_zero, eq_comm (a := (1 : ℝ)) (b := p)]
+  tauto
 
 /-! ### Explaining away: Equations 5.11 to 5.13 and the G-value -/
 
@@ -721,9 +945,104 @@ theorem explainAway_one_iff {RR rr K : ℝ} (hK : 0 < K) (hRK : RR ≠ K)
   rw [explainAway_iff one_pos hK hRK hg]
   constructor <;> intro h <;> rw [h] <;> ring_nf
 
-/-- The E-value `RR + sqrt (RR (RR - 1))` of Fox, MacLehose and Lash (2021), Equation 5.13
-(printed as `RR + sqrt (RR² - RR)`). -/
-noncomputable def eValue (RR : ℝ) : ℝ := RR + Real.sqrt (RR * (RR - 1))
+/-- **The solution of Equation 5.11 relative to one**: for `p₁ ≠ 0` and `RR ≠ K`,
+`rr - 1 = K (RR - 1) / (p₁ (K - RR))`, where `rr` is the right side of Equation 5.11. -/
+theorem explainAway_sol_sub_one {RR K p₁ : ℝ} (hp₁ : p₁ ≠ 0) (hRK : RR ≠ K) :
+    (K - K * p₁ - K * RR + RR * p₁) / (p₁ * (RR - K)) - 1 = K * (RR - 1) / (p₁ * (K - RR)) := by
+  have h1 : RR - K ≠ 0 := sub_ne_zero.2 hRK
+  have h2 : K - RR ≠ 0 := sub_ne_zero.2 hRK.symm
+  field_simp
+  ring
+
+/-- **Admissibility of the solution of Equation 5.11.** For an observed `RR > 1`, `p₁ > 0` and
+`K = RR_EC > 0` with `K ≠ RR`, the confounder to disease risk ratio solved from Equation 5.11
+exceeds one exactly when `RR < K`. -/
+theorem one_lt_explainAway_sol_iff {RR K p₁ : ℝ} (hRR : 1 < RR) (hp₁ : 0 < p₁) (hK : 0 < K)
+    (hRK : RR ≠ K) :
+    1 < (K - K * p₁ - K * RR + RR * p₁) / (p₁ * (RR - K)) ↔ RR < K := by
+  rw [← sub_pos, explainAway_sol_sub_one hp₁.ne' hRK,
+    div_pos_iff_of_pos_left (mul_pos hK (by linarith)), mul_pos_iff_of_pos_left hp₁, sub_pos]
+
+/-- **An inadmissible solution.** For `1 ≤ K < RR` and `0 < p₁ ≤ 1`, the solution of
+Equation 5.11 is at most zero, so no confounder with confounder to exposure risk ratio
+`K ≤ RR_obs` explains the observed risk ratio away. -/
+theorem explainAway_sol_nonpos {RR K p₁ : ℝ} (hK : 1 ≤ K) (hKR : K < RR) (hp₁ : 0 < p₁)
+    (hp₁' : p₁ ≤ 1) : (K - K * p₁ - K * RR + RR * p₁) / (p₁ * (RR - K)) ≤ 0 := by
+  refine div_nonpos_of_nonpos_of_nonneg ?_ (mul_nonneg hp₁.le (by linarith))
+  nlinarith [mul_nonneg (sub_nonneg.2 hp₁') (sub_nonneg.2 hKR.le)]
+
+/-- For `rr ≥ 1` and `K > 1` the joint bounding factor is below `K`. -/
+theorem boundingFactor_lt_right {rr K : ℝ} (hrr : 1 ≤ rr) (hK : 1 < K) :
+    boundingFactor rr K < K := by
+  unfold boundingFactor
+  rw [div_lt_iff₀ (by linarith)]
+  nlinarith
+
+/-- **When a confounder can explain the estimate away** (Equation 5.11 with its admissibility
+region). For `K = RR_EC > 1`, a prevalence `0 < p₁ ≤ 1` among the exposed and an observed
+`RR > 1`, some confounder to disease risk ratio `rr ≥ 1` gives bias factor exactly `RR` along
+`p₀ = p₁ / K` if and only if `RR < K`. At `RR ≥ K` the bias factor stays below `K` for every
+`rr ≥ 1` (`biasFactor_le_boundingFactor` and `boundingFactor_lt_right`). -/
+theorem exists_explainAway_iff {RR K p₁ : ℝ} (hK : 1 < K) (hp₁ : 0 < p₁) (hp₁' : p₁ ≤ 1)
+    (hRR : 1 < RR) : (∃ rr, 1 ≤ rr ∧ RR = biasFactor rr p₁ (p₁ / K)) ↔ RR < K := by
+  constructor
+  · rintro ⟨rr, hrr, h⟩
+    rw [h]
+    exact (biasFactor_le_boundingFactor hrr hK.le hp₁.le hp₁').trans_lt
+      (boundingFactor_lt_right hrr hK)
+  · intro hlt
+    have hRK : RR ≠ K := hlt.ne
+    set s := (K - K * p₁ - K * RR + RR * p₁) / (p₁ * (RR - K)) with hs
+    have h1 : 1 < s := (one_lt_explainAway_sol_iff hRR hp₁ (by linarith) hRK).2 hlt
+    have hg : mixFactor s (p₁ / K) ≠ 0 := by
+      unfold mixFactor
+      have : 0 ≤ (s - 1) * (p₁ / K) := mul_nonneg (by linarith) (by positivity)
+      nlinarith
+    exact ⟨s, h1.le, (explainAway_iff hp₁ (by linarith) hRK hg).2 rfl⟩
+
+/-- The E-value of Fox, MacLehose and Lash (2021), Equation 5.13 (page 134), printed as
+`RR_obs + sqrt (RR_obs² - RR_obs)`, the common value `RR_EC = RR_CD > 1` that explains away an
+observed risk ratio above one when `p₁ = 1`; extended to a protective risk ratio
+`0 < RR < 1` in the standard way (VanderWeele and Ding 2017) by applying the formula to
+`q = max RR (1 / RR)`: `eValue RR = q + sqrt (q (q - 1))`. For `RR ≥ 1` this is the printed
+formula (`eValue_of_one_le`), the expression of `evalue_le_max`; the value is meaningful only
+for `RR > 0`. -/
+noncomputable def eValue (RR : ℝ) : ℝ :=
+  max RR RR⁻¹ + Real.sqrt (max RR RR⁻¹ * (max RR RR⁻¹ - 1))
+
+/-- For `RR ≥ 1` the E-value is the printed formula `RR + sqrt (RR (RR - 1))`. -/
+theorem eValue_of_one_le {RR : ℝ} (hRR : 1 ≤ RR) :
+    eValue RR = RR + Real.sqrt (RR * (RR - 1)) := by
+  unfold eValue
+  rw [max_eq_left ((inv_le_one_of_one_le₀ hRR).trans hRR)]
+
+/-- The E-value does not depend on the coding of the exposure: `eValue (1 / RR) = eValue RR`.
+For `RR > 0` this is the recoding of the exposure; at `RR = 0` it is an identity between
+totalized expressions (`0⁻¹ = 0`). -/
+theorem eValue_inv (RR : ℝ) : eValue RR⁻¹ = eValue RR := by
+  unfold eValue
+  rw [inv_inv, max_comm]
+
+/-- For a protective risk ratio `0 < RR ≤ 1` the E-value is the formula applied to `1 / RR`. -/
+theorem eValue_of_le_one {RR : ℝ} (h0 : 0 < RR) (h1 : RR ≤ 1) :
+    eValue RR = RR⁻¹ + Real.sqrt (RR⁻¹ * (RR⁻¹ - 1)) := by
+  rw [← eValue_inv, eValue_of_one_le ((one_le_inv₀ h0).2 h1)]
+
+/-- **The E-value inequality** (`evalue_le_max`) in terms of `eValue`: for an observed
+`RR > 1`, if a confounder with parameters `a, b ≥ 1` explains it away
+(`RR ≤ boundingFactor a b`), then `eValue RR ≤ max a b`. -/
+theorem eValue_le_max {RR a b : ℝ} (hRR : 1 < RR) (ha : 1 ≤ a) (hb : 1 ≤ b)
+    (h : RR ≤ boundingFactor a b) : eValue RR ≤ max a b := by
+  rw [eValue_of_one_le hRR.le]
+  exact evalue_le_max hRR ha hb h
+
+/-- **The E-value inequality for a protective estimate**: for `0 < RR < 1`, if the confounder
+explains away `1 / RR` (`1 / RR ≤ boundingFactor a b`, with the exposure recoded), then
+`eValue RR ≤ max a b`. -/
+theorem eValue_le_max_of_lt_one {RR a b : ℝ} (h0 : 0 < RR) (h1 : RR < 1) (ha : 1 ≤ a)
+    (hb : 1 ≤ b) (h : RR⁻¹ ≤ boundingFactor a b) : eValue RR ≤ max a b := by
+  rw [← eValue_inv]
+  exact eValue_le_max ((one_lt_inv₀ h0).2 h1) ha hb h
 
 /-- **Sharpness of the E-value** (Equation 5.13): for `RR ≥ 1`,
 `boundingFactor E E = RR` with `E = eValue RR`. Together with `evalue_le_max` this shows that
@@ -731,7 +1050,8 @@ the E-value is the least common value of the two risk ratio parameters that expl
 `RR`. -/
 theorem boundingFactor_eValue {RR : ℝ} (hRR : 1 ≤ RR) :
     boundingFactor (eValue RR) (eValue RR) = RR := by
-  unfold boundingFactor eValue
+  rw [eValue_of_one_le hRR]
+  unfold boundingFactor
   have hs := Real.sq_sqrt (show 0 ≤ RR * (RR - 1) by nlinarith)
   have hs0 := Real.sqrt_nonneg (RR * (RR - 1))
   have hD : RR + Real.sqrt (RR * (RR - 1)) + (RR + Real.sqrt (RR * (RR - 1))) - 1 ≠ 0 := by
@@ -744,7 +1064,7 @@ theorem boundingFactor_eValue {RR : ℝ} (hRR : 1 ≤ RR) :
 theorem biasFactor_eValue {RR : ℝ} (hRR : 1 ≤ RR) :
     biasFactor (eValue RR) 1 (1 / eValue RR) = RR := by
   have hE : 1 ≤ eValue RR := by
-    unfold eValue; linarith [Real.sqrt_nonneg (RR * (RR - 1))]
+    rw [eValue_of_one_le hRR]; linarith [Real.sqrt_nonneg (RR * (RR - 1))]
   rw [biasFactor_one hE hE, boundingFactor_eValue hRR]
 
 /-- The linear coefficient `RR + p₁ + RR p₁ - 1` of the G-value quadratic. -/
@@ -809,12 +1129,72 @@ theorem biasFactor_gValue {RR p₁ : ℝ} (hRR : 1 ≤ RR) (hp₁ : 0 < p₁) :
   field_simp
   linear_combination hq
 
-/-- **`G(1) = E`**: at `p₁ = 1` the G-value is the E-value. -/
-theorem gValue_one (RR : ℝ) : gValue RR 1 = eValue RR := by
-  unfold gValue eValue gCoeff
+/-- **`G(1) = E`**: at `p₁ = 1` the G-value is the E-value, for an observed `RR ≥ 1` (the
+domain of both formulas). -/
+theorem gValue_one {RR : ℝ} (hRR : 1 ≤ RR) : gValue RR 1 = eValue RR := by
+  rw [eValue_of_one_le hRR]
+  unfold gValue gCoeff
   have e : (RR + 1 + RR * 1 - 1) ^ 2 - 4 * RR * 1 ^ 2 = 2 ^ 2 * (RR * (RR - 1)) := by ring
   rw [e, Real.sqrt_mul (by norm_num), Real.sqrt_sq (by norm_num)]
   ring
+
+/-- **The G-value is at least the E-value**: for `RR ≥ 1` and `0 < p₁ ≤ 1`,
+`eValue RR ≤ gValue RR p₁`. The strict form printed in the book is `eValue_lt_gValue`. -/
+theorem eValue_le_gValue {RR p₁ : ℝ} (hRR : 1 ≤ RR) (hp₁ : 0 < p₁) (hp₁' : p₁ ≤ 1) :
+    eValue RR ≤ gValue RR p₁ := by
+  have hG := (gValue_root hRR hp₁).2
+  rcases hRR.lt_or_eq with h | h
+  · have hb : RR ≤ boundingFactor (gValue RR p₁) (gValue RR p₁) := by
+      have := biasFactor_le_boundingFactor hG hG hp₁.le hp₁'
+      rwa [biasFactor_gValue hRR hp₁] at this
+    simpa using eValue_le_max h hG hG hb
+  · subst h
+    rw [eValue_of_one_le le_rfl]
+    simpa using hG
+
+/-- **The G-value exceeds the E-value when `p₁ < 1`** (Fox, MacLehose and Lash 2021, page
+135: "When `p₁ < 1`, the result will be greater than the E-value"), for an observed `RR > 1`.
+-/
+theorem eValue_lt_gValue {RR p₁ : ℝ} (hRR : 1 < RR) (hp₁ : 0 < p₁) (hp₁' : p₁ < 1) :
+    eValue RR < gValue RR p₁ := by
+  refine lt_of_le_of_ne (eValue_le_gValue hRR.le hp₁ hp₁'.le) fun h => ?_
+  have hG := (gValue_root hRR.le hp₁).2
+  have hb : biasFactor (gValue RR p₁) p₁ (p₁ / gValue RR p₁) =
+      boundingFactor (gValue RR p₁) (gValue RR p₁) := by
+    rw [biasFactor_gValue hRR.le hp₁, ← h, boundingFactor_eValue hRR.le]
+  rcases (biasFactor_eq_boundingFactor_iff hG hG hp₁.le).1 hb with h1 | h1 | h1
+  · linarith
+  all_goals
+    have := biasFactor_gValue hRR.le hp₁
+    rw [h1] at this
+    norm_num [biasFactor, mixFactor] at this
+    linarith
+
+/-- **The G-value is the only root at least one.** For `RR > 1` and `p₁ > 0`, any root
+`G ≥ 1` of `p₁ G² - (RR + p₁ + RR p₁ - 1) G + RR p₁ = 0` is `gValue RR p₁`: the quadratic
+equals `1 - RR < 0` at `G = 1`, so its other root is below one. -/
+theorem eq_gValue_of_root {RR p₁ G : ℝ} (hRR : 1 < RR) (hp₁ : 0 < p₁) (hG : 1 ≤ G)
+    (hq : p₁ * G ^ 2 - gCoeff RR p₁ * G + RR * p₁ = 0) : G = gValue RR p₁ := by
+  obtain ⟨hq', hG'⟩ := gValue_root hRR.le hp₁
+  set H := gValue RR p₁
+  by_contra hne
+  have hsub : G - H ≠ 0 := sub_ne_zero.2 hne
+  -- the two roots have sum `B / p₁`, hence product `RR`
+  have hsum : p₁ * (G + H) = gCoeff RR p₁ := by
+    have : (G - H) * (p₁ * (G + H) - gCoeff RR p₁) = 0 := by linear_combination hq - hq'
+    rcases mul_eq_zero.1 this with h | h
+    · exact absurd h hsub
+    · linarith
+  have hprod : p₁ * (G * H) = p₁ * RR := by
+    unfold gCoeff at hsum hq
+    linear_combination -hq + G * hsum
+  have hGH : G * H = RR := mul_left_cancel₀ hp₁.ne' hprod
+  have h1 : 0 ≤ (G - 1) * (H - 1) := mul_nonneg (by linarith) (by linarith)
+  -- at `1` the quadratic is `p₁ (1 - G) (1 - H) = 1 - RR < 0`
+  have h2 : p₁ * ((G - 1) * (H - 1)) = 1 - RR := by
+    unfold gCoeff at hsum
+    linear_combination (-1 : ℝ) * hsum + p₁ * hGH
+  nlinarith [mul_nonneg hp₁.le h1]
 
 /-! ### Signed rules for the direction of confounding bias -/
 
@@ -842,28 +1222,75 @@ theorem sign_biasFactor_sub_one {rr p₁ p₀ : ℝ} (hg : 0 < mixFactor rr p₀
 
 /-- The signed rule in the stratum risk model: the crude risk ratio exceeds the SMR exactly
 when `(rr - 1) (p₁ - p₀) > 0`, with `rr` the confounder to disease risk ratio among the
-unexposed. -/
-theorem smr_lt_crudeRR_iff {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ} (hm : ∀ e c, 0 < m e c)
+unexposed. The unexposed stratum risks and the observed risk of the exposed must be positive
+(at a zero exposed risk both ratios are zero). -/
+theorem smr_lt_crudeRR_iff {m : Bool → Bool → ℝ} {π : Bool → ℝ} {rr : ℝ}
+    (hm₀ : ∀ c, 0 < m false c) (hO : 0 < observedMean m π true)
     (hπ₀ : 0 ≤ π false) (hπ₀' : π false ≤ 1) (hπ₁ : 0 ≤ π true) (hπ₁' : π true ≤ 1)
     (hrr : m false true = rr * m false false) :
     smr m π < crudeRR m π ↔ 0 < (rr - 1) * (π true - π false) := by
-  have hconf := crudeRR_div_smr hm hπ₀ hπ₀' hπ₁ hπ₁' hrr
-  have hrr0 : 0 < rr := by
-    have := hm false true
-    rw [hrr] at this
-    exact pos_of_mul_pos_left this (hm false false).le
+  have hconf := crudeRR_div_smr hm₀ hO.ne' hπ₀ hπ₀' hπ₁ hπ₁' hrr
+  obtain ⟨hrr0, -, hS0⟩ := unexposed_facts (π := π) hm₀ hrr
   have hg := mixFactor_pos hrr0 hπ₀ hπ₀'
-  have hS : 0 < smr m π := div_pos (convex_comb_pos hπ₁ hπ₁' (hm _ _) (hm _ _))
-    (convex_comb_pos hπ₁ hπ₁' (hm _ _) (hm _ _))
+  have hS : 0 < smr m π := by
+    unfold smr
+    rw [hS0]
+    exact div_pos hO (mul_pos (hm₀ false) (mixFactor_pos hrr0 hπ₁ hπ₁'))
   rw [← one_lt_div hS, hconf]
   unfold biasFactor
   rw [one_lt_div hg, ← sub_pos, mixFactor_sub]
 
-/-- **The signed rule needs a single confounder to disease association.** With an exposure by
-confounder interaction of opposite signs (`γ₁ = 0.2 > 0` among the exposed,
-`γ₀ = -0.2 < 0` among the unexposed) and `p₁ = 0.8 > p₀ = 0.2`, the bias of the crude risk
-difference is negative relative to the effect standardized to the exposed and positive relative
-to the effect standardized to the unexposed, so no product of two signs determines it. -/
+/-- The bias of the crude risk difference for a standard population with prevalence
+`r = w p₁ + (1 - w) p₀` between the two arms: it is
+`((1 - w) γ₁ + w γ₀) (p₁ - p₀)`, with `γ₁`, `γ₀` the confounder to disease risk differences
+among the exposed and the unexposed. -/
+theorem unadjustedBias_eq_mix (m : Bool → Bool → ℝ) (π : Bool → ℝ) {w r : ℝ}
+    (hr : r = w * π true + (1 - w) * π false) :
+    unadjustedBias m π r =
+      ((1 - w) * (m true true - m true false) + w * (m false true - m false false)) *
+        (π true - π false) := by
+  rw [unadjustedBias_eq, hr]
+  ring
+
+/-- **Signed DAG rule under sign agreement** (Fox, MacLehose and Lash 2021, Table 5.10, stated
+there under monotonicity assumptions). If the confounder to disease risk differences in the two
+exposure groups are both positive (interaction of any size allowed), then for every standard
+population between the arms (`r = w p₁ + (1 - w) p₀`, `0 ≤ w ≤ 1`) the bias of the crude risk
+difference has the sign of `p₁ - p₀`; if both are negative, the opposite sign. -/
+theorem sign_unadjustedBias_of_same_sign {m : Bool → Bool → ℝ} (π : Bool → ℝ) {w r : ℝ}
+    (hw : 0 ≤ w) (hw' : w ≤ 1) (hr : r = w * π true + (1 - w) * π false) :
+    (0 < m true true - m true false → 0 < m false true - m false false →
+        SignType.sign (unadjustedBias m π r) = SignType.sign (π true - π false)) ∧
+      (m true true - m true false < 0 → m false true - m false false < 0 →
+        SignType.sign (unadjustedBias m π r) = -SignType.sign (π true - π false)) := by
+  rw [unadjustedBias_eq_mix m π hr, sign_mul]
+  constructor
+  · intro h₁ h₀
+    have := convex_comb_pos hw hw' h₀ h₁
+    rw [sign_pos (by linarith), one_mul]
+  · intro h₁ h₀
+    have := convex_comb_pos hw hw' (neg_pos.2 h₀) (neg_pos.2 h₁)
+    rw [sign_neg (by linarith), neg_one_mul]
+
+/-- **Signed DAG rule for the standard of the exposed**, the standard of the book's SMR: the
+bias of the crude risk difference relative to the effect standardized to the exposed is
+`γ₀ (p₁ - p₀)`, so its sign is the sign of the confounder to disease risk difference among the
+unexposed times the sign of `p₁ - p₀`, whatever the risk difference among the exposed. -/
+theorem sign_unadjustedBias_exposed {m : Bool → Bool → ℝ} {γ₀ : ℝ}
+    (h₀ : m false true - m false false = γ₀) (π : Bool → ℝ) :
+    SignType.sign (unadjustedBias m π (π true)) =
+      SignType.sign γ₀ * SignType.sign (π true - π false) := by
+  rw [unadjustedBias_eq, h₀, sub_self, mul_zero, zero_sub, ← sign_mul]
+  congr 1
+  ring
+
+/-- **The signed rule needs sign agreement across exposure strata.** With confounder to disease
+risk differences of opposite signs (`γ₁ = 0.2 > 0` among the exposed, `γ₀ = -0.2 < 0` among the
+unexposed) and `p₁ = 0.8 > p₀ = 0.2`, the bias of the crude risk difference is negative
+relative to the effect standardized to the exposed and positive relative to the effect
+standardized to the unexposed, so no single pair of signs determines it for every standard. The
+rule for the standard of the exposed (`sign_unadjustedBias_exposed`, the sign of `γ₀` times the
+sign of `p₁ - p₀`) still holds here. -/
 theorem signed_rule_fails_with_interaction :
     ∃ (m : Bool → Bool → ℝ) (π : Bool → ℝ),
       0 < m true true - m true false ∧ m false true - m false false < 0 ∧
@@ -887,15 +1314,43 @@ noncomputable def hivPrev : Bool → ℝ := fun e => if e then 4 / 5 else 1 / 20
 theorem hivPrev_mem : ∀ e, 0 < hivPrev e ∧ hivPrev e < 1 := by
   intro e; cases e <;> norm_num [hivPrev]
 
-/-- Table 5.5 (Fox, MacLehose and Lash 2021): with `RR_CD = 0.63`, the projected cells of the
-stratum of Muslims are `A₁ = 75.2` and `B₁ = 2.7` (Equation 5.5, recomputed `75.17` and
-`2.73`). -/
+/-- `x` rounds to the printed value `v` at half width `δ` (half a unit of the last printed
+digit): `v - δ ≤ x < v + δ`. -/
+def RoundsTo (x v δ : ℝ) : Prop := v - δ ≤ x ∧ x < v + δ
+
+/-- The projected stratified table of Table 5.5 (Fox, MacLehose and Lash 2021, page 118):
+`RR_CD = 0.63` in both exposure groups, indexed by confounder, disease and exposure. -/
+noncomputable def table55 : Bool → Bool → Bool → ℝ :=
+  projTable 105 85 632 178 (63 / 100) (63 / 100) hivPrev
+
+/-- **All eight cells of Table 5.5** (page 118) round to the printed values: cases `75.2`,
+`2.7` (stratum `C₁`, exposed and unexposed) and `29.8`, `82.3` (stratum `C₀`); noncases
+`430.4`, `6.2` and `96.6`, `86.8`. Exact values: `75.1705`, `2.7280`, `29.8295`, `82.2720`,
+`430.4295`, `6.1720`, `96.5705`, `86.8280`. -/
 theorem table_5_5_cells :
-    75.1 < splitCases (63 / 100) (632 * (4 / 5)) 632 105 ∧
-      splitCases (63 / 100) (632 * (4 / 5)) 632 105 < 75.2 ∧
-      2.7 < splitCases (63 / 100) (178 * (1 / 20)) 178 85 ∧
-      splitCases (63 / 100) (178 * (1 / 20)) 178 85 < 2.75 := by
-  unfold splitCases; norm_num
+    RoundsTo (table55 true true true) 75.2 0.05 ∧ RoundsTo (table55 true true false) 2.7 0.05 ∧
+      RoundsTo (table55 false true true) 29.8 0.05 ∧
+      RoundsTo (table55 false true false) 82.3 0.05 ∧
+      RoundsTo (table55 true false true) 430.4 0.05 ∧
+      RoundsTo (table55 true false false) 6.2 0.05 ∧
+      RoundsTo (table55 false false true) 96.6 0.05 ∧
+      RoundsTo (table55 false false false) 86.8 0.05 := by
+  simp only [table55, projTable, projColumn, hivPrev, RoundsTo, splitCases, ite_true,
+    Bool.false_eq_true, ite_false]
+  norm_num
+
+/-- **The risk ratio row of Table 5.5** (page 118): the projected stratum risk ratios of both
+strata round to the printed `0.49` (exactly, both equal the SMR `0.48506`). -/
+theorem table_5_5_stratum_rr :
+    RoundsTo (projRisk 105 85 632 178 (63 / 100) (63 / 100) hivPrev true true /
+        projRisk 105 85 632 178 (63 / 100) (63 / 100) hivPrev false true) 0.49 0.005 ∧
+      RoundsTo (projRisk 105 85 632 178 (63 / 100) (63 / 100) hivPrev true false /
+        projRisk 105 85 632 178 (63 / 100) (63 / 100) hivPrev false false) 0.49 0.005 := by
+  have h := projRisk_eq (a := 105) (b := 85) (nE := 632) (nU := 178) (rr₁ := 63 / 100)
+    (rr₀ := 63 / 100) (by norm_num) (by norm_num) (by norm_num) (by norm_num) hivPrev_mem
+  rw [h.1, h.2.1, h.2.2.1, h.2.2.2]
+  simp only [hivPrev, ite_true, Bool.false_eq_true, ite_false, mixFactor, RoundsTo]
+  norm_num
 
 /-- Table 5.5: the SMR of the projected table is `0.485` (printed `0.49`), exactly the closed
 form of Equation 5.1 evaluated at the unrounded crude risk ratio `(105/632)/(85/178)`. -/
@@ -905,52 +1360,66 @@ theorem table_5_5_smr :
       0.485 < smr (projRisk 105 85 632 178 (63 / 100) (63 / 100) hivPrev) hivPrev ∧
       smr (projRisk 105 85 632 178 (63 / 100) (63 / 100) hivPrev) hivPrev < 0.4851 := by
   rw [smr_projRisk (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-    (by norm_num) hivPrev_mem]
+    hivPrev_mem]
   simp only [hivPrev, ite_true, Bool.false_eq_true, ite_false, mixFactor]
   norm_num
 
 /-- Equation 5.1 with the rounded crude risk ratio `0.35`: `RR_adj = 0.488`, printed `0.49`. -/
 theorem eq_5_1_example :
-    0.48 < 0.35 * (mixFactor 0.63 0.05 / mixFactor 0.63 0.8) ∧
-      0.35 * (mixFactor 0.63 0.05 / mixFactor 0.63 0.8) < 0.49 := by
-  unfold mixFactor; norm_num
+    RoundsTo (0.35 * (mixFactor 0.63 0.05 / mixFactor 0.63 0.8)) 0.49 0.005 := by
+  unfold mixFactor RoundsTo; norm_num
 
 /-- With `RR_CD = 0.8` instead of `0.63` the SMR is `0.410` (printed `0.41`). -/
 theorem eq_5_1_example_rr08 :
     0.41 < smr (projRisk 105 85 632 178 (4 / 5) (4 / 5) hivPrev) hivPrev ∧
       smr (projRisk 105 85 632 178 (4 / 5) (4 / 5) hivPrev) hivPrev < 0.4101 := by
   rw [smr_projRisk (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-    (by norm_num) hivPrev_mem]
+    hivPrev_mem]
   simp only [hivPrev, ite_true, Bool.false_eq_true, ite_false, mixFactor]
   norm_num
 
-/-- Table 5.6 and Equations 5.6 to 5.8 (effect measure modification, `RR_CD|E=1 = 0.4`,
-`RR_CD|E=0 = 0.7`): the SMR is `0.451` (printed `0.45`); the stratum risk ratios are `0.377`
-among Muslims and `0.659` among others (printed `0.38` and `0.66`). -/
+/-- Table 5.6 and Equations 5.6 to 5.8 (page 124; effect measure modification,
+`RR_CD|E=1 = 0.4`, `RR_CD|E=0 = 0.7`): the SMR is `0.451` (printed `0.45`); the stratum risk
+ratios are `0.377` among Muslims and `0.659` among others (printed `0.38` and `0.66`). -/
 theorem table_5_6 :
-    (0.45 < smr (projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev) hivPrev ∧
-      smr (projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev) hivPrev < 0.452) ∧
-    (0.37 < projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev true true /
-        projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev false true ∧
-      projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev true true /
-        projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev false true < 0.38) ∧
-    (0.65 < projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev true false /
-        projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev false false ∧
-      projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev true false /
-        projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev false false < 0.66) := by
+    RoundsTo (smr (projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev) hivPrev) 0.45 0.005 ∧
+    RoundsTo (projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev true true /
+        projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev false true) 0.38 0.005 ∧
+    RoundsTo (projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev true false /
+        projRisk 105 85 632 178 (2 / 5) (7 / 10) hivPrev false false) 0.66 0.005 := by
   have h := projRisk_eq (a := 105) (b := 85) (nE := 632) (nU := 178) (rr₁ := 2 / 5)
     (rr₀ := 7 / 10) (by norm_num) (by norm_num) (by norm_num) (by norm_num) hivPrev_mem
   rw [smr_projRisk (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-    (by norm_num) hivPrev_mem, h.1, h.2.1, h.2.2.1, h.2.2.2]
-  simp only [hivPrev, ite_true, Bool.false_eq_true, ite_false, mixFactor]
+    hivPrev_mem, h.1, h.2.1, h.2.2.1, h.2.2.2]
+  simp only [hivPrev, ite_true, Bool.false_eq_true, ite_false, mixFactor, RoundsTo]
+  norm_num
+
+/-- The projected stratified table of Table 5.6 (page 124): `RR_CD|E=1 = 0.4` and
+`RR_CD|E=0 = 0.7`, indexed by confounder, disease and exposure. -/
+noncomputable def table56 : Bool → Bool → Bool → ℝ :=
+  projTable 105 85 632 178 (2 / 5) (7 / 10) hivPrev
+
+/-- **All eight cells of Table 5.6** (page 124) round to the printed values: cases `64.6`,
+`3.0` (stratum `C₁`, exposed and unexposed) and `40.4`, `82.0` (stratum `C₀`); noncases
+`441.0`, `5.9` and `86.0`, `87.1`. Exact values: `64.6154`, `3.0203`, `40.3846`, `81.9797`,
+`440.9846`, `5.8797`, `86.0154`, `87.1203`. -/
+theorem table_5_6_cells :
+    RoundsTo (table56 true true true) 64.6 0.05 ∧ RoundsTo (table56 true true false) 3.0 0.05 ∧
+      RoundsTo (table56 false true true) 40.4 0.05 ∧
+      RoundsTo (table56 false true false) 82.0 0.05 ∧
+      RoundsTo (table56 true false true) 441.0 0.05 ∧
+      RoundsTo (table56 true false false) 5.9 0.05 ∧
+      RoundsTo (table56 false false true) 86.0 0.05 ∧
+      RoundsTo (table56 false false false) 87.1 0.05 := by
+  simp only [table56, projTable, projColumn, hivPrev, RoundsTo, splitCases, ite_true,
+    Bool.false_eq_true, ite_false]
   norm_num
 
 /-- Equation 5.8 with the rounded crude risk ratio: `0.35 (0.7 · 0.05 + 0.95) / (0.7 · 0.8 + 0.2)`
 is `0.454`, printed `0.45`. -/
 theorem eq_5_8_example :
-    0.45 < 0.35 * (mixFactor 0.7 0.05 / mixFactor 0.7 0.8) ∧
-      0.35 * (mixFactor 0.7 0.05 / mixFactor 0.7 0.8) < 0.46 := by
-  unfold mixFactor; norm_num
+    RoundsTo (0.35 * (mixFactor 0.7 0.05 / mixFactor 0.7 0.8)) 0.45 0.005 := by
+  unfold mixFactor RoundsTo; norm_num
 
 /-- The polytomous example ("Polytomous Confounders"): Muslim, Christian and other with risk
 ratios `0.4`, `0.8`, `1` and prevalences `0.6, 0.2, 0.2` (circumcised) and `0.05, 0.2, 0.75`
@@ -986,15 +1455,16 @@ theorem table_5_8_row_1 : 0.66 * (mixFactor 3 0.5 / mixFactor 3 0.1) = (1.1 : �
   unfold mixFactor; norm_num
 
 /-- The E-value of `RR_obs = 2` is `2 + sqrt 2 ≈ 3.41` (Equation 5.13). -/
-theorem eValue_two : 3.41 < eValue 2 ∧ eValue 2 < 3.42 := by
-  unfold eValue
+theorem eValue_two : RoundsTo (eValue 2) 3.41 0.005 := by
+  unfold RoundsTo
+  rw [eValue_of_one_le (by norm_num)]
   have h : (2 : ℝ) * (2 - 1) = 2 := by norm_num
   rw [h]
   constructor
   · have : (1.41 : ℝ) < Real.sqrt 2 := by
       rw [Real.lt_sqrt (by norm_num)]; norm_num
     linarith
-  · have : Real.sqrt 2 < 1.42 := by
+  · have : Real.sqrt 2 < 1.415 := by
       rw [Real.sqrt_lt' (by norm_num)]; norm_num
     linarith
 
@@ -1016,26 +1486,48 @@ theorem gValue_examples :
   · rw [lt_div_iff₀ (by norm_num)]; linarith
   · rw [div_lt_iff₀ (by norm_num)]; linarith
 
-/-- The text after Equation 5.12: a factor with `RR_EC = 6` and `RR_CD = 4` could explain
-`RR_obs = 2` if `p₁ = 1` (bias factor `24/9 ≈ 2.67`), but not if `p₁ = 0.25` (bias factor
-`14/9 ≈ 1.56`). -/
+/-- The E-value of a protective estimate: `eValue (1 / 2) = 2 + sqrt 2`, the E-value of
+`RR = 2` (the protective case of VanderWeele and Ding 2017). -/
+theorem eValue_half : eValue (1 / 2) = 2 + Real.sqrt 2 := by
+  rw [eValue_of_le_one (by norm_num) (by norm_num)]
+  norm_num
+
+/-- The text after Equation 5.12 (page 133): a factor with `RR_EC = 6` and `RR_CD = 4` is not
+ruled out by the isopleth `p₁ = 1`, but cannot explain `RR_obs = 2` if `p₁ = 0.25`. Along
+`p₀ = p₁ / 6` the bias factor is `8/3` at `p₁ = 1`, so it exceeds the observed `2` and the
+adjusted risk ratio would be `2 / (8/3) = 3/4`, beyond the null; at `p₁ = 1/4` it is
+`14/9 < 2`. -/
 theorem winkelstein_example :
-    2 ≤ biasFactor 4 1 (1 / 6) ∧ biasFactor 4 (1 / 4) (1 / 4 / 6) < 2 := by
+    biasFactor 4 1 (1 / 6) = 8 / 3 ∧ 2 / biasFactor 4 1 (1 / 6) = 3 / 4 ∧
+      biasFactor 4 (1 / 4) (1 / 4 / 6) = 14 / 9 := by
   unfold biasFactor mixFactor; norm_num
+
+/-- An exact explain away instance with the strengths of `winkelstein_example` (not printed in
+the book; it is where the `p₁ = 0.5` isopleth of Figure 5.7 passes through `RR_EC = 6`): at
+`p₁ = 1/2`, `p₀ = 1/12` the bias factor is exactly `2`, so `RR_adj = 1`, and `rr = 4` is the
+solution of Equation 5.11. -/
+theorem winkelstein_exact :
+    biasFactor 4 (1 / 2) (1 / 2 / 6) = 2 ∧
+      (6 - 6 * (1 / 2) - 6 * 2 + 2 * (1 / 2)) / (1 / 2 * (2 - 6)) = (4 : ℝ) := by
+  unfold biasFactor mixFactor; norm_num
+
+/-- An inadmissible solution of Equation 5.12: for `RR_obs = 2` and `RR_EC = 1.5 < RR_obs`, the
+required confounder to disease risk ratio is `(2 - 1.5 · 2) / (2 - 1.5) = -2`
+(`explainAway_sol_nonpos`). -/
+theorem explainAway_inadmissible : ((2 : ℝ) - 3 / 2 * 2) / (2 - 3 / 2) = -2 := by norm_num
 
 /-- Table 12.5 (Chapter 12): projecting the misclassification and selection adjusted table of
 Table 12.4 (cases `262.6`, `928.1`; controls `220.7`, `1128.7`) onto physical activity with
 `OR_CD = 0.8` and control prevalences `0.299` (ever users) and `0.436` (never users) gives the
-case cells `66.8` and `354.6` and the common stratum odds ratio `1.40`. -/
+case cells `66.8` and `354.6` and the common stratum odds ratio `1.40` (exactly `1.40486`). -/
 theorem table_12_5 :
     (66.8 < splitCases 0.8 (220.7 * 0.299) 220.7 262.6 ∧
       splitCases 0.8 (220.7 * 0.299) 220.7 262.6 < 66.85) ∧
     (354.6 < splitCases 0.8 (1128.7 * 0.436) 1128.7 928.1 ∧
       splitCases 0.8 (1128.7 * 0.436) 1128.7 928.1 < 354.65) ∧
-    (1.40 < (262.6 / 220.7) / (928.1 / 1128.7) * (mixFactor 0.8 0.436 / mixFactor 0.8 0.299) ∧
-      (262.6 / 220.7) / (928.1 / 1128.7) * (mixFactor 0.8 0.436 / mixFactor 0.8 0.299) <
-        (1.41 : ℝ)) := by
-  unfold splitCases mixFactor; norm_num
+    RoundsTo ((262.6 / 220.7) / (928.1 / 1128.7) * (mixFactor 0.8 0.436 / mixFactor 0.8 0.299))
+      1.40 0.005 := by
+  unfold splitCases mixFactor RoundsTo; norm_num
 
 end Examples
 
