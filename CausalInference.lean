@@ -172,3 +172,4 @@ public import CausalInference.StructuralNested.RPSFTMExtensions
 public import CausalInference.StructuralNested.GTests
 public import CausalInference.StructuralNested.GTestsExamples
 public import CausalInference.BiasAnalysis.DistributionsExamples
+public import CausalInference.Bias.HazardMixtureGeneral

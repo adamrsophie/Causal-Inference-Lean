@@ -58,7 +58,8 @@ population cumulative hazard is `H = -log S` (`mixCumHazard`, with `H' = h`).
 
 All results are about population quantities. The NICE DSU text speaks of estimates from
 pooled data; the formal results here say what those estimates target, not how they are
-computed. Only finite mixtures are treated; a general frailty distribution is not.
+computed. Only finite mixtures are treated here; a general law of the rates is treated in
+`CausalInference.Bias.HazardMixtureGeneral`.
 
 ## Sources
 
