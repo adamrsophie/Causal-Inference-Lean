@@ -35,7 +35,7 @@ Project site with a dependency map, highlights, and a full reference:
 | `CausalInference/Survival` | Discrete-time survival, hazards and the product formula, independent censoring and the product-limit functional under equality of hazards among the uncensored, with non-identification counterexamples without independence and without support, hazard ratios against survival, the Kaplan-Meier estimator as the product limit of the empirical law |
 | `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting and its augmented form, regression identities, identification of the mean from the observed law under missingness at random, non-identification counterexamples without it and without positivity |
 | `CausalInference/Sensitivity` | Rosenbaum bounds for sign and signed-rank statistics, bias formulas for unmeasured confounding, the bounding factor and the E-value |
-| `CausalInference/Estimation` | Independent samples, consistency with continuous mapping, asymptotic linearity and its closure properties, asymptotic normality, the delta method, Wald interval coverage with an estimated scale |
+| `CausalInference/Estimation` | Independent samples, consistency with continuous mapping, asymptotic linearity and its closure properties, asymptotic normality, the delta method, Wald interval coverage with an estimated scale, consistency of the sample covariance ratio and the sample Wald ratio for instrumental variables under a nonzero first stage |
 
 ## Principles
 
