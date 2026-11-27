@@ -95,3 +95,8 @@ public import CausalInference.SCM.Effects
 public import CausalInference.SCM.Intervention
 public import CausalInference.SCM.Markov
 public import CausalInference.MissingData.Identification
+public import CausalInference.LinearSEM.Basic
+public import CausalInference.LinearSEM.Counterexamples
+public import CausalInference.LinearSEM.PathCoefficients
+public import CausalInference.LinearSEM.Regression
+public import CausalInference.LinearSEM.SingleDoor
