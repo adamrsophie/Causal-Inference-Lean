@@ -100,3 +100,10 @@ public import CausalInference.LinearSEM.Counterexamples
 public import CausalInference.LinearSEM.PathCoefficients
 public import CausalInference.LinearSEM.Regression
 public import CausalInference.LinearSEM.SingleDoor
+public import CausalInference.Graphical.Criteria.BackDoor
+public import CausalInference.Graphical.Criteria.CommonAncestor
+public import CausalInference.Graphical.Criteria.FrontDoor
+public import CausalInference.Graphical.Criteria.Instrument
+public import CausalInference.Graphical.Criteria.MarkovBlanket
+public import CausalInference.Graphical.Criteria.Moralization
+public import CausalInference.Graphical.Criteria.SequentialBackDoor
