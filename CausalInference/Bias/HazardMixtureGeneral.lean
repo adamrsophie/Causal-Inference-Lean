@@ -8,6 +8,7 @@ module
 public import CausalInference.Bias.HazardMixture
 public import Mathlib.Probability.Moments.Tilted
 public import Mathlib.Probability.Moments.MGFAnalytic
+public import Mathlib.Probability.Distributions.Gamma
 
 /-!
 # Hazards of general mixtures of exponential laws
@@ -46,6 +47,37 @@ distributed according to a probability law `ν` on `ℝ` with `ν`-almost every 
 * `genCumHazard_attenuation`: multiplying every rate by `ψ > 1` gives, at every `t > 0`,
   `0 < H₀(t) < H₁(t) < ψ H₀(t)` when the rate is not almost surely constant; `H₁(t) = H₀(ψ t)`
   is `genSurvival_map_mul`.
+* `genCumHazard_attenuation_of_lt_one`: the protective mirror; for `0 < ψ < 1`,
+  `ψ H₀(t) < H₁(t) < H₀(t)`.
+* `genHazard_map_mul` (`h₁(t) = ψ h₀(ψ t)`), `genHazard_map_lt` (`h₁(t) < ψ h₀(t)` for
+  `ψ > 1`) and `lt_genHazard_map` (`ψ h₀(t) < h₁(t)` for `0 < ψ < 1`): on the hazard scale the
+  bound toward the null always holds. The bound on the other side need not:
+  `twoPoint_hazards_cross` gives equal weights on the rates `1/1000` and `1` with `ψ = 2`, and
+  `h₁(5) < h₀(5)`, so the marginal hazards cross although treatment doubles every rate.
+
+## Gamma frailty
+
+For `ν = gammaMeasure a ρ` (shape `a > 0`, rate `ρ > 0`) and `t ≥ 0`:
+
+* `integral_exp_neg_gammaMeasure`, `genSurvival_gamma`: `S(t) = (ρ / (ρ + t)) ^ a`, the
+  Laplace transform of the gamma law.
+* `genCumHazard_gamma`: `H(t) = a log (1 + t / ρ)`; `genHazard_gamma`: `h(t) = a / (ρ + t)`,
+  including `h(0) = a / ρ`, the mean rate.
+* `survivorLaw_gamma`: the survivors at `t` follow `gammaMeasure a (ρ + t)`;
+  `variance_survivorLaw_gamma`: their variance is `a / (ρ + t) ^ 2`, obtained from
+  `hasDerivAt_genHazard` and the closed form of `h`.
+* `gamma_hazardRatio`: under a proportional effect `ψ > 0` on every rate the marginal hazard
+  ratio is `ψ (ρ + t) / (ρ + ψ t)`. It equals `ψ` at `t = 0` (`gammaRatio_zero`), is strictly
+  decreasing and above `1` for `ψ > 1` (`gammaRatio_strictAntiOn_and_one_lt`), strictly
+  increasing and below `1` for `ψ < 1` (`gammaRatio_strictMonoOn_and_lt_one`), and tends to `1`
+  (`tendsto_gamma_hazardRatio`). Under gamma frailty the hazards therefore never cross, in
+  contrast with `twoPoint_hazards_cross`.
+
+The frailty section of `CausalInference.Survival.HazardRatio` (`frailtyHazard2`) is a discrete
+two-period model with finitely many frailty strata, whose hazard ratio is a ratio of period
+risks; it has no gamma frailty, so no identity links it to the results here. Both show the same
+mechanism: selection of the survivors moves the marginal hazard ratio from the individual
+ratio `ψ` toward `1`.
 
 ## Source
 
@@ -463,6 +495,267 @@ theorem genCumHazard_attenuation [IsProbabilityMeasure ν] (hν : ∀ᵐ r ∂ν
   have : 0 < g t := by rw [← hslope]; positivity
   simp only [hg] at this
   linarith
+
+/-! ### The gamma frailty law -/
+
+section Gamma
+
+variable {a ρ : ℝ}
+
+/-- The gamma density is measurable. -/
+theorem measurable_gammaPDF' (a ρ : ℝ) : Measurable (gammaPDF a ρ) :=
+  (measurable_gammaPDFReal a ρ).ennreal_ofReal
+
+/-- Integrals against `gammaMeasure a ρ` are integrals over `(0, ∞)` against the gamma density
+`ρ ^ a / Γ(a) x ^ (a - 1) exp (-(ρ x))`. -/
+theorem integral_gammaMeasure (ha : 0 < a) (hρ : 0 < ρ) (f : ℝ → ℝ) :
+    ∫ x, f x ∂(gammaMeasure a ρ) =
+      ∫ x in Ioi 0, ρ ^ a / Real.Gamma a * x ^ (a - 1) * Real.exp (-(ρ * x)) * f x := by
+  rw [gammaMeasure, integral_withDensity_eq_integral_toReal_smul (measurable_gammaPDF' a ρ)
+    (ae_of_all _ fun _ => ENNReal.ofReal_lt_top)]
+  simp_rw [gammaPDF, ENNReal.toReal_ofReal (gammaPDFReal_nonneg ha hρ _), smul_eq_mul]
+  rw [← setIntegral_eq_integral_of_forall_compl_eq_zero (s := Ici 0) fun x hx => by
+      simp [gammaPDFReal, show ¬ 0 ≤ x from hx], integral_Ici_eq_integral_Ioi]
+  refine setIntegral_congr_fun measurableSet_Ioi fun x (hx : 0 < x) => ?_
+  simp [gammaPDFReal, hx.le]
+
+/-- Gamma-distributed rates are almost surely nonnegative. -/
+theorem ae_nonneg_gammaMeasure : ∀ᵐ x ∂(gammaMeasure a ρ), 0 ≤ x := by
+  rw [gammaMeasure, ae_withDensity_iff (measurable_gammaPDF' a ρ)]
+  refine ae_of_all _ fun x hx => ?_
+  by_contra h
+  exact hx (gammaPDF_of_neg (not_le.1 h))
+
+/-- `ρ ^ a (1 / (ρ + t)) ^ a = (ρ / (ρ + t)) ^ a`. -/
+theorem rpow_mul_one_div_rpow (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    ρ ^ a * (1 / (ρ + t)) ^ a = (ρ / (ρ + t)) ^ a := by
+  rw [← Real.mul_rpow hρ.le (by positivity), mul_one_div]
+
+/-- **The Laplace transform of the gamma law**: for `t ≥ 0`,
+`∫ exp (-(x t)) d(gammaMeasure a ρ) = (ρ / (ρ + t)) ^ a`. -/
+theorem integral_exp_neg_gammaMeasure (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    ∫ x, Real.exp (-(x * t)) ∂(gammaMeasure a ρ) = (ρ / (ρ + t)) ^ a := by
+  have hρt : 0 < ρ + t := by linarith
+  rw [integral_gammaMeasure ha hρ]
+  have e : ∀ x ∈ Ioi (0 : ℝ), ρ ^ a / Real.Gamma a * x ^ (a - 1) * Real.exp (-(ρ * x)) *
+      Real.exp (-(x * t)) =
+      ρ ^ a / Real.Gamma a * (x ^ (a - 1) * Real.exp (-((ρ + t) * x))) := fun x _ => by
+    rw [show -((ρ + t) * x) = -(ρ * x) + -(x * t) by ring, Real.exp_add]
+    ring
+  rw [setIntegral_congr_fun measurableSet_Ioi e, integral_const_mul,
+    Real.integral_rpow_mul_exp_neg_mul_Ioi ha hρt, ← rpow_mul_one_div_rpow hρ ht]
+  have := (Real.Gamma_pos_of_pos ha).ne'
+  field_simp
+
+/-- **The first moment form**: for `t ≥ 0`,
+`∫ x exp (-(x t)) d(gammaMeasure a ρ) = a / (ρ + t) * (ρ / (ρ + t)) ^ a`. -/
+theorem integral_mul_exp_neg_gammaMeasure (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    ∫ x, x * Real.exp (-(x * t)) ∂(gammaMeasure a ρ) = a / (ρ + t) * (ρ / (ρ + t)) ^ a := by
+  have hρt : 0 < ρ + t := by linarith
+  rw [integral_gammaMeasure ha hρ]
+  have e : ∀ x ∈ Ioi (0 : ℝ), ρ ^ a / Real.Gamma a * x ^ (a - 1) * Real.exp (-(ρ * x)) *
+      (x * Real.exp (-(x * t))) =
+      ρ ^ a / Real.Gamma a * (x ^ (a + 1 - 1) * Real.exp (-((ρ + t) * x))) := fun x hx => by
+    have hx0 : (x : ℝ) ≠ 0 := (show 0 < x from hx).ne'
+    rw [show -((ρ + t) * x) = -(ρ * x) + -(x * t) by ring, Real.exp_add,
+      show a + 1 - 1 = a by ring, Real.rpow_sub_one hx0]
+    field_simp
+  rw [setIntegral_congr_fun measurableSet_Ioi e, integral_const_mul,
+    Real.integral_rpow_mul_exp_neg_mul_Ioi (by linarith) hρt, Real.Gamma_add_one ha.ne',
+    Real.rpow_add_one (by positivity), ← rpow_mul_one_div_rpow hρ ht]
+  have := (Real.Gamma_pos_of_pos ha).ne'
+  generalize (1 / (ρ + t)) ^ a = X
+  field_simp
+
+/-- **Gamma frailty: the survival** `S(t) = (ρ / (ρ + t)) ^ a` for `t ≥ 0`. -/
+theorem genSurvival_gamma (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    genSurvival (gammaMeasure a ρ) t = (ρ / (ρ + t)) ^ a :=
+  integral_exp_neg_gammaMeasure ha hρ ht
+
+/-- **Gamma frailty: the cumulative hazard** `H(t) = a log (1 + t / ρ)` for `t ≥ 0`. -/
+theorem genCumHazard_gamma (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    genCumHazard (gammaMeasure a ρ) t = a * Real.log (1 + t / ρ) := by
+  have hρt : 0 < ρ + t := by linarith
+  rw [genCumHazard, genSurvival_gamma ha hρ ht, Real.log_rpow (by positivity),
+    show 1 + t / ρ = (ρ / (ρ + t))⁻¹ by field_simp, Real.log_inv]
+  ring
+
+/-- **Gamma frailty: the hazard** `h(t) = a / (ρ + t)` for `t ≥ 0`; at `t = 0` it is the mean
+rate `a / ρ`. -/
+theorem genHazard_gamma (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    genHazard (gammaMeasure a ρ) t = a / (ρ + t) := by
+  have hρt : 0 < ρ + t := by linarith
+  rw [genHazard_eq_div, integral_mul_exp_neg_gammaMeasure ha hρ ht, genSurvival_gamma ha hρ ht,
+    mul_div_assoc, div_self (by positivity), mul_one]
+
+/-- **Gamma frailty: the survivors are again gamma distributed**, with the same shape and rate
+`ρ + t`: `survivorLaw (gammaMeasure a ρ) t = gammaMeasure a (ρ + t)` for `t ≥ 0`. -/
+theorem survivorLaw_gamma (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 ≤ t) :
+    survivorLaw (gammaMeasure a ρ) t = gammaMeasure a (ρ + t) := by
+  have hρt : 0 < ρ + t := by linarith
+  have hg : Measurable fun x : ℝ =>
+      ENNReal.ofReal (Real.exp (-(x * t)) / (ρ / (ρ + t)) ^ a) :=
+    ((Real.continuous_exp.comp (by fun_prop)).div_const _).measurable.ennreal_ofReal
+  rw [survivorLaw_eq_withDensity, genSurvival_gamma ha hρ ht, gammaMeasure, gammaMeasure,
+    ← withDensity_mul _ (measurable_gammaPDF' a ρ) hg]
+  congr 1
+  funext x
+  simp only [Pi.mul_apply]
+  by_cases hx : 0 ≤ x
+  · rw [gammaPDF_of_nonneg hx, gammaPDF_of_nonneg hx, ← ENNReal.ofReal_mul (by positivity)]
+    congr 1
+    rw [Real.div_rpow hρ.le hρt.le, show -((ρ + t) * x) = -(ρ * x) + -(x * t) by ring,
+      Real.exp_add]
+    have := (Real.Gamma_pos_of_pos ha).ne'
+    have : ρ ^ a ≠ 0 := (Real.rpow_pos_of_pos hρ a).ne'
+    have : (ρ + t) ^ a ≠ 0 := (Real.rpow_pos_of_pos hρt a).ne'
+    field_simp
+  · rw [gammaPDF_of_neg (not_le.1 hx), gammaPDF_of_neg (not_le.1 hx), zero_mul]
+
+/-- **Gamma frailty: the variance among survivors** is `a / (ρ + t) ^ 2` at `t > 0`, the
+variance of `gammaMeasure a (ρ + t)`; it is the value that `hasDerivAt_genHazard` gives from
+`h(t) = a / (ρ + t)`. -/
+theorem variance_survivorLaw_gamma (ha : 0 < a) (hρ : 0 < ρ) {t : ℝ} (ht : 0 < t) :
+    Var[fun x => x; survivorLaw (gammaMeasure a ρ) t] = a / (ρ + t) ^ 2 := by
+  have := isProbabilityMeasure_gammaMeasure ha hρ
+  have hρt : 0 < ρ + t := by linarith
+  have h1 := hasDerivAt_genHazard (ae_nonneg_gammaMeasure (a := a) (ρ := ρ)) ht
+  have h2 : HasDerivAt (fun s => a / (ρ + s)) (-(a / (ρ + t) ^ 2)) t := by
+    have := (hasDerivAt_const t a).div ((hasDerivAt_id t).const_add ρ) hρt.ne'
+    convert this using 1
+    · rfl
+    · simp only [id]
+      ring
+  have h3 : genHazard (gammaMeasure a ρ) =ᶠ[𝓝 t] fun s => a / (ρ + s) := by
+    filter_upwards [lt_mem_nhds ht] with s hs
+    exact genHazard_gamma ha hρ hs.le
+  have := (h1.congr_of_eventuallyEq h3.symm).unique h2
+  linarith
+
+/-- Under a proportional effect `ψ` on every rate the hazard is `h₁(t) = ψ h₀(ψ t)`. -/
+theorem genHazard_map_mul (ν : Measure ℝ) (ψ t : ℝ) :
+    genHazard (ν.map (fun r => ψ * r)) t = ψ * genHazard ν (ψ * t) := by
+  rw [genHazard_eq_div, genHazard_eq_div, genSurvival_map_mul,
+    integral_map (by fun_prop) (Continuous.aestronglyMeasurable (by fun_prop)), mul_div_assoc',
+    ← integral_const_mul]
+  congr 1
+  refine integral_congr_ae (ae_of_all _ fun r => ?_)
+  simp only
+  ring_nf
+
+/-- **Gamma frailty: the marginal hazard ratio** under a proportional effect `ψ > 0` on every
+individual rate: `h₁(t) / h₀(t) = ψ (ρ + t) / (ρ + ψ t)` for `t ≥ 0`. -/
+theorem gamma_hazardRatio (ha : 0 < a) (hρ : 0 < ρ) {ψ : ℝ} (hψ : 0 < ψ) {t : ℝ} (ht : 0 ≤ t) :
+    genHazard ((gammaMeasure a ρ).map (fun r => ψ * r)) t / genHazard (gammaMeasure a ρ) t =
+      ψ * (ρ + t) / (ρ + ψ * t) := by
+  have h1 : 0 < ρ + t := by linarith
+  have h2 : 0 < ρ + ψ * t := by nlinarith
+  rw [genHazard_map_mul, genHazard_gamma ha hρ (by positivity), genHazard_gamma ha hρ ht]
+  field_simp
+
+/-- The closed-form ratio `ψ (ρ + t) / (ρ + ψ t)` equals `ψ` at `t = 0`. -/
+theorem gammaRatio_zero (hρ : 0 < ρ) (ψ : ℝ) : ψ * (ρ + 0) / (ρ + ψ * 0) = ψ := by
+  rw [add_zero, mul_zero, add_zero, mul_div_assoc, div_self hρ.ne', mul_one]
+
+/-- For `ψ > 1` the ratio `ψ (ρ + t) / (ρ + ψ t)` is strictly decreasing on `[0, ∞)` and stays
+above `1`: the marginal hazards never cross. -/
+theorem gammaRatio_strictAntiOn_and_one_lt (hρ : 0 < ρ) {ψ : ℝ} (hψ : 1 < ψ) :
+    StrictAntiOn (fun t => ψ * (ρ + t) / (ρ + ψ * t)) (Ici 0) ∧
+      ∀ t, 0 ≤ t → 1 < ψ * (ρ + t) / (ρ + ψ * t) := by
+  refine ⟨fun s (hs : 0 ≤ s) t (ht : 0 ≤ t) hst => ?_, fun t ht => ?_⟩
+  · have : 0 < ρ + ψ * s := by nlinarith
+    have : 0 < ρ + ψ * t := by nlinarith
+    simp only
+    rw [div_lt_div_iff₀ (by positivity) (by positivity)]
+    nlinarith [mul_pos hρ (sub_pos.2 hψ), mul_pos (mul_pos hρ (sub_pos.2 hψ)) (sub_pos.2 hst)]
+  · have : 0 < ρ + ψ * t := by nlinarith
+    rw [one_lt_div this]
+    nlinarith
+
+/-- For `0 < ψ < 1` the ratio `ψ (ρ + t) / (ρ + ψ t)` is strictly increasing on `[0, ∞)` and
+stays below `1`. -/
+theorem gammaRatio_strictMonoOn_and_lt_one (hρ : 0 < ρ) {ψ : ℝ} (hψ0 : 0 < ψ) (hψ1 : ψ < 1) :
+    StrictMonoOn (fun t => ψ * (ρ + t) / (ρ + ψ * t)) (Ici 0) ∧
+      ∀ t, 0 ≤ t → ψ * (ρ + t) / (ρ + ψ * t) < 1 := by
+  refine ⟨fun s (hs : 0 ≤ s) t (ht : 0 ≤ t) hst => ?_, fun t ht => ?_⟩
+  · have : 0 < ρ + ψ * s := by nlinarith
+    have : 0 < ρ + ψ * t := by nlinarith
+    simp only
+    rw [div_lt_div_iff₀ (by positivity) (by positivity)]
+    nlinarith [mul_pos (mul_pos hρ (sub_pos.2 hψ1)) (sub_pos.2 hst)]
+  · have : 0 < ρ + ψ * t := by nlinarith
+    rw [div_lt_one this]
+    nlinarith
+
+/-- **Gamma frailty: the marginal hazard ratio tends to `1`** as `t → ∞`, for every `ψ > 0`. -/
+theorem tendsto_gamma_hazardRatio (ha : 0 < a) (hρ : 0 < ρ) {ψ : ℝ} (hψ : 0 < ψ) :
+    Tendsto (fun t => genHazard ((gammaMeasure a ρ).map (fun r => ψ * r)) t /
+      genHazard (gammaMeasure a ρ) t) atTop (𝓝 1) := by
+  have hlim : Tendsto (fun t : ℝ => 1 + ρ * (ψ - 1) / (ρ + ψ * t)) atTop (𝓝 (1 + 0)) :=
+    tendsto_const_nhds.add (tendsto_const_nhds.div_atTop
+      (tendsto_atTop_add_const_left _ ρ (tendsto_id.const_mul_atTop hψ)))
+  rw [add_zero] at hlim
+  refine hlim.congr' ?_
+  filter_upwards [eventually_ge_atTop 0] with t ht
+  rw [gamma_hazardRatio ha hρ hψ ht]
+  have : 0 < ρ + ψ * t := by nlinarith
+  field_simp
+  ring
+
+end Gamma
+
+/-! ### The protective mirror and the hazard scale -/
+
+/-- **The protective mirror of `genCumHazard_attenuation`**: for `0 < ψ < 1`, a rate that is not
+almost surely constant and `t > 0`, `0 < H₁(t)`, `ψ H₀(t) < H₁(t)` and `H₁(t) < H₀(t)`: the
+marginal cumulative hazard ratio lies strictly between `ψ` and `1`. -/
+theorem genCumHazard_attenuation_of_lt_one [IsProbabilityMeasure ν] (hν : ∀ᵐ r ∂ν, 0 ≤ r)
+    (hnc : ¬ ∃ c, ∀ᵐ r ∂ν, r = c) {ψ : ℝ} (hψ0 : 0 < ψ) (hψ1 : ψ < 1) (ht : 0 < t) :
+    0 < genCumHazard (ν.map (fun r => ψ * r)) t ∧
+      ψ * genCumHazard ν t < genCumHazard (ν.map (fun r => ψ * r)) t ∧
+      genCumHazard (ν.map (fun r => ψ * r)) t < genCumHazard ν t := by
+  obtain ⟨h0, h1, h2⟩ := genCumHazard_attenuation hν hnc (one_lt_inv₀ hψ0 |>.2 hψ1)
+    (mul_pos hψ0 ht)
+  rw [genCumHazard_map_mul, ← mul_assoc, inv_mul_cancel₀ hψ0.ne', one_mul] at h1 h2
+  rw [genCumHazard_map_mul]
+  refine ⟨h0, ?_, h1⟩
+  have := mul_lt_mul_of_pos_left h2 hψ0
+  rwa [← mul_assoc, mul_inv_cancel₀ hψ0.ne', one_mul] at this
+
+/-- **The hazard-scale bound** for `ψ > 1`: `h₁(t) < ψ h₀(t)` at every `t > 0`, when the rate
+is not almost surely constant. -/
+theorem genHazard_map_lt [IsProbabilityMeasure ν] (hν : ∀ᵐ r ∂ν, 0 ≤ r)
+    (hnc : ¬ ∃ c, ∀ᵐ r ∂ν, r = c) {ψ : ℝ} (hψ : 1 < ψ) (ht : 0 < t) :
+    genHazard (ν.map (fun r => ψ * r)) t < ψ * genHazard ν t := by
+  rw [genHazard_map_mul]
+  have := genHazard_strictAntiOn hν hnc (show t ∈ Ioi 0 from ht)
+    (show ψ * t ∈ Ioi 0 from mem_Ioi.2 (by nlinarith)) (by nlinarith)
+  nlinarith
+
+/-- **The hazard-scale bound** for `0 < ψ < 1`: `ψ h₀(t) < h₁(t)` at every `t > 0`, when the
+rate is not almost surely constant. -/
+theorem lt_genHazard_map [IsProbabilityMeasure ν] (hν : ∀ᵐ r ∂ν, 0 ≤ r)
+    (hnc : ¬ ∃ c, ∀ᵐ r ∂ν, r = c) {ψ : ℝ} (hψ0 : 0 < ψ) (hψ1 : ψ < 1) (ht : 0 < t) :
+    ψ * genHazard ν t < genHazard (ν.map (fun r => ψ * r)) t := by
+  rw [genHazard_map_mul]
+  have := genHazard_strictAntiOn hν hnc (show ψ * t ∈ Ioi 0 from mem_Ioi.2 (mul_pos hψ0 ht))
+    (show t ∈ Ioi 0 from ht) (by nlinarith)
+  nlinarith
+
+/-- **Crossing hazards with a two-point law.** Equal weights on the rates `1/1000` and `1`, and
+every rate doubled under treatment (`ψ = 2`): at `t = 5` the marginal hazard of the treated is
+below that of the untreated, `h₁(5) < h₀(5)`, although treatment doubles every individual rate.
+The lower bound `h₀ < h₁` of the attenuation therefore fails on the hazard scale for this law;
+under gamma frailty it holds at every time (`gammaRatio_strictAntiOn_and_one_lt`). -/
+theorem twoPoint_hazards_cross :
+    genHazard ((finMix HazardMixtureExample.exWeight HazardMixtureExample.exRate).map
+        (fun x => 2 * x)) 5 <
+      genHazard (finMix HazardMixtureExample.exWeight HazardMixtureExample.exRate) 5 := by
+  have hp := HazardMixtureExample.isWeights_exWeight.1
+  rw [genHazard_map_mul, genHazard_finMix hp, genHazard_finMix hp, ← mixHazard_mul]
+  have h := HazardMixtureExample.marginal_hazardRatio_lt_one.2.1
+  rwa [div_lt_one (mixHazard_pos HazardMixtureExample.isWeights_exWeight
+    HazardMixtureExample.exRate_pos 5)] at h
 
 end HazardMixtureGeneral
 
