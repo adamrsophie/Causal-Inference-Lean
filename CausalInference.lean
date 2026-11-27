@@ -227,3 +227,7 @@ public import CausalInference.Identification.IDAlgorithm
 public import CausalInference.Identification.IDSoundness
 public import CausalInference.Identification.IDExamples
 public import CausalInference.Identification.IDFigure38
+public import CausalInference.SCM.TwinBackDoor
+public import CausalInference.SCM.SWIG
+public import CausalInference.SCM.SWIGExamples
+public import CausalInference.SCM.SWIGTwin
