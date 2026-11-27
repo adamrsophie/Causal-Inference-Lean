@@ -7,6 +7,7 @@ module
 
 public import CausalInference.SCM.TwinNetwork
 public import CausalInference.Graphical.Criteria.Instrument
+public import CausalInference.Graphical.GlobalMarkov
 
 /-!
 # The counterfactual instrument condition from the graphical criterion
@@ -27,6 +28,10 @@ condition (i) of the graphical one, for an instrument that is not a descendant o
   `Z ⫫ Y_x | S`.
 * `SCM.condIndepFun_potentialResponse_of_isPretreatmentInstrument`: the same conclusion for a
   pretreatment instrument (`Digraph.IsPretreatmentInstrument`).
+* `SCM.IgnoredInstrument.relevance_not_graphical`: condition (ii) does not follow from the
+  graph. On `Z → X → Y`, where `Z` is a pretreatment instrument and the edge `Z → X` is
+  present, a model whose treatment equation ignores `Z` has a law that factorizes according to
+  the graph, yet `Z ⫫ X`.
 
 ## Proof
 
@@ -40,7 +45,8 @@ law into the cross-world statement.
 
 Condition (ii) of the counterfactual criterion, the dependence of `Z` and `X` given `S`, does
 not follow from d-connection: a law that factorizes according to the graph need not be faithful
-to it, so dependence in a given model is a separate hypothesis. Without the requirement that `Z`
+to it, so dependence in a given model is a separate hypothesis
+(`SCM.IgnoredInstrument.relevance_not_graphical`). Without the requirement that `Z`
 is not a descendant of `X` the conclusion can fail: see
 `CausalInference.InstrumentExamples.descendantInstrument` and the linear model
 `CausalInference.LinearSEM.DescendantInstrumentModel.counterexample`.
@@ -97,6 +103,64 @@ theorem condIndepFun_potentialResponse_of_isPretreatmentInstrument {X Z Y S : Fi
       (fun u => Y.restrict ((M.intervene X x).solve u)) (fun u => S.restrict (M.solve u)) :=
   M.condIndepFun_potentialResponse_of_dSep x (fun z hz => h.2 z hz) (fun s hs => h.1.2.1 s hs)
     h.1.2.2.1
+
+/-! ### Relevance is not graphical -/
+
+namespace IgnoredInstrument
+
+open CausalInference.Criteria
+
+/-- The graph `Z → X → Y` on `Fin 3` (`X = 0`, `Z = 1`, `Y = 2`). -/
+abbrev graph : Digraph (Fin 3) := ofEdges [(1, 0), (0, 2)]
+
+/-- The graph `X → Y` with `Z` isolated: `graph` without the edge `Z → X`. -/
+abbrev graph' : Digraph (Fin 3) := ofEdges [(0, 2)]
+
+/-- The structural functions: `Z` and `X` copy their noise bits, `Y` copies `X`. The equation of
+`X` ignores its parent `Z`. -/
+def f (H : Digraph (Fin 3)) [DecidableRel H.Adj] (h02 : H.Adj 0 2) (v : Fin 3)
+    (z : H.parentsFinset v → Bool) (e : Bool) : Bool :=
+  if hv : v = 2 then z ⟨0, Digraph.mem_parentsFinset.2 (hv ▸ h02)⟩ else e
+
+/-- The model on `graph` with fair noise bits. -/
+noncomputable def model : SCM graph (fun _ => Bool) (fun _ => Bool) where
+  acyclic := by decide +kernel
+  f := f graph (by decide)
+  noise _ := FiniteDist.uniform
+
+/-- The same structural functions on `graph'`. -/
+noncomputable def model' : SCM graph' (fun _ => Bool) (fun _ => Bool) where
+  acyclic := by decide +kernel
+  f := f graph' (by decide)
+  noise _ := FiniteDist.uniform
+
+theorem model_solve (u : Fin 3 → Bool) : model.solve u = ![u 0, u 1, u 0] := by
+  refine (model.isSolution_iff.1 fun v => ?_).symm
+  fin_cases v <;> simp [model, f]
+
+theorem model'_solve (u : Fin 3 → Bool) : model'.solve u = ![u 0, u 1, u 0] := by
+  refine (model'.isSolution_iff.1 fun v => ?_).symm
+  fin_cases v <;> simp [model', f]
+
+theorem model_dist : model.dist = model'.dist := by
+  have h : model.solve = model'.solve := funext fun u => by rw [model_solve, model'_solve]
+  unfold SCM.dist
+  rw [h]
+  rfl
+
+/-- **Relevance is not graphical.** In `graph`, `Z = 1` is a pretreatment instrument for
+`X = 0` on `Y = 2` with no covariates and the edge `Z → X` is present; the law of `model`
+factorizes according to `graph`, yet `Z` and `X` are independent, because the equation of `X`
+ignores `Z`. Condition (ii) of the counterfactual instrument criterion fails, so it cannot be
+derived from the graph. -/
+theorem relevance_not_graphical :
+    graph.IsPretreatmentInstrument {1} {0} {2} ∅ ∧ graph.Adj 1 0 ∧
+      graph.Factorizes model.dist ∧ model.dist.CondIndep {1} {0} ∅ := by
+  refine ⟨by decide +kernel, by decide, model.factorizes, ?_⟩
+  rw [model_dist]
+  exact model'.factorizes.condIndep_of_dSep model'.acyclic (by decide +kernel)
+
+end IgnoredInstrument
 
 end SCM
 

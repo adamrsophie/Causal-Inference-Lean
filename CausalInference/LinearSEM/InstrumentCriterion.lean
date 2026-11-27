@@ -30,6 +30,12 @@ condition of the instrumental variable estimand, with the total effect as the sl
 * `LinearSEM.partialCov_eq_T_mul_partialCov_of_dSep`: the conditional version with a set `S`
   of covariates that are not descendants of `x` and an invertible covariance block of `S`: the
   partial covariances given `S` satisfy the same identity.
+* `LinearSEM.partialCov_eq_T_mul_partialCov_of_cutOutgoing`: the algebraic core, for any error
+  covariance: a vanishing partial covariance of `z` and `y` given `S` in the model with the
+  edges out of `x` cut gives the identity above.
+* `LinearSEM.CancellingInstrumentModel.counterexample`: relevance is not graphical. A
+  pretreatment instrument whose two paths to the treatment cancel has `Σ z x = 0`, so the
+  ratio theorem needs its hypothesis `Σ z x ≠ 0`.
 * `LinearSEM.T_eq_B_of_forall`: the total effect is the path coefficient `B y x` when no other
   parent of `y` is a descendant of `x`.
 * `LinearSEM.ErrorRealization.linearIV_of_isPretreatmentInstrument`: for a realization of the
@@ -145,24 +151,28 @@ theorem cov_eq_T_mul_cov_of_dSep (hΩ : M.Ω.IsDiag) {x y z : V}
   rw [partialCov_empty] at h0
   rw [h0, zero_add]
 
-/-- The conditional form: with a set `S` of covariates that are not descendants of `x`, an
-invertible covariance block of `S`, and `z`, `y` d-separated by `S` in the graph with the
-edges into `x` removed, the partial covariances given `S` satisfy
-`Σ_{zy·S} = T y x Σ_{zx·S}`. -/
-theorem partialCov_eq_T_mul_partialCov_of_dSep (hΩ : M.Ω.IsDiag) {x y z : V} {S : Finset V}
-    (hz : z ∉ M.G.descendantsOf {x}) (hS : ∀ s ∈ S, s ∉ M.G.descendantsOf {x}) (hy : y ≠ x)
-    (hsep : (M.G.deleteIncoming {x}).DSep {z} {y} ↑S) (hu : IsUnit (subCov M.cov S)) :
-    partialCov M.cov S z y = M.T y x * partialCov M.cov S z x := by
-  have hzx : z ≠ x := fun h => hz ⟨x, rfl, h ▸ ReflTransGen.refl⟩
-  have hnt : ∀ {s}, s ∉ M.G.descendantsOf {x} → ¬ TransGen M.G.Adj x s :=
-    fun hs h => hs ⟨x, rfl, h.to_reflTransGen⟩
+/-- Covariates that are not descendants of `x` keep their covariance block when the edges out
+of `x` are cut, so its invertibility transfers. -/
+theorem isUnit_subCov_cutOutgoing {x : V} {S : Finset V}
+    (hS : ∀ s ∈ S, s ∉ M.G.descendantsOf {x}) (hu : IsUnit (subCov M.cov S)) :
+    IsUnit (subCov (M.cutOutgoing x).cov S) := by
   have hsub : subCov (M.cutOutgoing x).cov S = subCov M.cov S := by
     ext s t
-    exact M.cov_cutOutgoing (hnt (hS s s.2)) (hnt (hS t t.2))
-  have hu' : IsUnit (subCov (M.cutOutgoing x).cov S) := hsub ▸ hu
-  have hsep' : (M.cutOutgoing x).G.DSep {z} {y} ↑S :=
-    Digraph.dSep_deleteOutgoing_of_dSep_deleteIncoming (fun s hs => hS s hs) hzx hy hsep
-  have h0 := (M.cutOutgoing x).partialCov_eq_zero_of_dSep hΩ hsep' hu'
+    exact M.cov_cutOutgoing (fun h => hS s s.2 ⟨x, rfl, h.to_reflTransGen⟩)
+      (fun h => hS t t.2 ⟨x, rfl, h.to_reflTransGen⟩)
+  exact hsub ▸ hu
+
+/-- The algebraic core of the instrument criterion: if `z` and the covariates `S` are not
+descendants of `x`, `y ≠ x`, the covariance block of `S` is invertible, and the partial
+covariance of `z` and `y` given `S` vanishes in the model with the edges out of `x` cut, then
+`Σ_{zy·S} = T y x Σ_{zx·S}`. No assumption on the error covariance is needed. -/
+theorem partialCov_eq_T_mul_partialCov_of_cutOutgoing {x y z : V} {S : Finset V}
+    (hz : z ∉ M.G.descendantsOf {x}) (hS : ∀ s ∈ S, s ∉ M.G.descendantsOf {x}) (hy : y ≠ x)
+    (hu : IsUnit (subCov M.cov S)) (h0 : partialCov (M.cutOutgoing x).cov S z y = 0) :
+    partialCov M.cov S z y = M.T y x * partialCov M.cov S z x := by
+  have hnt : ∀ {s}, s ∉ M.G.descendantsOf {x} → ¬ TransGen M.G.Adj x s :=
+    fun hs h => hs ⟨x, rfl, h.to_reflTransGen⟩
+  have hu' := M.isUnit_subCov_cutOutgoing hS hu
   have hγ := regCoeff_isRegCoeff (C := (M.cutOutgoing x).cov) y hu'
   have hγx := regCoeff_isRegCoeff (C := M.cov) x hu
   -- the covariance with a vertex of `S` is unchanged when the coefficient vanishes off `S`
@@ -192,6 +202,20 @@ theorem partialCov_eq_T_mul_partialCov_of_dSep (hΩ : M.Ω.IsDiag) {x y z : V} {
   simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul, mul_add, Finset.sum_add_distrib]
   rw [Finset.sum_congr rfl fun t _ => e1 z hz t]
   linear_combination h0 - e4
+
+/-- The conditional form: with a set `S` of covariates that are not descendants of `x`, an
+invertible covariance block of `S`, and `z`, `y` d-separated by `S` in the graph with the
+edges into `x` removed, the partial covariances given `S` satisfy
+`Σ_{zy·S} = T y x Σ_{zx·S}`. -/
+theorem partialCov_eq_T_mul_partialCov_of_dSep (hΩ : M.Ω.IsDiag) {x y z : V} {S : Finset V}
+    (hz : z ∉ M.G.descendantsOf {x}) (hS : ∀ s ∈ S, s ∉ M.G.descendantsOf {x}) (hy : y ≠ x)
+    (hsep : (M.G.deleteIncoming {x}).DSep {z} {y} ↑S) (hu : IsUnit (subCov M.cov S)) :
+    partialCov M.cov S z y = M.T y x * partialCov M.cov S z x := by
+  have hzx : z ≠ x := fun h => hz ⟨x, rfl, h ▸ ReflTransGen.refl⟩
+  have hsep' : (M.cutOutgoing x).G.DSep {z} {y} ↑S :=
+    Digraph.dSep_deleteOutgoing_of_dSep_deleteIncoming (fun s hs => hS s hs) hzx hy hsep
+  exact M.partialCov_eq_T_mul_partialCov_of_cutOutgoing hz hS hy hu
+    ((M.cutOutgoing x).partialCov_eq_zero_of_dSep hΩ hsep' (M.isUnit_subCov_cutOutgoing hS hu))
 
 /-- The total effect of `x` on `y ≠ x` is the path coefficient `B y x` when no other parent of
 `y` (a vertex `p ≠ x` with `B y p ≠ 0`) is a descendant of `x`. -/
@@ -295,6 +319,60 @@ theorem counterexample :
   norm_num
 
 end DescendantInstrumentModel
+
+/-! ### Relevance is not graphical -/
+
+namespace CancellingInstrumentModel
+
+open Criteria
+
+/-- The graph `Z → X`, `Z → W → X`, `X → Y` on `Fin 4` (`X = 0`, `Z = 1`, `Y = 2`, `W = 3`). -/
+abbrev graph : Digraph (Fin 4) := ofEdges [(1, 0), (1, 3), (3, 0), (0, 2)]
+
+/-- The linear model on `graph` with `X = Z - W + ε_X`, `W = Z + ε_W`, `Y = X + ε_Y` and
+uncorrelated unit errors. Every edge carries a nonzero coefficient, and the two directed paths
+from `Z` to `X` cancel. -/
+def model : LinearSEM (Fin 4) where
+  G := graph
+  acyclic := by decide +kernel
+  B := !![0, 1, 0, -1; 0, 0, 0, 0; 1, 0, 0, 0; 0, 1, 0, 0]
+  B_support v u h := by
+    fin_cases v <;> fin_cases u <;> simp_all [graph, ofEdges]
+  Ω := 1
+  Ω_posSemidef := Matrix.PosSemidef.one
+
+theorem T_eq : model.T = !![1, 0, 0, -1; 0, 1, 0, 0; 1, 0, 1, -1; 0, 1, 0, 1] :=
+  T_eq_of_mul_eq_one _ <| by
+    ext i j; fin_cases i <;> fin_cases j <;> simp [model, Matrix.mul_apply, Fin.sum_univ_four]
+
+/-- **The nonvanishing first stage cannot be dropped.** In `model` the errors are uncorrelated,
+`Z` is a pretreatment instrument for `X` on `Y` (so every hypothesis of
+`cov_eq_T_mul_cov_of_isPretreatmentInstrument` holds), and every edge out of `Z` carries a
+nonzero coefficient; yet the two paths from `Z` to `X` cancel, so `Σ z x = 0`. The moment
+condition `Σ z y = T y x Σ z x` holds as `0 = 1 · 0`, but the instrumental ratio is `0 / 0 = 0`
+while the total effect is `T y x = 1`. -/
+theorem counterexample :
+    model.Ω.IsDiag ∧ model.G.IsPretreatmentInstrument {1} {0} {2} ∅ ∧
+      model.B 0 1 ≠ 0 ∧ model.B 3 1 ≠ 0 ∧ model.B 0 3 ≠ 0 ∧ model.cov 1 0 = 0 ∧
+      model.cov 1 2 = 0 ∧ model.T 2 0 = 1 ∧ model.cov 1 2 / model.cov 1 0 ≠ model.T 2 0 := by
+  have hC : ∀ i j, model.cov i j = ∑ a, (!![1, 0, 0, -1; 0, 1, 0, 0; 1, 0, 1, -1; 0, 1, 0, 1] :
+      Matrix (Fin 4) (Fin 4) ℝ) i a * (!![1, 0, 0, -1; 0, 1, 0, 0; 1, 0, 1, -1; 0, 1, 0, 1] :
+      Matrix (Fin 4) (Fin 4) ℝ) j a := by
+    intro i j
+    rw [cov_apply, T_eq]
+    refine Finset.sum_congr rfl fun a _ => ?_
+    simp [model, Matrix.one_apply]
+  have h10 : model.cov 1 0 = 0 := by rw [hC]; simp [Fin.sum_univ_four]
+  have h12 : model.cov 1 2 = 0 := by rw [hC]; simp [Fin.sum_univ_four]
+  have hT : model.T 2 0 = 1 := by rw [T_eq]; simp
+  refine ⟨Matrix.isDiag_one,
+    (by decide +kernel : graph.IsPretreatmentInstrument {1} {0} {2} ∅), by simp [model],
+    by simp [model],
+    by simp [model], h10, h12, hT, ?_⟩
+  rw [h10, h12, hT]
+  norm_num
+
+end CancellingInstrumentModel
 
 end LinearSEM
 
