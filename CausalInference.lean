@@ -94,3 +94,4 @@ public import CausalInference.SCM.Counterfactuals
 public import CausalInference.SCM.Effects
 public import CausalInference.SCM.Intervention
 public import CausalInference.SCM.Markov
+public import CausalInference.MissingData.Identification

@@ -25,12 +25,22 @@ version of `E[1{R} | X]`, the conditional probability of response given `X`.
 
 * `integral_mul_eq_of_condExp_eq`: the weighting lemma. If `E[r | m] = p` and `g` is
   `m`-measurable then `E[r g] = E[p g]`.
-* `ipw_identity`: under MAR and almost sure positivity of `π(X)`,
-  `E[1{R} Y / π(X)] = E[Y]` (given integrability of the weighted outcome).
-* `ipw_identity_of_le`: the same with `π(X) ≥ c > 0`, where integrability follows from that of
-  `Y`.
-* `regression_identity`: if `μ₁ : 𝒳 → ℝ` satisfies `E[1{R} Y | X] = π(X) μ₁(X)` (so `μ₁(X)` is a
-  version of `E[Y | X, R = true]` computed from observed data), then under MAR and positivity
+* `lintegral_ofReal_mul_eq_of_condExp_eq`, `integrable_mul_of_condExp_eq`: the weighting lemma
+  for a nonnegative `r` and Lebesgue integrals, and its consequence that `r g` is integrable
+  whenever `p g` is.
+* `integrable_ipw`, `ipw_identity`: under MAR and almost sure positivity of `π(X)`, integrability
+  of `Y` gives integrability of the weighted outcome and `E[1{R} Y / π(X)] = E[Y]`.
+  `integrable_ipw_of_condExp_eq` and `ipw_identity_of_condExp_eq` are the same statements for
+  any `σ(X)`-measurable version of the propensity on the sample space.
+* `ipw_identity_of_integrable_weighted`: the IPW identity assuming integrability of the weighted
+  outcome instead of that of `Y`; `ipw_identity_of_le`: the IPW identity with `π(X) ≥ c > 0`.
+* `ipw_weight_integral`: the normalization `E[1{R} / π(X)] = 1`.
+* `aipw_identity_of_propensity`, `aipw_identity_of_regression`: the augmented IPW identity
+  `E[1{R} Y / π(X) - (1{R} - π(X)) / π(X) h(X)] = E[Y]` when `π` is the true propensity (any
+  `h`), and when `h(X)` is a version of `E[Y | X]` (any positive `π`): double robustness.
+* `regression_ae_eq`, `regression_identity`: if `μ₁ : 𝒳 → ℝ` satisfies
+  `E[1{R} Y | X] = π(X) μ₁(X)` (so `μ₁(X)` is a version of `E[Y | X, R = true]` computed from
+  observed data), then under MAR and positivity `μ₁(X)` is a version of `E[Y | X]`, and
   `E[μ₁(X)] = E[Y]`.
 * `ipcw_identity`: the IPW identity read as inverse probability of censoring weighting.
 * `ipcw_identity_two_period`: inverse probability of censoring weighting over two periods with
@@ -51,6 +61,7 @@ namespace CausalInference
 namespace MissingData
 
 open MeasureTheory ProbabilityTheory
+open scoped ENNReal
 
 section Weighting
 
@@ -69,6 +80,58 @@ theorem integral_mul_eq_of_condExp_eq [IsFiniteMeasure μ] {m : MeasurableSpace 
   calc ∫ ω, r ω * g ω ∂μ = ∫ ω, (μ[r * g | m]) ω ∂μ := (integral_condExp hm).symm
     _ = ∫ ω, p ω * g ω ∂μ := integral_congr_ae hpull
 
+/-- The weighting lemma for nonnegative weights and Lebesgue integrals. If `r ≥ 0` is
+integrable with `E[r | m] = p` almost everywhere, then `∫⁻ r G = ∫⁻ p G` for every
+`m`-measurable `G : Ω → [0, ∞]`. No integrability of the products is needed. -/
+theorem lintegral_ofReal_mul_eq_of_condExp_eq [IsFiniteMeasure μ] {m : MeasurableSpace Ω}
+    (hm : m ≤ mΩ) {r p : Ω → ℝ} (hr : Integrable r μ) (hr0 : 0 ≤ᵐ[μ] r)
+    (hp : μ[r | m] =ᵐ[μ] p) {G : Ω → ℝ≥0∞} (hG : Measurable[m] G) :
+    ∫⁻ ω, ENNReal.ofReal (r ω) * G ω ∂μ = ∫⁻ ω, ENNReal.ofReal (p ω) * G ω ∂μ := by
+  have hp0 : 0 ≤ᵐ[μ] p := by
+    filter_upwards [condExp_nonneg (m := m) hr0, hp] with ω h1 h2
+    rw [← h2]; exact h1
+  have hpi : Integrable p μ := integrable_condExp.congr hp
+  have hGm : AEMeasurable G μ := (hG.mono hm le_rfl).aemeasurable
+  have htrim : (μ.withDensity fun ω => ENNReal.ofReal (r ω)).trim hm =
+      (μ.withDensity fun ω => ENNReal.ofReal (p ω)).trim hm := by
+    ext s hs
+    rw [trim_measurableSet_eq hm hs, trim_measurableSet_eq hm hs,
+      withDensity_apply _ (hm s hs), withDensity_apply _ (hm s hs),
+      ← ofReal_integral_eq_lintegral_ofReal hr.integrableOn (ae_restrict_of_ae hr0),
+      ← ofReal_integral_eq_lintegral_ofReal hpi.integrableOn (ae_restrict_of_ae hp0),
+      ← setIntegral_condExp hm hr hs, setIntegral_congr_ae (hm s hs) (hp.mono fun _ h _ => h)]
+  have h1 := lintegral_withDensity_eq_lintegral_mul₀
+    hr.aestronglyMeasurable.aemeasurable.ennreal_ofReal hGm
+  have h2 := lintegral_withDensity_eq_lintegral_mul₀
+    hpi.aestronglyMeasurable.aemeasurable.ennreal_ofReal hGm
+  simp only [Pi.mul_apply] at h1 h2
+  rw [← h1, ← h2, ← lintegral_trim hm hG, ← lintegral_trim hm hG, htrim]
+
+/-- The converse integrability half of the weighting lemma for nonnegative weights. If `r ≥ 0`
+is integrable with `E[r | m] = p` almost everywhere, `g` is `m`-measurable, and `p g` is
+integrable, then `r g` is integrable. -/
+theorem integrable_mul_of_condExp_eq [IsFiniteMeasure μ] {m : MeasurableSpace Ω} (hm : m ≤ mΩ)
+    {r g p : Ω → ℝ} (hr : Integrable r μ) (hr0 : 0 ≤ᵐ[μ] r) (hg : StronglyMeasurable[m] g)
+    (hp : μ[r | m] =ᵐ[μ] p) (hpg : Integrable (fun ω => p ω * g ω) μ) :
+    Integrable (fun ω => r ω * g ω) μ := by
+  have hp0 : 0 ≤ᵐ[μ] p := by
+    filter_upwards [condExp_nonneg (m := m) hr0, hp] with ω h1 h2
+    rw [← h2]; exact h1
+  refine ⟨hr.aestronglyMeasurable.mul (hg.mono hm).aestronglyMeasurable, ?_⟩
+  have key := lintegral_ofReal_mul_eq_of_condExp_eq hm hr hr0 hp (G := fun ω => ‖g ω‖ₑ)
+    hg.measurable.eNorm
+  have e1 : ∫⁻ ω, ‖r ω * g ω‖ₑ ∂μ = ∫⁻ ω, ENNReal.ofReal (r ω) * ‖g ω‖ₑ ∂μ := by
+    refine lintegral_congr_ae ?_
+    filter_upwards [hr0] with ω hω
+    rw [eNorm_mul, Real.eNorm_eq_ofReal hω]
+  have e2 : ∫⁻ ω, ‖p ω * g ω‖ₑ ∂μ = ∫⁻ ω, ENNReal.ofReal (p ω) * ‖g ω‖ₑ ∂μ := by
+    refine lintegral_congr_ae ?_
+    filter_upwards [hp0] with ω hω
+    rw [eNorm_mul, Real.eNorm_eq_ofReal hω]
+  unfold HasFiniteIntegral
+  rw [e1, key, ← e2]
+  exact hpg.2
+
 end Weighting
 
 variable {Ω 𝒳 : Type*} [MeasurableSpace Ω] [MeasurableSpace 𝒳] {μ : Measure Ω}
@@ -82,11 +145,82 @@ theorem measurable_comap_prod {β : Type*} [MeasurableSpace β] {h : 𝒳 × ℝ
       (fun ω => h (X ω, Y ω)) :=
   hh.comp (comap_measurable _)
 
+/-- Integrability of the inverse probability weighted outcome. Let `p` be a `σ(X)`-measurable
+version of the response propensity `E[1{R} | X]`, assume the mean-independence form of MAR and
+`p > 0` almost surely. If `Y` is integrable then so is `1{R} Y / p`; indeed
+`E[1{R} |Y| / p] = E[|Y|]`. -/
+theorem integrable_ipw_of_condExp_eq [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+    (hR : Measurable R) {p : Ω → ℝ}
+    (hpm : StronglyMeasurable[MeasurableSpace.comap X inferInstance] p)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] p)
+    (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < p ω) (hYi : Integrable Y μ) :
+    Integrable (fun ω => respInd R ω * Y ω / p ω) μ := by
+  have hXY : Measurable fun ω => (X ω, Y ω) := hX.prodMk hY
+  have hg : StronglyMeasurable[MeasurableSpace.comap (fun ω => (X ω, Y ω)) inferInstance]
+      (fun ω => Y ω / p ω) :=
+    (measurable_comap_prod (h := fun q : 𝒳 × ℝ => q.2) measurable_snd).stronglyMeasurable.div
+      (hpm.mono comap_le_comap_prod)
+  have h := integrable_mul_of_condExp_eq (r := respInd R) hXY.comap_le
+    ((integrable_const 1).indicator (hR (measurableSet_singleton true)))
+    (Filter.Eventually.of_forall fun ω => respInd_nonneg R ω) hg (hmar.trans hprop)
+    (hYi.congr (by filter_upwards [hpos] with ω hω; field_simp))
+  simpa only [mul_div_assoc] using h
+
+/-- Inverse probability weighting under MAR with a `σ(X)`-measurable version `p` of the response
+propensity `E[1{R} | X]` (for instance the conditional expectation itself). Under the
+mean-independence form of MAR, `p > 0` almost surely and integrability of `Y`,
+`E[1{R} Y / p] = E[Y]`. -/
+theorem ipw_identity_of_condExp_eq [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+    (hR : Measurable R) {p : Ω → ℝ}
+    (hpm : StronglyMeasurable[MeasurableSpace.comap X inferInstance] p)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] p)
+    (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < p ω) (hYi : Integrable Y μ) :
+    ∫ ω, respInd R ω * Y ω / p ω ∂μ = ∫ ω, Y ω ∂μ := by
+  have hXY : Measurable fun ω => (X ω, Y ω) := hX.prodMk hY
+  have hg : StronglyMeasurable[MeasurableSpace.comap (fun ω => (X ω, Y ω)) inferInstance]
+      (fun ω => Y ω / p ω) :=
+    (measurable_comap_prod (h := fun q : 𝒳 × ℝ => q.2) measurable_snd).stronglyMeasurable.div
+      (hpm.mono comap_le_comap_prod)
+  have hint' : Integrable (fun ω => respInd R ω * (Y ω / p ω)) μ := by
+    simpa only [mul_div_assoc] using integrable_ipw_of_condExp_eq hX hY hR hpm hprop hmar hpos hYi
+  have key := (integral_mul_eq_of_condExp_eq (r := respInd R) hXY.comap_le
+    ((integrable_const 1).indicator (hR (measurableSet_singleton true))) hg hint'
+    (hmar.trans hprop)).2
+  simp only [mul_div_assoc] at key ⊢
+  rw [key]
+  refine integral_congr_ae ?_
+  filter_upwards [hpos] with ω hω
+  field_simp
+
+/-- Integrability of the inverse probability weighted outcome: if `π ∘ X` is a version of the
+response propensity `E[1{R} | X]`, MAR holds in the mean-independence form, `π(X) > 0` almost
+surely and `Y` is integrable, then `1{R} Y / π(X)` is integrable. -/
+theorem integrable_ipw [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+    (hR : Measurable R) {π : 𝒳 → ℝ} (hπ : Measurable π)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
+    (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) (hYi : Integrable Y μ) :
+    Integrable (fun ω => respInd R ω * Y ω / π (X ω)) μ :=
+  integrable_ipw_of_condExp_eq hX hY hR (hπ.comp (comap_measurable X)).stronglyMeasurable hprop
+    hmar hpos hYi
+
 /-- Inverse probability weighting under MAR. Let `π ∘ X` be a version of the response
 propensity `E[1{R} | X]`, assume the mean-independence form of MAR, almost sure positivity of
-`π(X)`, and integrability of the weighted outcome. Then `E[1{R} Y / π(X)] = E[Y]`. -/
+`π(X)`, and integrability of `Y`. Then the weighted outcome is integrable (`integrable_ipw`) and
+`E[1{R} Y / π(X)] = E[Y]`. -/
 theorem ipw_identity [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
     (hR : Measurable R) {π : 𝒳 → ℝ} (hπ : Measurable π)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
+    (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) (hYi : Integrable Y μ) :
+    ∫ ω, respInd R ω * Y ω / π (X ω) ∂μ = ∫ ω, Y ω ∂μ :=
+  ipw_identity_of_condExp_eq hX hY hR (hπ.comp (comap_measurable X)).stronglyMeasurable hprop
+    hmar hpos hYi
+
+/-- Inverse probability weighting under MAR, assuming integrability of the weighted outcome
+instead of that of `Y`. Let `π ∘ X` be a version of the response propensity `E[1{R} | X]`,
+assume the mean-independence form of MAR, almost sure positivity of `π(X)`, and integrability
+of `1{R} Y / π(X)`. Then `E[1{R} Y / π(X)] = E[Y]`. -/
+theorem ipw_identity_of_integrable_weighted [IsFiniteMeasure μ] (hX : Measurable X)
+    (hY : Measurable Y) (hR : Measurable R) {π : 𝒳 → ℝ} (hπ : Measurable π)
     (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
     (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω))
     (hint : Integrable (fun ω => respInd R ω * Y ω / π (X ω)) μ) :
@@ -108,40 +242,161 @@ theorem ipw_identity [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y
   field_simp
 
 /-- Inverse probability weighting with the propensity bounded away from zero: if `Y` is
-integrable and `π(X) ≥ c > 0` almost surely, then the weighted outcome is integrable and, under
-MAR, `E[1{R} Y / π(X)] = E[Y]`. -/
+integrable and `π(X) ≥ c > 0` almost surely, then under MAR `E[1{R} Y / π(X)] = E[Y]`. -/
 theorem ipw_identity_of_le [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
     (hR : Measurable R) {π : 𝒳 → ℝ} (hπ : Measurable π)
     (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
     (hmar : MARMean μ X Y R) {c : ℝ} (hc : 0 < c) (hbd : ∀ᵐ ω ∂μ, c ≤ π (X ω))
     (hYi : Integrable Y μ) :
-    ∫ ω, respInd R ω * Y ω / π (X ω) ∂μ = ∫ ω, Y ω ∂μ := by
-  refine ipw_identity hX hY hR hπ hprop hmar
-    (hbd.mono fun ω hω => hc.trans_le hω) ?_
-  refine Integrable.mono' (hYi.norm.div_const c)
-    (((measurable_respInd hR).mul hY).div (hπ.comp hX)).aestronglyMeasurable ?_
-  filter_upwards [hbd] with ω hω
-  have hπpos : 0 < π (X ω) := hc.trans_le hω
-  rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_div, abs_mul, abs_of_nonneg (respInd_nonneg R ω),
-    abs_of_pos hπpos]
-  calc respInd R ω * |Y ω| / π (X ω) ≤ 1 * |Y ω| / c := by
-        gcongr
-        exact respInd_le_one R ω
-    _ = |Y ω| / c := by rw [one_mul]
+    ∫ ω, respInd R ω * Y ω / π (X ω) ∂μ = ∫ ω, Y ω ∂μ :=
+  ipw_identity hX hY hR hπ hprop hmar (hbd.mono fun _ hω => hc.trans_le hω) hYi
 
-/-- Outcome regression (standardization) under MAR. Let `π ∘ X` be a version of `E[1{R} | X]`
-and let `μ₁ : 𝒳 → ℝ` satisfy `E[1{R} Y | X] = π(X) μ₁(X)` almost everywhere; on `{π(X) > 0}`
-this makes `μ₁(X)` a version of the complete-case regression `E[Y | X, R = true]`, and it
-involves only observed quantities. Under the mean-independence form of MAR, almost sure
-positivity of `π(X)` and integrability of `Y`, `μ₁(X)` is a version of `E[Y | X]` and
-`E[μ₁(X)] = E[Y]`. -/
-theorem regression_identity [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+/-- Normalization of the inverse probability weights: if `π ∘ X` is a version of the response
+propensity `E[1{R} | X]` on a probability space and `π(X) > 0` almost surely, then the weight
+`1{R} / π(X)` is integrable and `E[1{R} / π(X)] = 1`. No missingness assumption is needed. This
+is the normalization behind the Hajek form of the IPW estimator. -/
+theorem ipw_weight_integral [IsProbabilityMeasure μ] (hX : Measurable X) (hR : Measurable R)
+    {π : 𝒳 → ℝ} (hπ : Measurable π)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
+    (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) :
+    Integrable (fun ω => respInd R ω / π (X ω)) μ ∧ ∫ ω, respInd R ω / π (X ω) ∂μ = 1 := by
+  have hri : Integrable (respInd R) μ :=
+    (integrable_const 1).indicator (hR (measurableSet_singleton true))
+  have hg : StronglyMeasurable[MeasurableSpace.comap X inferInstance] fun ω => 1 / π (X ω) :=
+    ((measurable_const.div hπ).comp (comap_measurable X)).stronglyMeasurable
+  have hone : (fun ω => π (X ω) * (1 / π (X ω))) =ᵐ[μ] fun _ => (1 : ℝ) := by
+    filter_upwards [hpos] with ω hω
+    field_simp
+  have hint := integrable_mul_of_condExp_eq hX.comap_le hri
+    (Filter.Eventually.of_forall fun ω => respInd_nonneg R ω) hg hprop
+    ((integrable_const 1).congr hone.symm)
+  have key := (integral_mul_eq_of_condExp_eq hX.comap_le hri hg hint hprop).2
+  simp only [mul_one_div] at hint key
+  refine ⟨hint, ?_⟩
+  rw [key, integral_congr_ae (by simpa only [mul_one_div] using hone)]
+  simp
+
+/-- Inverse probability weighting of a function of the covariate: if `π ∘ X` is a version of
+the response propensity `E[1{R} | X]`, `π(X) > 0` almost surely and `h(X)` is integrable, then
+`1{R} h(X) / π(X)` is integrable and `E[1{R} h(X) / π(X)] = E[h(X)]`. -/
+theorem ipw_identity_covariate [IsFiniteMeasure μ] (hX : Measurable X) (hR : Measurable R)
+    {π : 𝒳 → ℝ} (hπ : Measurable π)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
+    (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) {h : 𝒳 → ℝ} (hh : Measurable h)
+    (hhi : Integrable (fun ω => h (X ω)) μ) :
+    Integrable (fun ω => respInd R ω * h (X ω) / π (X ω)) μ ∧
+      ∫ ω, respInd R ω * h (X ω) / π (X ω) ∂μ = ∫ ω, h (X ω) ∂μ := by
+  have hri : Integrable (respInd R) μ :=
+    (integrable_const 1).indicator (hR (measurableSet_singleton true))
+  have hg : StronglyMeasurable[MeasurableSpace.comap X inferInstance]
+      fun ω => h (X ω) / π (X ω) :=
+    ((hh.div hπ).comp (comap_measurable X)).stronglyMeasurable
+  have hcancel : (fun ω => π (X ω) * (h (X ω) / π (X ω))) =ᵐ[μ] fun ω => h (X ω) := by
+    filter_upwards [hpos] with ω hω
+    field_simp
+  have hint := integrable_mul_of_condExp_eq hX.comap_le hri
+    (Filter.Eventually.of_forall fun ω => respInd_nonneg R ω) hg hprop (hhi.congr hcancel.symm)
+  have key := (integral_mul_eq_of_condExp_eq hX.comap_le hri hg hint hprop).2
+  simp only [← mul_div_assoc] at hint key
+  exact ⟨hint, key.trans (integral_congr_ae (by simpa only [← mul_div_assoc] using hcancel))⟩
+
+/-- The augmented inverse probability weighted identity of Robins, Rotnitzky and Zhao (1994),
+first robustness case: the propensity is correct. If `π ∘ X` is a version of `E[1{R} | X]`,
+MAR holds in the mean-independence form, `π(X) > 0` almost surely, `Y` is integrable and
+`h(X)` is any integrable function of the covariate, then
+`E[1{R} Y / π(X) - (1{R} - π(X)) / π(X) h(X)] = E[Y]`. -/
+theorem aipw_identity_of_propensity [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+    (hR : Measurable R) {π : 𝒳 → ℝ} (hπ : Measurable π)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
+    (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) (hYi : Integrable Y μ)
+    {h : 𝒳 → ℝ} (hh : Measurable h) (hhi : Integrable (fun ω => h (X ω)) μ) :
+    ∫ ω, (respInd R ω * Y ω / π (X ω) - (respInd R ω - π (X ω)) / π (X ω) * h (X ω)) ∂μ =
+      ∫ ω, Y ω ∂μ := by
+  obtain ⟨hint, hcov⟩ := ipw_identity_covariate hX hR hπ hprop hpos hh hhi
+  have hrw : (fun ω => respInd R ω * Y ω / π (X ω) - (respInd R ω - π (X ω)) / π (X ω) *
+      h (X ω)) =ᵐ[μ] fun ω => respInd R ω * Y ω / π (X ω) -
+        respInd R ω * h (X ω) / π (X ω) + h (X ω) := by
+    filter_upwards [hpos] with ω hω
+    field_simp
+    ring
+  have hipw := integrable_ipw hX hY hR hπ hprop hmar hpos hYi
+  have hA : Integrable (fun ω => respInd R ω * Y ω / π (X ω) -
+      respInd R ω * h (X ω) / π (X ω)) μ := hipw.sub hint
+  have e1 := integral_add hA hhi
+  have e2 := integral_sub hipw hint
+  rw [integral_congr_ae hrw, e1, e2, ipw_identity hX hY hR hπ hprop hmar hpos hYi, hcov]
+  ring
+
+/-- The augmented inverse probability weighted identity, second robustness case: the outcome
+regression is correct. If `h(X)` is a version of `E[Y | X]`, MAR holds in the mean-independence
+form and `π` is any measurable function with `π(X) > 0` almost surely (not necessarily the
+response propensity), then `E[1{R} Y / π(X) - (1{R} - π(X)) / π(X) h(X)] = E[Y]`, provided the
+weighted residual `1{R} (Y - h(X)) / π(X)` is integrable. Together with
+`aipw_identity_of_propensity` this is the double robustness of the augmented estimator. -/
+theorem aipw_identity_of_regression [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+    (hR : Measurable R) {π : 𝒳 → ℝ} (hπ : Measurable π) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω))
+    (hmar : MARMean μ X Y R) (hYi : Integrable Y μ) {h : 𝒳 → ℝ} (hh : Measurable h)
+    (hreg : μ[Y | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => h (X ω))
+    (hint : Integrable (fun ω => respInd R ω * (Y ω - h (X ω)) / π (X ω)) μ) :
+    ∫ ω, (respInd R ω * Y ω / π (X ω) - (respInd R ω - π (X ω)) / π (X ω) * h (X ω)) ∂μ =
+      ∫ ω, Y ω ∂μ := by
+  have hXY : Measurable fun ω => (X ω, Y ω) := hX.prodMk hY
+  have hri : Integrable (respInd R) μ :=
+    (integrable_const 1).indicator (hR (measurableSet_singleton true))
+  have hhm : StronglyMeasurable[MeasurableSpace.comap X inferInstance] fun ω => h (X ω) :=
+    (hh.comp (comap_measurable X)).stronglyMeasurable
+  have hhi : Integrable (fun ω => h (X ω)) μ := integrable_condExp.congr hreg
+  -- first step: condition on `(X, Y)`, replacing `1{R}` by `E[1{R} | X]`
+  have hg : StronglyMeasurable[MeasurableSpace.comap (fun ω => (X ω, Y ω)) inferInstance]
+      fun ω => (Y ω - h (X ω)) / π (X ω) :=
+    (measurable_comap_prod (h := fun q : 𝒳 × ℝ => (q.2 - h q.1) / π q.1)
+      ((measurable_snd.sub (hh.comp measurable_fst)).div
+        (hπ.comp measurable_fst))).stronglyMeasurable
+  obtain ⟨hint₁, key₁⟩ := integral_mul_eq_of_condExp_eq (r := respInd R) hXY.comap_le hri hg
+    (by simpa only [mul_div_assoc] using hint) hmar
+  -- second step: condition on `X`, where the residual has conditional mean zero
+  have hres : μ[fun ω => Y ω - h (X ω) | MeasurableSpace.comap X inferInstance] =ᵐ[μ]
+      fun _ => (0 : ℝ) := by
+    filter_upwards [condExp_sub hYi hhi (MeasurableSpace.comap X inferInstance), hreg]
+      with ω h1 h2
+    change μ[Y - (fun ω => h (X ω)) | MeasurableSpace.comap X inferInstance] ω = 0
+    rw [h1, Pi.sub_apply, h2, condExp_of_stronglyMeasurable hX.comap_le hhm hhi, sub_self]
+  have hg' : StronglyMeasurable[MeasurableSpace.comap X inferInstance]
+      fun ω => (μ[respInd R | MeasurableSpace.comap X inferInstance]) ω / π (X ω) :=
+    stronglyMeasurable_condExp.div ((hπ.comp (comap_measurable X)).stronglyMeasurable)
+  have key₂ := (integral_mul_eq_of_condExp_eq (r := fun ω => Y ω - h (X ω)) hX.comap_le
+    (hYi.sub hhi) hg' (hint₁.congr (Filter.Eventually.of_forall fun ω => by
+      simp only; ring)) hres).2
+  have hzero : ∫ ω, respInd R ω * (Y ω - h (X ω)) / π (X ω) ∂μ = 0 := by
+    simp only [mul_div_assoc] at key₁ ⊢
+    rw [key₁]
+    calc ∫ ω, (μ[respInd R | MeasurableSpace.comap X inferInstance]) ω *
+          ((Y ω - h (X ω)) / π (X ω)) ∂μ
+        = ∫ ω, (Y ω - h (X ω)) *
+          ((μ[respInd R | MeasurableSpace.comap X inferInstance]) ω / π (X ω)) ∂μ := by
+          congr 1; funext ω; ring
+      _ = 0 := by rw [key₂]; simp
+  have hrw : (fun ω => respInd R ω * Y ω / π (X ω) - (respInd R ω - π (X ω)) / π (X ω) *
+      h (X ω)) =ᵐ[μ] fun ω => respInd R ω * (Y ω - h (X ω)) / π (X ω) + h (X ω) := by
+    filter_upwards [hpos] with ω hω
+    field_simp
+    ring
+  rw [integral_congr_ae hrw, integral_add hint hhi, hzero, zero_add,
+    ← integral_congr_ae hreg, integral_condExp hX.comap_le]
+
+/-- Outcome regression (standardization) under MAR, almost everywhere form. Let `π ∘ X` be a
+version of `E[1{R} | X]` and let `μ₁ : 𝒳 → ℝ` satisfy `E[1{R} Y | X] = π(X) μ₁(X)` almost
+everywhere; on `{π(X) > 0}` this makes `μ₁(X)` a version of the complete-case regression
+`E[Y | X, R = true]`, and it involves only observed quantities. Under the mean-independence
+form of MAR, almost sure positivity of `π(X)` and integrability of `Y`, `μ₁(X)` is a version of
+`E[Y | X]`. -/
+theorem regression_ae_eq [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
     (hR : Measurable R) {π μ₁ : 𝒳 → ℝ} (hπ : Measurable π)
     (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
     (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) (hYi : Integrable Y μ)
     (hreg : μ[respInd R * Y | MeasurableSpace.comap X inferInstance] =ᵐ[μ]
       fun ω => π (X ω) * μ₁ (X ω)) :
-    ∫ ω, μ₁ (X ω) ∂μ = ∫ ω, Y ω ∂μ := by
+    (fun ω => μ₁ (X ω)) =ᵐ[μ] μ[Y | MeasurableSpace.comap X inferInstance] := by
   have hXY : Measurable fun ω => (X ω, Y ω) := hX.prodMk hY
   have hri : Integrable (respInd R) μ :=
     (integrable_const 1).indicator (hR (measurableSet_singleton true))
@@ -175,11 +430,21 @@ theorem regression_identity [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measu
         ((hmar.trans hprop).mul (by rfl))
     refine (condExp_congr_ae h1).trans ?_
     exact condExp_stronglyMeasurable_mul_of_bound hX.comap_le hπm hYi 1 hbd
-  have hμ₁ : (fun ω => μ₁ (X ω)) =ᵐ[μ] μ[Y | MeasurableSpace.comap X inferInstance] := by
-    filter_upwards [hreg, hstep, hpos] with ω h1 h2 h3
-    rw [h1] at h2
-    exact mul_left_cancel₀ h3.ne' h2
-  rw [integral_congr_ae hμ₁, integral_condExp hX.comap_le]
+  filter_upwards [hreg, hstep, hpos] with ω h1 h2 h3
+  rw [h1] at h2
+  exact mul_left_cancel₀ h3.ne' h2
+
+/-- Outcome regression (standardization) under MAR. Under the hypotheses of `regression_ae_eq`,
+`μ₁(X)` is a version of `E[Y | X]`, hence `E[μ₁(X)] = E[Y]`. -/
+theorem regression_identity [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+    (hR : Measurable R) {π μ₁ : 𝒳 → ℝ} (hπ : Measurable π)
+    (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] fun ω => π (X ω))
+    (hmar : MARMean μ X Y R) (hpos : ∀ᵐ ω ∂μ, 0 < π (X ω)) (hYi : Integrable Y μ)
+    (hreg : μ[respInd R * Y | MeasurableSpace.comap X inferInstance] =ᵐ[μ]
+      fun ω => π (X ω) * μ₁ (X ω)) :
+    ∫ ω, μ₁ (X ω) ∂μ = ∫ ω, Y ω ∂μ := by
+  rw [integral_congr_ae (regression_ae_eq hX hY hR hπ hprop hmar hpos hYi hreg),
+    integral_condExp hX.comap_le]
 
 /-- Inverse probability of censoring weighting. An outcome `Y` is observed only for the
 uncensored units, `Δ ω = true`. If `K ∘ X` is a version of the probability `E[1{Δ} | X]` of
@@ -193,7 +458,7 @@ theorem ipcw_identity [IsFiniteMeasure μ] {Δ : Ω → Bool} (hX : Measurable X
     (hnoninf : MARMean μ X Y Δ) (hpos : ∀ᵐ ω ∂μ, 0 < K (X ω))
     (hint : Integrable (fun ω => respInd Δ ω * Y ω / K (X ω)) μ) :
     ∫ ω, respInd Δ ω * Y ω / K (X ω) ∂μ = ∫ ω, Y ω ∂μ :=
-  ipw_identity hX hY hΔ hK hprop hnoninf hpos hint
+  ipw_identity_of_integrable_weighted hX hY hΔ hK hprop hnoninf hpos hint
 
 /-- Inverse probability of censoring weighting over two periods with a time-varying covariate.
 A unit has baseline covariate `L₀`, a covariate `L₁` measured at time one, and outcome `Y`;

@@ -28,7 +28,7 @@ The project is at an early stage. Modules are added only when they contain check
 | `CausalInference/Attribution` | Probabilities of necessity, sufficiency, and both: identification under exogeneity and monotonicity, sharp bounds from experimental and combined data, non-identification, textbook examples |
 | `CausalInference/Bias` | Selection bias and conditioning on a collider, selection without bias, the built-in selection bias of hazard ratios, measurement error and misclassification with correction formulas |
 | `CausalInference/Survival` | Discrete-time survival, hazards and the product formula, independent censoring and the product-limit functional with a non-identification counterexample, hazard ratios against survival, the Kaplan-Meier estimator |
-| `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting, regression identities, a non-identification counterexample |
+| `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting and its augmented form, regression identities, identification of the mean from the observed law under missingness at random, non-identification counterexamples without it and without positivity |
 | `CausalInference/Sensitivity` | Rosenbaum bounds for sign and signed-rank statistics, bias formulas for unmeasured confounding, the bounding factor and the E-value |
 | `CausalInference/Estimation` | Independent samples, consistency with continuous mapping, asymptotic linearity and its closure properties, asymptotic normality, the delta method, Wald interval coverage with an estimated scale |
 
