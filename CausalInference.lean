@@ -156,3 +156,5 @@ public import CausalInference.Survival.HazardRatio
 public import CausalInference.Bias.HazardMixture
 public import CausalInference.BiasAnalysis.DiagnosticAccuracy
 public import CausalInference.Sensitivity.ZBias
+public import CausalInference.Survival.SwitchDecision
+public import CausalInference.Survival.SwitchingCounterexamples
