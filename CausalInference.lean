@@ -89,3 +89,8 @@ public import CausalInference.Survival.Basic
 public import CausalInference.Survival.Censoring
 public import CausalInference.Survival.Comparison
 public import CausalInference.Survival.KaplanMeier
+public import CausalInference.SCM.Basic
+public import CausalInference.SCM.Counterfactuals
+public import CausalInference.SCM.Effects
+public import CausalInference.SCM.Intervention
+public import CausalInference.SCM.Markov
