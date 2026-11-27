@@ -26,8 +26,8 @@ against conditional measures. The concrete models are finite product measures.
 
 * `CausalInference.IVModel.att`: the average treatment effect on the treated
   `E[Y z 1 - Y z 0 | Dobs = true]`.
-* `IVModel.NoSelectionOnGains`: the unit-level effect is mean independent of the principal
-  stratum (in unnormalized form, so that null strata impose nothing).
+* `IVModel.NoSelectionOnGains`: the unit-level effect is integrable and mean independent of the
+  principal stratum (in unnormalized form, so that null strata impose nothing).
 
 ## Main results
 
@@ -35,11 +35,13 @@ against conditional measures. The concrete models are finite product measures.
   same mean effect `τ`, the Wald ratio is `τ`.
 * `IVModel.wald_eq_ate_of_noSelectionOnGains`: under exclusion, independence, relevance and
   integrability (no monotonicity), no selection on gains makes the Wald ratio the average
-  treatment effect; `IVModel.noSelectionOnGains_iff` gives the conditional form of the
-  hypothesis.
+  treatment effect (under a probability measure); `IVModel.noSelectionOnGains_iff` gives the
+  conditional form of the hypothesis.
 * `IVModel.wald_eq_of_homogeneous`: with a constant effect `β` the Wald ratio is `β`, defiers
   allowed; `IVModel.homogeneous_collapse`: then the average effect, the effect on the treated,
-  the complier effect and the Wald ratio all equal `β`.
+  the complier effect and the Wald ratio all equal `β` when the compliers have positive mass
+  (positive mass of the treated follows from relevance,
+  `IVModel.Relevance.measure_dobs_true_ne_zero`).
 * `IVModel.wald_eq_wald_of_homogeneous`: overidentification under a constant effect: two valid
   instruments give the same Wald ratio.
 * `IVHeterogeneity.roy_separation`: a Roy model (units select treatment when their gain exceeds
@@ -90,19 +92,24 @@ theorem wald_eq_of_setIntegral_eq [IsFiniteMeasure μ] (hE : M.Exclusion μ)
 /-! ### No selection on gains -/
 
 /-- **No selection on gains** at instrument value `z`: the unit-level effect `Y z 1 - Y z 0` is
-mean independent of the principal stratum, in the unnormalized form
-`∫_s (Y z 1 - Y z 0) = P(s) E[Y z 1 - Y z 0]` for each of the four strata `s`. For a stratum of
-positive mass this says `E[Y z 1 - Y z 0 | s] = E[Y z 1 - Y z 0]`
-(`IVModel.noSelectionOnGains_iff`); for a null stratum it is automatic. -/
+integrable and mean independent of the principal stratum, in the unnormalized form
+`∫_s (Y z 1 - Y z 0) = P(s) E[Y z 1 - Y z 0]` for each of the four strata `s`. Integrability is
+part of the condition, so that it cannot hold through integrals that are `0` by the convention
+for non-integrable functions. Under a probability measure `μ`, `IVModel.ate` is the population
+mean effect and, for a stratum of positive mass, the condition says
+`E[Y z 1 - Y z 0 | s] = E[Y z 1 - Y z 0]` (`IVModel.noSelectionOnGains_iff`); for a null stratum
+it is automatic. -/
 def NoSelectionOnGains (μ : Measure Ω) (z : Bool) : Prop :=
-  ∀ s, ∫ ω in M.stratum s, M.effect z ω ∂μ = μ.real (M.stratum s) * M.ate μ z
+  Integrable (M.effect z) μ ∧
+    ∀ s, ∫ ω in M.stratum s, M.effect z ω ∂μ = μ.real (M.stratum s) * M.ate μ z
 
-/-- No selection on gains is equivalent to the conditional form: every principal stratum of
-positive mass has mean effect equal to the average treatment effect. -/
-theorem noSelectionOnGains_iff [IsFiniteMeasure μ] {z : Bool} :
-    M.NoSelectionOnGains μ z ↔
+/-- Under a probability measure, no selection on gains is equivalent to the conditional form:
+the effect is integrable and every principal stratum of positive mass has mean effect equal to
+the average treatment effect. -/
+theorem noSelectionOnGains_iff [IsProbabilityMeasure μ] {z : Bool} :
+    M.NoSelectionOnGains μ z ↔ Integrable (M.effect z) μ ∧
       ∀ s, μ (M.stratum s) ≠ 0 → ∫ ω, M.effect z ω ∂μ[|M.stratum s] = M.ate μ z := by
-  refine forall_congr' fun s ↦ ?_
+  refine and_congr_right' (forall_congr' fun s ↦ ?_)
   rw [integral_cond_eq_inv_mul]
   by_cases h0 : μ (M.stratum s) = 0
   · simp [h0, setIntegral_measure_zero _ h0, measureReal_def]
@@ -119,14 +126,15 @@ TSD 17, Section 2.4.1: with heterogeneous effects, IV recovers the average treat
 selection into treatment is not influenced by the individual gain). Assume the exclusion
 restriction, instrument independence, relevance and integrable potential outcomes, but not
 monotonicity. If the unit-level effect is mean independent of the principal stratum
-(`IVModel.NoSelectionOnGains`), the Wald ratio equals the average treatment effect
-`E[Y z 1 - Y z 0]`. Only the complier and defier strata are used. -/
+(`IVModel.NoSelectionOnGains`), the Wald ratio equals `IVModel.ate`, which under a probability
+measure is the average treatment effect `E[Y z 1 - Y z 0]`. Only the complier and defier
+strata are used. -/
 theorem wald_eq_ate_of_noSelectionOnGains [IsFiniteMeasure μ] (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (hR : M.Relevance μ) (hY : ∀ z d, Integrable (M.Y z d) μ)
     {z : Bool} (hN : M.NoSelectionOnGains μ z) :
     M.wald μ = M.ate μ z :=
   M.wald_eq_of_setIntegral_eq hE hI hR (fun z ↦ M.integrable_Y_D (hY z) z)
-    ((hN .complier).trans (mul_comm _ _)) ((hN .defier).trans (mul_comm _ _))
+    ((hN.2 .complier).trans (mul_comm _ _)) ((hN.2 .defier).trans (mul_comm _ _))
 
 /-! ### Homogeneous effects -/
 
@@ -173,26 +181,41 @@ theorem wald_eq_of_homogeneous [IsFiniteMeasure μ] (hE : M.Exclusion μ)
   M.wald_eq_of_setIntegral_eq hE hI hR hY (M.setIntegral_effect_of_homogeneous hβ _)
     (M.setIntegral_effect_of_homogeneous hβ _)
 
+/-- Relevance forces the treated to have positive mass: if `P(Dobs = true) = 0`, then
+`Dobs` is coded `0` almost surely, also under each conditional measure given the instrument
+(which is absolutely continuous with respect to `μ`), so the first stage is `0`. -/
+theorem Relevance.measure_dobs_true_ne_zero {M : IVModel Ω} (hR : M.Relevance μ) :
+    μ {ω | M.Dobs ω = true} ≠ 0 := by
+  intro h0
+  have hae : M.DobsReal =ᵐ[μ] fun _ ↦ 0 :=
+    (measure_eq_zero_iff_ae_notMem.1 h0).mono fun ω hω ↦ by
+      simp only [Set.mem_ofPred_eq, Bool.not_eq_true] at hω
+      simp [DobsReal, boolToReal, hω]
+  have hz : ∀ z, M.condMean μ M.DobsReal z = 0 := fun z ↦ by
+    rw [condMean, integral_congr_ae (cond_absolutelyContinuous.ae_le hae), integral_zero]
+  exact hR.2.2 (by rw [firstStage, hz, hz, sub_zero])
+
 /-- **Homogeneity collapses the treatment effect parameters** (NICE DSU TSD 17, Section 2.1.2:
 "a treatment effect is homogeneous if ... It follows in this case that the ATE, ATT and LATE are
 identical"). Under the exclusion restriction, instrument independence, relevance and integrable
-responses `Y z (D z)`, if the unit-level effect equals `β` almost surely, the treated and the
-compliers have positive mass, then the average treatment effect, the effect on the treated, the
-complier average causal effect and the Wald ratio all equal `β`. The two positivity hypotheses
-are needed for the two conditional means to be genuine; relevance without monotonicity implies
-neither. -/
+responses `Y z (D z)`, if the unit-level effect equals `β` almost surely and the compliers have
+positive mass, then the average treatment effect, the effect on the treated, the complier
+average causal effect and the Wald ratio all equal `β`. Positive mass of the treated follows
+from relevance (`IVModel.Relevance.measure_dobs_true_ne_zero`). Positive mass of the compliers
+does not: without monotonicity the first stage can be carried by defiers alone, so it is a
+hypothesis. -/
 theorem homogeneous_collapse [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (hR : M.Relevance μ) (hY : ∀ z, Integrable (M.YD z) μ)
-    {z : Bool} {β : ℝ} (hβ : ∀ᵐ ω ∂μ, M.effect z ω = β) (hT : μ {ω | M.Dobs ω = true} ≠ 0)
-    (hC : μ M.compliers ≠ 0) :
+    {z : Bool} {β : ℝ} (hβ : ∀ᵐ ω ∂μ, M.effect z ω = β) (hC : μ M.compliers ≠ 0) :
     M.ate μ z = β ∧ M.att μ z = β ∧ M.complierEffect μ z = β ∧ M.wald μ = β :=
-  ⟨M.ate_eq_of_homogeneous hβ, M.att_eq_of_homogeneous hβ hT,
+  ⟨M.ate_eq_of_homogeneous hβ, M.att_eq_of_homogeneous hβ hR.measure_dobs_true_ne_zero,
     M.complierEffect_eq_of_homogeneous hβ hC, M.wald_eq_of_homogeneous hE hI hR hY hβ⟩
 
 /-- A homogeneous effect satisfies no selection on gains. -/
 theorem noSelectionOnGains_of_homogeneous [IsProbabilityMeasure μ] {z : Bool} {β : ℝ}
-    (hβ : ∀ᵐ ω ∂μ, M.effect z ω = β) : M.NoSelectionOnGains μ z := fun s ↦ by
-  rw [M.setIntegral_effect_of_homogeneous hβ, M.ate_eq_of_homogeneous hβ, mul_comm]
+    (hβ : ∀ᵐ ω ∂μ, M.effect z ω = β) : M.NoSelectionOnGains μ z :=
+  ⟨(integrable_const β).congr (hβ.mono fun _ h ↦ h.symm), fun s ↦ by
+    rw [M.setIntegral_effect_of_homogeneous hβ, M.ate_eq_of_homogeneous hβ, mul_comm]⟩
 
 /-- **Overidentification under a constant effect** (NICE DSU TSD 17, Question 17). Two binary
 instrumental variable models on the same probability space, each satisfying the exclusion

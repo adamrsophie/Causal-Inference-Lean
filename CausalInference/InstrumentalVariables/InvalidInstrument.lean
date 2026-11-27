@@ -36,7 +36,9 @@ words; the statements below are their formalization.
   `LinearIVModel.ivBias_gt_olsBias_iff_correlation`: equivalently, when `Var(U) ≠ 0`,
   `|ρ(Z, D)| |ρ(D, U)| < |ρ(Z, U)|`.
 * `LinearIVModel.ivBias_eq_correlation`, `LinearIVModel.olsBias_eq_correlation`: the two biases
-  in correlation form; the IV bias is inversely proportional to `ρ(Z, D)`.
+  in correlation form; `LinearIVModel.abs_ivBias_ge`: with `sd(U) / sd(D) ≥ c > 0`, the IV
+  bias is at least `c |ρ(Z, U)| / |ρ(Z, D)|`, so it grows without bound as `ρ(Z, D) → 0`
+  (without the bound on the scale ratio it need not).
 * `LinearIVModel.ivBias_gt_olsBias_of_abs_correlation_lt`: if `|ρ(Z, D)| < |ρ(Z, U)|`, the
   invalid instrument is worse than least squares, whatever the endogeneity of the treatment.
 * `LinearIVModel.covRatio_eq_covRatio_of_exogenous`: two valid instruments in the linear
@@ -45,6 +47,8 @@ words; the statements below are their formalization.
   covariance ratio is `β` under exclusion, independence and relevance, without monotonicity.
 * `InvalidInstrumentExample.worse_iv_ols`: a concrete model where the IV bias (`1`) exceeds the
   OLS bias (`1 / 2`).
+* `InvalidInstrumentExample.weakFamily_bias`: a family with `ρ(Z, U) = 1` and squared
+  first-stage correlation `1 / (1 + t²)`, in which the IV bias is `1` for every `t`.
 
 ## Implementation notes
 
@@ -159,10 +163,15 @@ theorem ivBias_gt_olsBias_iff_correlation [IsProbabilityMeasure μ] (h : L.Secon
     (show 0 < Real.sqrt Var[L.Z; μ] * Real.sqrt Var[L.U; μ] by positivity)).symm
 
 /-- **The IV bias in correlation form.** With finite second moments, a relevant instrument and
-`Var(U) ≠ 0`, `Cov(Z, Y) / Cov(Z, D) - β = (ρ(Z, U) / ρ(Z, D)) (sd(U) / sd(D))`: for a fixed
-violation `ρ(Z, U)` of exogeneity, the bias grows without bound as the first-stage correlation
-`ρ(Z, D)` tends to `0` (NICE DSU TSD 17, Section 2.4.1 and Question 18: a weak instrument
-amplifies the bias). -/
+`Var(U) ≠ 0`, `Cov(Z, Y) / Cov(Z, D) - β = (ρ(Z, U) / ρ(Z, D)) (sd(U) / sd(D))`. The bias is
+inversely proportional to the first-stage correlation `ρ(Z, D)` only when the scale factor
+`sd(U) / sd(D)` is held fixed. A fixed violation `ρ(Z, U)` of exogeneity together with
+`ρ(Z, D) → 0` does not force the bias to grow: for independent fair coins `Z`, `V`, `U = Z`
+and `D = Z + t V`, one has `ρ(Z, U) = 1` and `ρ(Z, D)² = 1 / (1 + t²) → 0` as `t` grows, while
+the bias stays `1`, because `sd(U) / sd(D) → 0` at the same rate
+(`InvalidInstrumentExample.weakFamily_bias`). With `sd(U) / sd(D)` bounded away from
+`0`, the bias does grow without bound (`LinearIVModel.abs_ivBias_ge`), which is the sense in
+which a weak instrument amplifies the bias (NICE DSU TSD 17, Section 2.4.1 and Question 18). -/
 theorem ivBias_eq_correlation [IsProbabilityMeasure μ] (h : L.SecondMoments μ)
     (hR : L.Relevance μ) (hU : Var[L.U; μ] ≠ 0) :
     cov[L.Z, L.Y; μ] / cov[L.Z, L.D; μ] - L.β =
@@ -177,6 +186,19 @@ theorem ivBias_eq_correlation [IsProbabilityMeasure μ] (h : L.SecondMoments μ)
     (Real.sqrt_pos.2 (lt_of_le_of_ne (variance_nonneg _ _) (Ne.symm hU))).ne'
   rw [covRatio_eq h hR, add_sub_cancel_left, correlation, correlation]
   field_simp
+
+/-- **A weak instrument amplifies the bias, at a bounded scale ratio.** With finite second
+moments, a relevant instrument and `Var(U) ≠ 0`, if `0 ≤ c ≤ sd(U) / sd(D)`, then the absolute
+IV bias is at least `c |ρ(Z, U)| / |ρ(Z, D)|`. So for a fixed violation `ρ(Z, U) ≠ 0` and a
+scale ratio bounded below by `c > 0`, the bias grows without bound as `ρ(Z, D) → 0`. -/
+theorem abs_ivBias_ge [IsProbabilityMeasure μ] (h : L.SecondMoments μ) (hR : L.Relevance μ)
+    (hU : Var[L.U; μ] ≠ 0) {c : ℝ} (hc : 0 ≤ c)
+    (hcr : c ≤ Real.sqrt Var[L.U; μ] / Real.sqrt Var[L.D; μ]) :
+    c * |correlation L.Z L.U μ| / |correlation L.Z L.D μ| ≤
+      |cov[L.Z, L.Y; μ] / cov[L.Z, L.D; μ] - L.β| := by
+  rw [ivBias_eq_correlation h hR hU, abs_mul, abs_div,
+    abs_of_nonneg (le_trans hc hcr), mul_comm c, mul_div_right_comm]
+  exact mul_le_mul_of_nonneg_left hcr (by positivity)
 
 /-- **The OLS bias in correlation form.** With finite second moments of `D` and `U` and
 nonzero variances, `Cov(D, Y) / Var(D) - β = ρ(D, U) (sd(U) / sd(D))`. -/
@@ -286,6 +308,51 @@ theorem worse_iv_ols :
   refine ⟨fun h ↦ ?_, hR, hiv, hols, ?_⟩
   · rw [LinearIVModel.Exogeneity, hZU] at h; norm_num at h
   · rw [hiv, hols]; norm_num [worse]
+
+/-- A family in which the first-stage correlation tends to `0` while the IV bias does not grow:
+`Z` and `V` are independent fair coins (coded `0`/`1`), the structural error is `U = Z`, the
+treatment is `D = Z + t V`, and `Y = U` (`α = 0`, `β = 0`). -/
+noncomputable def weakFamily (t : ℝ) : LinearIVModel (Bool × Bool) where
+  α := 0
+  β := 0
+  Z x := boolToReal x.1
+  D x := boolToReal x.1 + t * boolToReal x.2
+  U x := boolToReal x.1
+
+/-- **A vanishing first-stage correlation does not by itself make the IV bias grow.** In
+`weakFamily t` the instrument is relevant for every `t`, `ρ(Z, U) = 1`, and the squared
+first-stage correlation is `Cov(Z, D)² / (Var(Z) Var(D)) = 1 / (1 + t²)`, which tends to `0`
+as `t` grows; yet the IV bias `Cov(Z, Y) / Cov(Z, D) - β` equals `1` for every `t`. The scale
+factor `sd(U) / sd(D)` of `LinearIVModel.ivBias_eq_correlation` shrinks at the same rate, so a
+bound on it from below is needed in `LinearIVModel.abs_ivBias_ge`. -/
+theorem weakFamily_bias (t : ℝ) :
+    (weakFamily t).Relevance coins ∧
+      LinearIV.correlation (weakFamily t).Z (weakFamily t).U coins = 1 ∧
+      cov[(weakFamily t).Z, (weakFamily t).D; coins] ^ 2 /
+          (Var[(weakFamily t).Z; coins] * Var[(weakFamily t).D; coins]) = 1 / (1 + t ^ 2) ∧
+      cov[(weakFamily t).Z, (weakFamily t).Y; coins] /
+          cov[(weakFamily t).Z, (weakFamily t).D; coins] - (weakFamily t).β = 1 := by
+  have hZD : cov[(weakFamily t).Z, (weakFamily t).D; coins] = 1 / 4 := by
+    simp only [covariance, integral_coins, weakFamily]; norm_num; ring
+  have hZY : cov[(weakFamily t).Z, (weakFamily t).Y; coins] = 1 / 4 := by
+    simp only [covariance, integral_coins, weakFamily, LinearIVModel.Y]; norm_num
+  have hZU : cov[(weakFamily t).Z, (weakFamily t).U; coins] = 1 / 4 := by
+    simp only [covariance, integral_coins, weakFamily]; norm_num
+  have hVZ : Var[(weakFamily t).Z; coins] = 1 / 4 := by
+    rw [← covariance_self (measurable_of_countable _).aemeasurable]
+    simp only [covariance, integral_coins, weakFamily]; norm_num
+  have hVU : Var[(weakFamily t).U; coins] = 1 / 4 := by
+    rw [← covariance_self (measurable_of_countable _).aemeasurable]
+    simp only [covariance, integral_coins, weakFamily]; norm_num
+  have hVD : Var[(weakFamily t).D; coins] = (1 + t ^ 2) / 4 := by
+    rw [← covariance_self (measurable_of_countable _).aemeasurable]
+    simp only [covariance, integral_coins, weakFamily]; norm_num; ring
+  have hs : Real.sqrt (1 / 4 : ℝ) * Real.sqrt (1 / 4) = 1 / 4 :=
+    Real.mul_self_sqrt (by norm_num)
+  refine ⟨by rw [LinearIVModel.Relevance, hZD]; norm_num, ?_, ?_, ?_⟩
+  · rw [LinearIV.correlation, hZU, hVZ, hVU, hs]; norm_num
+  · rw [hZD, hVZ, hVD]; field_simp
+  · rw [hZY, hZD]; norm_num [weakFamily]
 
 end InvalidInstrumentExample
 

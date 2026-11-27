@@ -7,6 +7,7 @@ module
 
 public import CausalInference.Estimation.Consistency
 public import CausalInference.InstrumentalVariables.LinearIV
+public import Mathlib.Probability.Independence.Integration
 
 /-!
 # Consistency of instrumental variable estimators
@@ -50,7 +51,18 @@ probability (`CausalInference.IsConsistent`).
   totalized value `Cov(Z, Y) / 0 = 0`) unless the sample first stage is exactly zero with
   probability tending to one, that is unless only the convention `x / 0 = 0` is at work.
   `CausalInference.not_div_of_tendsto_zero_hypotheses_satisfiable` shows that the hypotheses
-  of the abstract statement can hold together.
+  of the abstract statement can hold together. In the linear model a zero first stage makes the
+  reduced form equal to `Cov(Z, U)` (`LinearIVModel.covariance_Z_Y_of_firstStage_eq_zero`), so
+  the sampling statement concerns an instrument that is also not exogenous.
+* Countermodels on an i.i.d. sample of two fair coins (instrument the first coin, treatment the
+  second): `IVConsistencyExample.sampleCovRatio_not_isConsistent_example`, with outcome equal to
+  the instrument, satisfies every hypothesis of `CausalInference.sampleCovRatio_not_isConsistent`
+  (the sample first stage is nonzero with probability at least `1/4` at every even sample size,
+  by a parity argument); `IVConsistencyExample.irrelevant_not_isConsistent` is a linear model
+  with finite second moments and an exogenous instrument in which only relevance fails, and the
+  sample covariance ratio is not consistent for `β`. There the error equals the treatment; the
+  model with an error independent of the treatment, where the ratio has a Cauchy limit law, is
+  not formalized.
 
 The finite sample bias of the IV estimator, which the source also mentions, is not formalized:
 the ratio need not even have a finite mean.
@@ -306,7 +318,12 @@ measurable `z`, `y`, `d` with finite second moments, a zero first stage `Cov(Z, 
 nonzero reduced form `Cov(Z, Y) ≠ 0`: unless the sample first stage `Ĉov(Z, D)` is exactly zero
 with probability tending to one, the sample covariance ratio is consistent for no constant `c`.
 In particular it is not consistent for the population ratio `Cov(Z, Y) / Cov(Z, D)`, which is
-`0` only by the convention `x / 0 = 0`. -/
+`0` only by the convention `x / 0 = 0`. In the linear model `Y = α + β D + U` a zero first stage
+makes the reduced form `Cov(Z, Y)` equal to `Cov(Z, U)`
+(`LinearIVModel.covariance_Z_Y_of_firstStage_eq_zero`), so the hypotheses describe an instrument
+that is both irrelevant and not exogenous; they never hold for an exogenous instrument. A model
+in which all the hypotheses hold is `IVConsistencyExample.sampleCovRatio_not_isConsistent_example`;
+the failure of relevance alone is `IVConsistencyExample.irrelevant_not_isConsistent`. -/
 theorem sampleCovRatio_not_isConsistent {μ : Measure Ω} [IsProbabilityMeasure μ]
     {O : ℕ → Ω → 𝒪} (hO : IsIIDSample O μ) {z y d : 𝒪 → ℝ} (hz : Measurable z)
     (hy : Measurable y) (hd : Measurable d) (hz2 : MemLp (fun ω ↦ z (O 0 ω)) 2 μ)
@@ -318,5 +335,233 @@ theorem sampleCovRatio_not_isConsistent {μ : Measure Ω} [IsProbabilityMeasure 
   have hb := sampleCov_isConsistent hO hz hd hz2 hd2
   rw [hR0] at hb
   exact (sampleCov_isConsistent hO hz hy hz2 hy2).not_div_of_tendsto_zero hRF hb hne c
+
+/-- In the linear model `Y = α + β D + U` with finite second moments, a zero first stage
+`Cov(Z, D) = 0` makes the reduced form equal to the covariance of the instrument with the error:
+`Cov(Z, Y) = Cov(Z, U)`. So with an exogenous instrument a zero first stage forces a zero reduced
+form. -/
+theorem LinearIVModel.covariance_Z_Y_of_firstStage_eq_zero {μ : Measure Ω}
+    [IsProbabilityMeasure μ] {L : LinearIVModel Ω} (h : L.SecondMoments μ)
+    (hR0 : cov[L.Z, L.D; μ] = 0) :
+    cov[L.Z, L.Y; μ] = cov[L.Z, L.U; μ] := by
+  rw [LinearIVModel.covariance_Y h.memLp_Z h.memLp_D h.memLp_U, hR0, mul_zero, zero_add]
+
+/-! ### Countermodels at a zero first stage -/
+
+namespace IVConsistencyExample
+
+open LinearIVExample IVModel Finset
+
+/-- The instrument of the countermodels: the first of two fair coins, coded `0`/`1`. -/
+def coinZ (o : Bool × Bool) : ℝ := boolToReal o.1
+
+/-- The treatment of the countermodels: the second coin, coded `0`/`1`, independent of the
+instrument. -/
+def coinD (o : Bool × Bool) : ℝ := boolToReal o.2
+
+/-- A parity argument. If the sample size `n` is even and positive, and both the number of
+instrument values `1` and the number of treatment values `1` among the first `n` observations
+are odd, then the sample covariance of instrument and treatment is not `0`: `n²` times it is
+`n a - b c` for counts `a`, `b`, `c` with `b c` odd and `n a` even. -/
+theorem sampleCov_ne_zero_of_odd {O : ℕ → Ω → Bool × Bool} {n : ℕ} (hn : Even n)
+    (hn0 : n ≠ 0) {ω : Ω} (h1 : Odd (∑ i ∈ range n, (O i ω).1.toNat))
+    (h2 : Odd (∑ i ∈ range n, (O i ω).2.toNat)) : sampleCov coinZ coinD O n ω ≠ 0 := by
+  intro h
+  have hz : ∀ o, coinZ o = (o.1.toNat : ℝ) := by rintro ⟨a, b⟩; cases a <;> simp [coinZ]
+  have hd : ∀ o, coinD o = (o.2.toNat : ℝ) := by rintro ⟨a, b⟩; cases b <;> simp [coinD]
+  have hn' : (n : ℝ) ≠ 0 := Nat.cast_ne_zero.2 hn0
+  set A := ∑ i ∈ range n, coinZ (O i ω) * coinD (O i ω)
+  set B := ∑ i ∈ range n, coinZ (O i ω)
+  set C := ∑ i ∈ range n, coinD (O i ω)
+  have h' : (n : ℝ)⁻¹ * A - (n : ℝ)⁻¹ * B * ((n : ℝ)⁻¹ * C) = 0 := h
+  have e : (n : ℝ) * A = B * C := by
+    have : (n : ℝ) * A = (n : ℝ) ^ 2 * ((n : ℝ)⁻¹ * A - (n : ℝ)⁻¹ * B * ((n : ℝ)⁻¹ * C)) +
+        B * C := by field_simp; ring
+    rw [this, h']; ring
+  simp only [A, B, C, hz, hd] at e
+  have e' : n * ∑ i ∈ range n, (O i ω).1.toNat * (O i ω).2.toNat =
+      (∑ i ∈ range n, (O i ω).1.toNat) * ∑ i ∈ range n, (O i ω).2.toNat := by
+    exact_mod_cast e
+  have hodd := h1.mul h2
+  rw [← e'] at hodd
+  exact (Nat.not_even_iff_odd.2 hodd) (hn.mul_right _)
+
+variable {μ : Measure Ω} [IsProbabilityMeasure μ] {O : ℕ → Ω → Bool × Bool}
+
+omit [IsProbabilityMeasure μ] in
+/-- For an i.i.d. sample of two fair coins, the mean of `∏_{i < n} g (O i)` is `0` when `n ≠ 0`
+and `g` has mean `0` under the law of one observation. -/
+theorem integral_prod_eq_zero (hO : IsIIDSample O μ) (hm : ∀ i, Measurable (O i))
+    (hlaw : ∀ i, HasLaw (O i) coins μ) {n : ℕ} (hn : n ≠ 0) {g : Bool × Bool → ℝ}
+    (hg : ∫ x, g x ∂coins = 0) : ∫ ω, ∏ i ∈ range n, g (O i ω) ∂μ = 0 := by
+  have hgm : AEStronglyMeasurable g coins := (measurable_of_countable g).aestronglyMeasurable
+  simp_rw [← Fin.prod_univ_eq_prod_range (fun i ↦ g (O i _)) n]
+  have hI : iIndepFun (fun i : Fin n ↦ O i) μ :=
+    ProbabilityTheory.iIndepFun.precomp Fin.val_injective hO.indep
+  rw [ProbabilityTheory.iIndepFun.integral_fun_prod_comp (f := fun _ ↦ g) hI
+    (fun i ↦ (hm i).aemeasurable)
+    (fun i ↦ (measurable_of_countable g).aestronglyMeasurable)]
+  have h0 : ∀ i : Fin n, ∫ ω, g (O i ω) ∂μ = 0 := fun i ↦ by
+    rw [← hg]; exact (hlaw i).integral_comp hgm
+  exact Finset.prod_eq_zero (Finset.mem_univ ⟨0, Nat.pos_of_ne_zero hn⟩) (h0 _)
+
+/-- For an i.i.d. sample of two fair coins and `n ≠ 0`, the event that the number of first coins
+equal to `1` and the number of second coins equal to `1` among the first `n` observations are
+both odd has probability `1/4`. -/
+theorem measureReal_odd_odd (hO : IsIIDSample O μ) (hm : ∀ i, Measurable (O i))
+    (hlaw : ∀ i, HasLaw (O i) coins μ) {n : ℕ} (hn : n ≠ 0) :
+    μ.real {ω | Odd (∑ i ∈ range n, (O i ω).1.toNat) ∧
+      Odd (∑ i ∈ range n, (O i ω).2.toNat)} = 1 / 4 := by
+  set E := {ω | Odd (∑ i ∈ range n, (O i ω).1.toNat) ∧ Odd (∑ i ∈ range n, (O i ω).2.toNat)}
+  have hs : ∀ f : Bool × Bool → ℕ, Measurable fun ω ↦ ∑ i ∈ range n, f (O i ω) := fun f ↦
+    Finset.measurable_sum _ fun i _ ↦ (measurable_of_countable f).comp (hm i)
+  have hE : MeasurableSet E :=
+    ((hs fun o ↦ o.1.toNat).prodMk (hs fun o ↦ o.2.toNat))
+      ((Set.to_countable {p : ℕ × ℕ | Odd p.1 ∧ Odd p.2}).measurableSet)
+  let g₁ : Bool × Bool → ℝ := fun o ↦ (-1) ^ o.1.toNat
+  let g₂ : Bool × Bool → ℝ := fun o ↦ (-1) ^ o.2.toNat
+  let P : (Bool × Bool → ℝ) → Ω → ℝ := fun g ω ↦ ∏ i ∈ range n, g (O i ω)
+  have hP : ∀ g : Bool × Bool → ℝ, (∀ x, |g x| ≤ 1) → Integrable (P g) μ := fun g hg ↦
+    Integrable.of_bound (Finset.measurable_prod _ fun i _ ↦
+      (measurable_of_countable g).comp (hm i)).aestronglyMeasurable 1
+      (ae_of_all _ fun ω ↦ by
+        rw [Real.norm_eq_abs, Finset.abs_prod]
+        exact Finset.prod_le_one₀ (fun _ _ ↦ abs_nonneg _) fun _ _ ↦ hg _)
+  have hb₁ : ∀ x, |g₁ x| ≤ 1 := fun x ↦ by simp [g₁]
+  have hb₂ : ∀ x, |g₂ x| ≤ 1 := fun x ↦ by simp [g₂]
+  have hb₁₂ : ∀ x, |g₁ x * g₂ x| ≤ 1 := fun x ↦ by simp [g₁, g₂]
+  have hind : E.indicator (1 : Ω → ℝ) =
+      fun ω ↦ (1 - P g₁ ω - P g₂ ω + P (fun o ↦ g₁ o * g₂ o) ω) / 4 := by
+    funext ω
+    simp only [P, Finset.prod_mul_distrib, g₁, g₂, Finset.prod_pow_eq_pow_sum]
+    rcases Nat.even_or_odd (∑ i ∈ range n, (O i ω).1.toNat) with ha | ha <;>
+      rcases Nat.even_or_odd (∑ i ∈ range n, (O i ω).2.toNat) with hb | hb <;>
+      simp [E, ha, hb, ha.neg_one_pow, hb.neg_one_pow, Nat.not_odd_iff_even.2]
+    norm_num
+  have h0 : ∀ g : Bool × Bool → ℝ, ∫ x, g x ∂coins = 0 → ∫ ω, P g ω ∂μ = 0 := fun g hg ↦
+    integral_prod_eq_zero hO hm hlaw hn hg
+  have i₁ : ∫ x, g₁ x ∂coins = 0 := by rw [integral_coins]; simp [g₁]
+  have i₂ : ∫ x, g₂ x ∂coins = 0 := by rw [integral_coins]; simp [g₂]
+  have i₁₂ : ∫ x, g₁ x * g₂ x ∂coins = 0 := by rw [integral_coins]; simp [g₁, g₂]
+  rw [← integral_indicator_one hE, hind, integral_div, integral_add, integral_sub, integral_sub,
+    integral_const, h0 _ i₁, h0 _ i₂, h0 _ i₁₂]
+  · simp
+  all_goals first
+    | exact integrable_const _
+    | exact hP _ hb₁
+    | exact hP _ hb₂
+    | exact hP _ hb₁₂
+    | exact (integrable_const _).sub (hP _ hb₁)
+    | exact ((integrable_const _).sub (hP _ hb₁)).sub (hP _ hb₂)
+
+/-- If each event `S n` of an even positive sample size contains the parity event of
+`IVConsistencyExample.measureReal_odd_odd`, the probabilities `μ (S n)` do not tend to `0`:
+they are at least `1/4` along the even sample sizes. -/
+theorem not_tendsto_zero_of_odd (hO : IsIIDSample O μ) (hm : ∀ i, Measurable (O i))
+    (hlaw : ∀ i, HasLaw (O i) coins μ) {S : ℕ → Set Ω}
+    (hS : ∀ n, Even n → n ≠ 0 → ∀ ω, Odd (∑ i ∈ range n, (O i ω).1.toNat) →
+      Odd (∑ i ∈ range n, (O i ω).2.toNat) → ω ∈ S n) :
+    ¬ Tendsto (fun n ↦ μ (S n)) atTop (𝓝 0) := by
+  intro h
+  obtain ⟨N, hN⟩ := eventually_atTop.1 ((tendsto_order.1 h).2 (ENNReal.ofReal (1 / 4))
+    (by norm_num))
+  have hlt := hN (2 * N + 2) (by omega)
+  refine (not_lt.2 ?_) hlt
+  rw [← measureReal_odd_odd hO hm hlaw (n := 2 * N + 2) (by omega), ofReal_measureReal]
+  exact measure_mono fun ω hω ↦
+    hS _ ⟨N + 1, by ring⟩ (by omega) ω hω.1 hω.2
+
+omit [IsProbabilityMeasure μ] in
+/-- Covariances of functions of the first observation of a sample with law `coins` are
+covariances under `coins`. -/
+theorem covariance_comp (hm : ∀ i, Measurable (O i)) (hlaw : ∀ i, HasLaw (O i) coins μ)
+    (f g : Bool × Bool → ℝ) :
+    cov[fun ω ↦ f (O 0 ω), fun ω ↦ g (O 0 ω); μ] = cov[f, g; coins] := by
+  rw [← (hlaw 0).map_eq, covariance_map_fun (measurable_of_countable f).aestronglyMeasurable
+    (measurable_of_countable g).aestronglyMeasurable (hm 0).aemeasurable]
+
+omit [IsProbabilityMeasure μ] in
+/-- Bounded functions of the first observation of a sample with law `coins` are square
+integrable. -/
+theorem memLp_comp (hlaw : ∀ i, HasLaw (O i) coins μ) {f : Bool × Bool → ℝ}
+    (hf : ∀ x, |f x| ≤ 2) : MemLp (fun ω ↦ f (O 0 ω)) 2 μ :=
+  (hlaw 0).memLp_comp (memLp_coins hf)
+
+/-- **The hypotheses of `sampleCovRatio_not_isConsistent` hold together.** Let `O` be an
+i.i.d. sample of two fair coins (such a sample exists by `exists_isIIDSample`), the instrument
+the first coin, the treatment the second coin and the outcome equal to the instrument. Then
+the first stage `Cov(Z, D)` is `0`, the reduced form `Cov(Z, Y) = 1/4` is not, and the
+probability that the sample first stage is nonzero does not tend to `0` (it is at least `1/4`
+at every even sample size, by a parity argument). So the sample covariance ratio is consistent
+for no constant. In the linear model `Y = α + β D + U` this outcome has `U = Z - β D`, so
+`Cov(Z, U) ≠ 0`: the instrument is both irrelevant and invalid (see
+`LinearIVModel.covariance_Z_Y_of_firstStage_eq_zero`). -/
+theorem sampleCovRatio_not_isConsistent_example (hO : IsIIDSample O μ)
+    (hm : ∀ i, Measurable (O i)) (hlaw : ∀ i, HasLaw (O i) coins μ) :
+    cov[fun ω ↦ coinZ (O 0 ω), fun ω ↦ coinD (O 0 ω); μ] = 0 ∧
+      cov[fun ω ↦ coinZ (O 0 ω), fun ω ↦ coinZ (O 0 ω); μ] = 1 / 4 ∧
+      ¬ Tendsto (fun n ↦ μ {ω | sampleCov coinZ coinD O n ω ≠ 0}) atTop (𝓝 0) ∧
+      ∀ c, ¬ IsConsistent (sampleCovRatio coinZ coinZ coinD O) c μ := by
+  have hZD : cov[fun ω ↦ coinZ (O 0 ω), fun ω ↦ coinD (O 0 ω); μ] = 0 := by
+    rw [covariance_comp hm hlaw]; simp only [covariance, integral_coins, coinZ, coinD]; norm_num
+  have hZZ : cov[fun ω ↦ coinZ (O 0 ω), fun ω ↦ coinZ (O 0 ω); μ] = 1 / 4 := by
+    rw [covariance_comp hm hlaw]; simp only [covariance, integral_coins, coinZ]; norm_num
+  have hne : ¬ Tendsto (fun n ↦ μ {ω | sampleCov coinZ coinD O n ω ≠ 0}) atTop (𝓝 0) :=
+    not_tendsto_zero_of_odd hO hm hlaw fun n hn hn0 ω h1 h2 ↦
+      sampleCov_ne_zero_of_odd hn hn0 h1 h2
+  have hb : ∀ x, |coinZ x| ≤ 2 := fun ⟨a, _⟩ ↦ by cases a <;> norm_num [coinZ]
+  have hb' : ∀ x, |coinD x| ≤ 2 := fun ⟨_, b⟩ ↦ by cases b <;> norm_num [coinD]
+  refine ⟨hZD, hZZ, hne, fun c ↦ ?_⟩
+  exact sampleCovRatio_not_isConsistent hO (measurable_of_countable _)
+    (measurable_of_countable _) (measurable_of_countable _) (memLp_comp hlaw hb)
+    (memLp_comp hlaw hb) (memLp_comp hlaw hb') hZD (by rw [hZZ]; norm_num) hne c
+
+/-- The linear model of the relevance countermodel: on an i.i.d. sample `O` of two fair coins,
+the first observation has instrument `Z` (the first coin), treatment `D` (the second coin),
+structural error `U = D`, and `α = β = 0`, so that `Y = D`. -/
+noncomputable def irrelevant (O : ℕ → Ω → Bool × Bool) : LinearIVModel Ω where
+  α := 0
+  β := 0
+  Z ω := coinZ (O 0 ω)
+  D ω := coinD (O 0 ω)
+  U ω := coinD (O 0 ω)
+
+/-- **Without relevance the sample IV estimator is not consistent for `β`.** In `irrelevant O`,
+built on an i.i.d. sample of two fair coins, the linear model has finite second moments and an
+exogenous instrument (`Cov(Z, U) = 0`), and only relevance fails (`Cov(Z, D) = 0`). The
+observed outcome is `Y = D`. The sample covariance ratio is `1` whenever the sample first
+stage is nonzero, which happens with probability at least `1/4` at every even sample size, so
+it is not consistent for the structural slope `β = 0`. This countermodel has the error equal to the
+treatment; the version with an error independent of the treatment, in which the estimator has a
+Cauchy limit law, is not formalized. -/
+theorem irrelevant_not_isConsistent (hO : IsIIDSample O μ) (hm : ∀ i, Measurable (O i))
+    (hlaw : ∀ i, HasLaw (O i) coins μ) :
+    (irrelevant O).SecondMoments μ ∧ (irrelevant O).Exogeneity μ ∧
+      ¬ (irrelevant O).Relevance μ ∧ (irrelevant O).Y = (fun ω ↦ coinD (O 0 ω)) ∧
+      ¬ IsConsistent (sampleCovRatio coinZ coinD coinD O) (irrelevant O).β μ := by
+  have hb : ∀ x, |coinZ x| ≤ 2 := fun ⟨a, _⟩ ↦ by cases a <;> norm_num [coinZ]
+  have hb' : ∀ x, |coinD x| ≤ 2 := fun ⟨_, b⟩ ↦ by cases b <;> norm_num [coinD]
+  have hZD : cov[fun ω ↦ coinZ (O 0 ω), fun ω ↦ coinD (O 0 ω); μ] = 0 := by
+    rw [covariance_comp hm hlaw]; simp only [covariance, integral_coins, coinZ, coinD]; norm_num
+  refine ⟨⟨memLp_comp hlaw hb', memLp_comp hlaw hb, memLp_comp hlaw hb'⟩, hZD,
+    fun h ↦ h hZD, by funext ω; simp [irrelevant, LinearIVModel.Y], fun hc ↦ ?_⟩
+  rw [IsConsistent, tendstoInMeasure_iff_dist] at hc
+  refine not_tendsto_zero_of_odd hO hm hlaw (S := fun n ↦ {ω | (1 / 2 : ℝ) ≤
+    dist (sampleCovRatio coinZ coinD coinD O n ω) (irrelevant O).β}) ?_ (hc (1 / 2) (by norm_num))
+  intro n hn hn0 ω h1 h2
+  have h := sampleCov_ne_zero_of_odd hn hn0 h1 h2
+  simp only [Set.mem_ofPred_eq, sampleCovRatio, div_self h, irrelevant, Real.dist_eq]
+  norm_num
+
+/-- The countermodels are not vacuous: an i.i.d. sample of two fair coins, with measurable
+observations, exists (`exists_isIIDSample`), so `sampleCovRatio_not_isConsistent_example` and
+`irrelevant_not_isConsistent` apply to it. -/
+theorem exists_coins_sample :
+    ∃ Ω : Type, ∃ _ : MeasurableSpace Ω, ∃ P : Measure Ω, ∃ O : ℕ → Ω → Bool × Bool,
+      IsProbabilityMeasure P ∧ (∀ i, Measurable (O i)) ∧ IsIIDSample O P ∧
+        ∀ i, HasLaw (O i) coins P :=
+  exists_isIIDSample coins
+
+end IVConsistencyExample
 
 end CausalInference

@@ -22,23 +22,30 @@ setting is second moments only, as in `CausalInference.LinearSEM.Basic`: the cov
 causal effect of `X` on `Y` is the total effect `T Y X = β`, and the bias of a regression is its
 coefficient of `X` minus `T Y X`.
 
-`Z` is a valid instrument when the exclusion restriction `κ = 0` holds: it then affects `Y` only
-through `X`, and it is uncorrelated with `U` by construction. The coefficient `κ` is kept as a
-parameter so that the failure of the exclusion restriction is a member of the same family.
+`Z` is uncorrelated with `U` by construction. It is a valid instrument when, in addition, the
+exclusion restriction `κ = 0` holds (it then affects `Y` only through `X`) and it is relevant,
+`Cov(Z, X) = α ω₀ ≠ 0`. The coefficient `κ` is kept as a parameter so that the failure of the
+exclusion restriction is a member of the same family; relevance is not assumed in the
+amplification statements: by `ZBias.abs_bias_lt_iff` the amplification is strict exactly when
+the instrument is relevant and there is confounding through `U` (`γ δ ω₁ ≠ 0`).
 
 ## Main results
 
-Write `v = γ² ω₁ + ω₂`; with `ω₀ = Var(Z) > 0` it is the partial variance `Var(X | Z)`
-(`ZBias.partialCov_XX`). The adjusted statements assume `ω₀ > 0` and `v > 0`.
+Write `v = γ² ω₁ + ω₂`; with `ω₀ = Var(Z) > 0` it is the residual variance
+`Var(X) - Cov(X, Z)² / Var(Z)` of the linear regression of `X` on `Z`
+(`ZBias.residualVar_XZ`, `ZBias.partialCov_XX`). It is a second moment quantity, not the
+conditional variance `Var(X | Z)`: the uncorrelated errors of the model need not be
+independent, and when the conditional mean of `X` given `Z` is not linear the two differ (with
+`Z` uniform on `{-1, 0, 1}`, `U = Z² - 2/3` and `X = Z + U`, the conditional variance is `0` and
+the residual variance is `2/9`). The adjusted statements assume `ω₀ > 0` and `v > 0`.
 
 * `ZBias.bias_unadjusted`: if `Var(X) = α² ω₀ + v > 0`, the regression of `Y` on `X` alone has
   bias `(γ δ ω₁ + α κ ω₀) / Var(X)`.
 * `ZBias.bias_adjusted`: the regression of `Y` on `X` and `Z` has bias `γ δ ω₁ / v`, whatever
   `κ`; `ZBias.bias_adjusted_eq_cov` and `ZBias.bias_adjusted_eq_partialCov` state it in
-  covariance form, `δ Cov(X, U) Var(Z) / (Var(X) Var(Z) - Cov(X, Z)²) = δ Cov(X, U) / Var(X | Z)`.
+  covariance form, `δ Cov(X, U) Var(Z) / (Var(X) Var(Z) - Cov(X, Z)²) = δ Cov(X, U) / v`.
 * `ZBias.bias_adjusted_mul`: under the exclusion restriction the two biases are in the exact
-  ratio `Var(X) / Var(X | Z)`: adjusted bias times `Var(X | Z)` equals unadjusted bias times
-  `Var(X)`.
+  ratio `Var(X) / v`: adjusted bias times `v` equals unadjusted bias times `Var(X)`.
 * `ZBias.abs_bias_le`: Z-bias. Under the exclusion restriction the absolute bias of the
   adjusted regression is at least that of the unadjusted one, with the same sign;
   `ZBias.abs_bias_lt_iff`: the inequality is strict if and only if `α ≠ 0` (relevance,
@@ -160,9 +167,24 @@ theorem isUnit_subCov_Z (hz : 0 < ω 0) : IsUnit (subCov (model α γ β δ κ �
   change (model α γ β δ κ ω hω).cov 0 0 * ((ω 0)⁻¹ * 1) = 1
   rw [cov_ZZ, mul_one, mul_inv_cancel₀ hz.ne']
 
-/-- `γ² ω₁ + ω₂` is the partial variance `Var(X | Z)`: the partial covariance of `X` with itself
-given `Z`, which is the residual variance of the regression of `X` on `Z`
-(`IsRegCoeff.partialCov_eq_covComb`). -/
+/-- The residual variance of the linear regression of `X` on `Z`, written out:
+`Var(X) - Cov(X, Z)² / Var(Z) = γ² ω₁ + ω₂`. The left side is a residual variance only when
+`Var(Z) = ω₀ > 0` (for `ω₀ = 0` the identity holds through `x / 0 = 0`, since then
+`Cov(X, Z) = 0`). It is not the conditional variance `Var(X | Z)`, which second moments do not
+determine. -/
+theorem residualVar_XZ :
+    (model α γ β δ κ ω hω).cov 2 2 -
+        (model α γ β δ κ ω hω).cov 2 0 ^ 2 / (model α γ β δ κ ω hω).cov 0 0 =
+      γ ^ 2 * ω 1 + ω 2 := by
+  rw [cov_XX, cov_XZ, cov_ZZ]
+  field_simp
+  ring
+
+/-- `γ² ω₁ + ω₂` is the partial covariance of `X` with itself given `Z`, that is the residual
+variance `Var(X) - Cov(X, Z)² / Var(Z)` of the linear regression of `X` on `Z`
+(`IsRegCoeff.partialCov_eq_covComb`, `ZBias.residualVar_XZ`). It is not the conditional
+variance `Var(X | Z)` unless the conditional mean of `X` given `Z` is linear with constant
+conditional variance, which the second moment model does not assume. -/
 theorem partialCov_XX (hz : 0 < ω 0) :
     partialCov (model α γ β δ κ ω hω).cov {0} 2 2 = γ ^ 2 * ω 1 + ω 2 := by
   have hreg := regCoeff_isRegCoeff 2 (isUnit_subCov_Z (α := α) (γ := γ) (β := β) (δ := δ)
@@ -180,7 +202,8 @@ theorem exists_isRegCoeff_unadjusted (hW : 0 < α ^ 2 * ω 0 + (γ ^ 2 * ω 1 + 
     ∃ r, IsRegCoeff (model α γ β δ κ ω hω).cov {2} 3 r :=
   exists_isRegCoeff_singleton 3 (cov_XX_pos hW).ne'
 
-/-- The regression of `Y` on `X` and `Z` exists when `Var(Z) > 0` and `Var(X | Z) > 0`. -/
+/-- The regression of `Y` on `X` and `Z` exists when `Var(Z) > 0` and the residual variance
+`γ² ω₁ + ω₂` of `X` on `Z` is positive. -/
 theorem exists_isRegCoeff_adjusted (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) :
     ∃ r, IsRegCoeff (model α γ β δ κ ω hω).cov {2, 0} 3 r :=
   exists_isRegCoeff_pair 3 (by decide) ((model α γ β δ κ ω hω).cov_symm 0 2)
@@ -188,7 +211,8 @@ theorem exists_isRegCoeff_adjusted (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 
 
 /-- The bias of the unadjusted regression: if `Var(X) = α² ω₀ + (γ² ω₁ + ω₂) > 0`, the
 coefficient of `X` in the regression of `Y` on `X` alone exceeds the causal effect `T Y X = β`
-by `(γ δ ω₁ + α κ ω₀) / Var(X)`; here `γ² ω₁ + ω₂ = Var(X | Z)`. The term `γ δ ω₁ =
+by `(γ δ ω₁ + α κ ω₀) / Var(X)`; here `γ² ω₁ + ω₂` is the residual variance of `X` on `Z`.
+The term `γ δ ω₁ =
 δ Cov(X, U)` is the confounding through `U`, the term `α κ ω₀` the confounding through `Z`
 (zero under the exclusion restriction). -/
 theorem bias_unadjusted (hW : 0 < α ^ 2 * ω 0 + (γ ^ 2 * ω 1 + ω 2)) {r : Fin 4 → ℝ}
@@ -202,10 +226,10 @@ theorem bias_unadjusted (hW : 0 < α ^ 2 * ω 0 + (γ ^ 2 * ω 1 + ω 2)) {r : F
   field_simp
   ring
 
-/-- The bias of the regression adjusted for the instrument: if `Var(Z) = ω₀ > 0` and
-`Var(X | Z) = γ² ω₁ + ω₂ > 0`, the coefficient of `X` in the regression of `Y` on `X` and `Z`
-exceeds the causal effect `T Y X = β` by `γ δ ω₁ / Var(X | Z)`, whatever the direct effect `κ`
-of `Z` on `Y`. -/
+/-- The bias of the regression adjusted for the instrument: if `Var(Z) = ω₀ > 0` and the
+residual variance `v = γ² ω₁ + ω₂` of `X` on `Z` is positive, the coefficient of `X` in the
+regression of `Y` on `X` and `Z` exceeds the causal effect `T Y X = β` by `γ δ ω₁ / v`,
+whatever the direct effect `κ` of `Z` on `Y`. -/
 theorem bias_adjusted (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r : Fin 4 → ℝ}
     (hr : IsRegCoeff (model α γ β δ κ ω hω).cov {2, 0} 3 r) :
     r 2 - (model α γ β δ κ ω hω).T 3 2 = γ * δ * ω 1 / (γ ^ 2 * ω 1 + ω 2) := by
@@ -217,7 +241,8 @@ theorem bias_adjusted (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r : Fin 4
   ring
 
 /-- The adjusted bias in covariance form: under the hypotheses of `bias_adjusted`, it is
-`δ Cov(X, U) Var(Z) / (Var(X) Var(Z) - Cov(X, Z)²)`, that is `δ Cov(X, U) / Var(X | Z)`. -/
+`δ Cov(X, U) Var(Z) / (Var(X) Var(Z) - Cov(X, Z)²)`, that is `δ Cov(X, U)` divided by the
+residual variance of `X` on `Z`. -/
 theorem bias_adjusted_eq_cov (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r : Fin 4 → ℝ}
     (hr : IsRegCoeff (model α γ β δ κ ω hω).cov {2, 0} 3 r) :
     r 2 - (model α γ β δ κ ω hω).T 3 2 =
@@ -228,8 +253,9 @@ theorem bias_adjusted_eq_cov (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r 
   field_simp
 
 /-- The adjusted bias with the partial variance: under the hypotheses of `bias_adjusted`, it is
-`δ Cov(X, U) / Var(X | Z)` with `Var(X | Z) = partialCov Σ {Z} X X`, as in the Frisch, Waugh,
-and Lovell form `IsRegCoeff.eq_partialCov_div` of the adjusted coefficient. -/
+`δ Cov(X, U) / partialCov Σ {Z} X X`, the partial variance being the residual variance of `X`
+on `Z`, as in the Frisch, Waugh, and Lovell form `IsRegCoeff.eq_partialCov_div` of the adjusted
+coefficient. -/
 theorem bias_adjusted_eq_partialCov (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2)
     {r : Fin 4 → ℝ} (hr : IsRegCoeff (model α γ β δ κ ω hω).cov {2, 0} 3 r) :
     r 2 - (model α γ β δ κ ω hω).T 3 2 =
@@ -239,9 +265,9 @@ theorem bias_adjusted_eq_partialCov (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω
 /-! ### Amplification under the exclusion restriction -/
 
 /-- The amplification factor: under the exclusion restriction (`κ = 0`), with `Var(Z) > 0` and
-`Var(X | Z) > 0`, the adjusted bias times `Var(X | Z)` equals the unadjusted bias times
-`Var(X)`. So the adjusted bias is the unadjusted bias multiplied by
-`Var(X) / Var(X | Z) = 1 / (1 - Corr(X, Z)²)`. -/
+positive residual variance `v = γ² ω₁ + ω₂ = Var(X) - Cov(X, Z)² / Var(Z)` of `X` on `Z`, the
+adjusted bias times `v` equals the unadjusted bias times `Var(X)`. So the adjusted bias is the
+unadjusted bias multiplied by `Var(X) / v = 1 / (1 - Corr(X, Z)²)`. -/
 theorem bias_adjusted_mul (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r s : Fin 4 → ℝ}
     (hr : IsRegCoeff (model α γ β δ 0 ω hω).cov {2} 3 r)
     (hs : IsRegCoeff (model α γ β δ 0 ω hω).cov {2, 0} 3 s) :
@@ -254,8 +280,9 @@ theorem bias_adjusted_mul (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r s :
   ring
 
 /-- Z-bias (bias amplification). Under the exclusion restriction (`κ = 0`), with `Var(Z) > 0`
-and `Var(X | Z) > 0`, the biases of the unadjusted and the `Z`-adjusted regressions have the
-same sign, and adjusting for the instrument does not decrease the absolute bias. -/
+and positive residual variance `γ² ω₁ + ω₂` of `X` on `Z`, the biases of the unadjusted and
+the `Z`-adjusted regressions have the same sign, and adjusting for the instrument does not
+decrease the absolute bias. -/
 theorem abs_bias_le (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r s : Fin 4 → ℝ}
     (hr : IsRegCoeff (model α γ β δ 0 ω hω).cov {2} 3 r)
     (hs : IsRegCoeff (model α γ β δ 0 ω hω).cov {2, 0} 3 s) :
@@ -321,8 +348,9 @@ theorem bias_eq_iff (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2) {r s : Fin 4
     · rw [ha]; ring
     · rw [hk]; ring
 
-/-- With a valid instrument and no confounding through `U` (`γ δ ω₁ = 0`), both regressions
-are unbiased: adjusting for the instrument adds no bias. -/
+/-- Under the exclusion restriction and with no confounding through `U` (`γ δ ω₁ = 0`), both
+regressions are unbiased, whether or not the instrument is relevant: adjusting for `Z` adds no
+bias. -/
 theorem bias_eq_zero_of_no_confounding (hz : 0 < ω 0) (hv : 0 < γ ^ 2 * ω 1 + ω 2)
     (hk : γ * δ * ω 1 = 0) {r s : Fin 4 → ℝ}
     (hr : IsRegCoeff (model α γ β δ 0 ω hω).cov {2} 3 r)
@@ -341,7 +369,8 @@ theorem unitVar_nonneg : (0 : Fin 4 → ℝ) ≤ fun _ => 1 := fun _ => zero_le_
 namespace Example
 
 /-- A valid instrument with every coefficient and every error variance equal to one:
-`X = Z + U + ε_X`, `Y = U + X + ε_Y`, so `Var(X) = 3` and `Var(X | Z) = 2`. -/
+`X = Z + U + ε_X`, `Y = U + X + ε_Y`, so `Var(X) = 3` and the residual variance of `X` on `Z`
+is `2`. -/
 abbrev M : LinearSEM (Fin 4) := model 1 1 1 1 0 (fun _ => 1) unitVar_nonneg
 
 /-- The unadjusted regression has bias `1/3`. -/
