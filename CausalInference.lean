@@ -135,3 +135,4 @@ public import CausalInference.BiasAnalysis.Bayesian
 public import CausalInference.Designs.DifferenceInDifferences.RepeatedCrossSection
 public import CausalInference.Designs.DifferenceInDifferences.TrendAdjusted
 public import CausalInference.Designs.DifferenceInDifferences.Scale
+public import CausalInference.Designs.RegressionDiscontinuity.Interpretation
