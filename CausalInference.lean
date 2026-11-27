@@ -127,3 +127,4 @@ public import CausalInference.SCM.TwinNetwork
 public import CausalInference.SCM.CounterfactualExamples
 public import CausalInference.SCM.ActualCause
 public import CausalInference.Graphical.DSeparationLemmas
+public import CausalInference.BiasAnalysis.MultipleBias
