@@ -25,7 +25,10 @@ All declarations live in the namespace `CausalInference.Randomized`.
 * `numTreated`: the number of treated units of an assignment.
 * `completeSupport`: the assignments treating exactly `n1` units.
 * `completeDesign`: the uniform design on `completeSupport n1`.
-* `PotentialOutcomes.diffInMeans`: the difference in means estimator.
+* `PotentialOutcomes.diffInMeans`: the fixed-denominator difference in means, with the arm
+  sizes supplied from outside.
+* `PotentialOutcomes.diffInMeansObs`: the observed difference in means, with the realized arm
+  counts as denominators.
 
 ## Main results
 
@@ -34,7 +37,13 @@ All declarations live in the namespace `CausalInference.Randomized`.
   `n1 / N`.
 * `completeDesign_pairInclusionProb`: two distinct units are both treated with
   probability `n1 (n1 - 1) / (N (N - 1))`.
-* `complete_diffInMeans_unbiased`: the difference in means is unbiased.
+* `complete_diffInMeans_unbiased`: the fixed-denominator difference in means is unbiased.
+* `PotentialOutcomes.diffInMeansObs_eq_diffInMeans`: on the support of complete
+  randomization the two statistics agree.
+* `complete_diffInMeansObs_unbiased`: the observed difference in means is unbiased.
+* `Design.inclusionProb_perm`, `Design.pairInclusionProb_perm`,
+  `Design.inclusionProb_of_perm_invariant`: inclusion probabilities of designs invariant
+  under relabeling the units.
 -/
 
 @[expose] public section
@@ -175,17 +184,22 @@ theorem completeDesign_pairInclusionProb (n1 : ℕ) (h : n1 ≤ Fintype.card ι)
   field_simp at htot ⊢
   exact htot
 
-/-- The difference in means `(1/n1) Σ_i A_i Y_i - (1/n0) Σ_i (1 - A_i) Y_i`: the average observed
-outcome among treated units minus that among control units, when `n1` units are treated and
-`n0` are controls. -/
+/-- The fixed-denominator difference in means `(1/n1) Σ_i A_i Y_i - (1/n0) Σ_i (1 - A_i) Y_i`,
+with the counts `n1` and `n0` supplied from outside. It is the difference between the average
+observed outcomes of the treated and the control units only for assignments that treat exactly
+`n1` units, with `n1 + n0 = N` (see `diffInMeansObs_eq_diffInMeans`); for other assignments it
+is a different statistic. The observed statistic computed from the realized arm counts is
+`PotentialOutcomes.diffInMeansObs`. -/
 noncomputable def PotentialOutcomes.diffInMeans (po : PotentialOutcomes ι) (n1 n0 : ℕ)
     (a : ι → Bool) : ℝ :=
   (n1 : ℝ)⁻¹ * ∑ i, treatInd a i * po.observed a i -
     (n0 : ℝ)⁻¹ * ∑ i, (1 - treatInd a i) * po.observed a i
 
 omit [DecidableEq ι] in
-/-- With `n1 + n0 = N` and both positive, the difference in means coincides, for every
-assignment, with the Horvitz-Thompson estimator using the treatment probability `n1 / N`. -/
+/-- A fixed-denominator identity: with `n1 + n0 = N` and both positive, the fixed-denominator
+expression `diffInMeans n1 n0` coincides, for every assignment, with the Horvitz-Thompson
+estimator using the treatment probability `n1 / N`. For an assignment that does not treat
+exactly `n1` units neither side is the observed difference in means. -/
 theorem PotentialOutcomes.diffInMeans_eq_htEstimator (po : PotentialOutcomes ι) {n1 n0 : ℕ}
     (hn : n1 + n0 = Fintype.card ι) (hn1 : 0 < n1) (hn0 : 0 < n0) (a : ι → Bool) :
     po.diffInMeans n1 n0 a = po.htEstimator (n1 / Fintype.card ι) a := by
@@ -208,10 +222,81 @@ theorem complete_diffInMeans_unbiased (po : PotentialOutcomes ι) {n1 n0 : ℕ}
     (completeDesign n1 (by omega)).expect (po.diffInMeans n1 n0) = po.ate := by
   have hN : 0 < Fintype.card ι := by omega
   have hNr : (0 : ℝ) < Fintype.card ι := by exact_mod_cast hN
+  have : Nonempty ι := Fintype.card_pos_iff.mp hN
   rw [show po.diffInMeans n1 n0 = _ from funext (po.diffInMeans_eq_htEstimator hn hn1 hn0)]
   refine po.htEstimator_unbiased _ _ (by positivity) ?_
     (completeDesign_inclusionProb n1 (by omega) hN)
   rw [div_lt_one hNr]
   exact_mod_cast (by omega : n1 < Fintype.card ι)
+
+/-- The observed difference in means: the average observed outcome among the units actually
+treated by `a` minus that among the units actually left as controls, with the realized arm
+counts `numTreated a` and `N - numTreated a` as denominators. It is a difference of arm means
+when both arms are nonempty, which holds on the support of complete randomization with
+`0 < n1 < N`. -/
+noncomputable def PotentialOutcomes.diffInMeansObs (po : PotentialOutcomes ι) (a : ι → Bool) :
+    ℝ :=
+  (numTreated a : ℝ)⁻¹ * ∑ i, treatInd a i * po.observed a i -
+    ((Fintype.card ι - numTreated a : ℕ) : ℝ)⁻¹ * ∑ i, (1 - treatInd a i) * po.observed a i
+
+/-- On the support of complete randomization with `n1` treated, `n1 + n0 = N`, the observed
+difference in means equals the fixed-denominator expression `diffInMeans n1 n0`. -/
+theorem PotentialOutcomes.diffInMeansObs_eq_diffInMeans (po : PotentialOutcomes ι)
+    {n1 n0 : ℕ} (hn : n1 + n0 = Fintype.card ι) {a : ι → Bool}
+    (ha : a ∈ completeSupport n1) : po.diffInMeansObs a = po.diffInMeans n1 n0 a := by
+  rw [mem_completeSupport] at ha
+  have h0 : Fintype.card ι - n1 = n0 := by omega
+  simp only [diffInMeansObs, diffInMeans, ha, h0]
+
+/-- **Unbiasedness of the observed difference in means under complete randomization.** If
+exactly `n1` of the `N = n1 + n0` units are treated, uniformly at random, with `n1, n0 > 0`,
+then the observed difference in means is unbiased for the finite-population average treatment
+effect. -/
+theorem complete_diffInMeansObs_unbiased (po : PotentialOutcomes ι) {n1 n0 : ℕ}
+    (hn : n1 + n0 = Fintype.card ι) (hn1 : 0 < n1) (hn0 : 0 < n0) :
+    (completeDesign n1 (by omega)).expect po.diffInMeansObs = po.ate := by
+  rw [Design.expect_congr _ fun a ha => po.diffInMeansObs_eq_diffInMeans hn ha]
+  exact complete_diffInMeans_unbiased po hn hn1 hn0
+
+/-! ### Permutation-invariant designs -/
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- For a design invariant under the relabeling `σ` of the units, the unit `σ i` is treated
+with the same probability as `i`. -/
+theorem Design.inclusionProb_perm (d : Design ι) (σ : Equiv.Perm ι)
+    (hσ : ∀ f : (ι → Bool) → ℝ, d.expect (fun a => f (a ∘ σ)) = d.expect f) (i : ι) :
+    d.inclusionProb (σ i) = d.inclusionProb i :=
+  hσ fun a => treatInd a i
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- For a design invariant under the relabeling `σ` of the units, the pair `(σ i, σ j)` is
+treated jointly with the same probability as `(i, j)`. -/
+theorem Design.pairInclusionProb_perm (d : Design ι) (σ : Equiv.Perm ι)
+    (hσ : ∀ f : (ι → Bool) → ℝ, d.expect (fun a => f (a ∘ σ)) = d.expect f) (i j : ι) :
+    d.pairInclusionProb (σ i) (σ j) = d.pairInclusionProb i j :=
+  hσ fun a => treatInd a i * treatInd a j
+
+omit [DecidableEq ι] in
+/-- **Inclusion probabilities of an exchangeable design.** If a design is invariant under every
+relabeling of the units and every assignment in its support treats exactly `m` units, then
+every unit is treated with probability `m / N`. -/
+theorem Design.inclusionProb_of_perm_invariant (d : Design ι) (m : ℕ)
+    (hσ : ∀ (σ : Equiv.Perm ι) (f : (ι → Bool) → ℝ),
+      d.expect (fun a => f (a ∘ σ)) = d.expect f)
+    (hsupp : ∀ a ∈ d.support, numTreated a = m) (i : ι) :
+    d.inclusionProb i = m / Fintype.card ι := by
+  classical
+  have hsym : ∀ j, d.inclusionProb j = d.inclusionProb i := fun j => by
+    simpa using d.inclusionProb_perm (Equiv.swap i j) (hσ _) i
+  have htot : ∑ j, d.inclusionProb j = m := by
+    unfold Design.inclusionProb
+    rw [← d.expect_sum, d.expect_congr (g := fun _ => (m : ℝ)) fun a ha => by
+      rw [← numTreated_eq_sum, hsupp a ha]]
+    exact d.expect_const _
+  rw [sum_congr rfl fun j _ => hsym j, sum_const, card_univ, nsmul_eq_mul] at htot
+  have : Nonempty ι := ⟨i⟩
+  have : (Fintype.card ι : ℝ) ≠ 0 := Nat.cast_ne_zero.2 Fintype.card_ne_zero
+  field_simp
+  linarith
 
 end CausalInference.Randomized

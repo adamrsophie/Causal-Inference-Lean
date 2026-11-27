@@ -73,3 +73,4 @@ public import CausalInference.Measures.Collapsibility
 public import CausalInference.Measures.EffectMeasures
 public import CausalInference.Measures.Examples
 public import CausalInference.Measures.Simpson
+public import CausalInference.Interference.DesignBridge
