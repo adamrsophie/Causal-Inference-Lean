@@ -26,7 +26,7 @@ Project site with a dependency map, highlights, and a full reference:
 | `CausalInference/InstrumentalVariables` | Principal strata, the local average treatment effect theorem, counterexamples without monotonicity, bounds on the average effect with sharpness, instrumental inequalities, linear instrumental variables |
 | `CausalInference/Interference` | Partial interference, direct and indirect effects, two-stage randomization |
 | `CausalInference/Mediation` | Controlled and natural effects, decompositions, the mediation formula, a cross-world counterexample |
-| `CausalInference/Longitudinal` | Time-varying treatments: sequential exchangeability, the g-formula at any finite horizon, inverse probability weighting, treatment-confounder feedback |
+| `CausalInference/Longitudinal` | Time-varying treatments: sequential exchangeability, the g-formula at any finite horizon for static and dynamic regimes, inverse probability weighting at any horizon, treatment-confounder feedback, the g-null test and the g-null paradox setting |
 | `CausalInference/Measures` | Risk difference, risk ratio, odds ratio; collapsibility and the odds ratio counterexample; effect modification; the sure-thing principle and Simpson's reversal; paradox examples |
 | `CausalInference/Interaction` | Response types for two treatments, additive interaction, synergism, sufficient causes |
 | `CausalInference/Attribution` | Probabilities of necessity, sufficiency, and both: identification under exogeneity and monotonicity, sharp bounds from experimental and combined data, non-identification, textbook examples |

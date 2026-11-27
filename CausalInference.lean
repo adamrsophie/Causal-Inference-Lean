@@ -112,3 +112,7 @@ public import CausalInference.SCM.DoCalculusExamples
 public import CausalInference.BiasAnalysis.SelectionAdjustment
 public import CausalInference.BiasAnalysis.ExternalAdjustment
 public import CausalInference.BiasAnalysis.MeasurementError
+public import CausalInference.Longitudinal.Bridge
+public import CausalInference.Longitudinal.WeightingGeneral
+public import CausalInference.Longitudinal.Dynamic
+public import CausalInference.Longitudinal.GNull
