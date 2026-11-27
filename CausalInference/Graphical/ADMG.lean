@@ -5,7 +5,8 @@ Authors: Adam R Sophie
 -/
 module
 
-public import CausalInference.Graphical.Mutilation
+public import CausalInference.Graphical.Closure
+public import CausalInference.Graphical.TopologicalOrder
 public import Mathlib.Combinatorics.SimpleGraph.Basic
 
 /-!
@@ -30,17 +31,24 @@ decidable, so `decide` can check it. An acyclic directed mixed graph (ADMG) is a
 * `ADMG.ofDigraph D`: the DAG `D` seen as an ADMG with no bidirected edges.
 * `ADMG.parents`, `ADMG.children`, `ADMG.IsAncestor`, `ADMG.ancestors`, `ADMG.descendants`,
   `ADMG.ancestorsOf`, `ADMG.descendantsOf`: the directed notions, read off the directed part.
-* `ADMG.siblings G v`: the bidirected neighbors of `v` (also called spouses).
+* `ADMG.siblings G v`: the bidirected neighbors of `v`, and its finite version
+  `ADMG.siblingsFinset G v`. (A spouse, in Pearl's usage, is a co-parent: a different notion.)
 * `ADMG.restrict G S`: the induced sub-ADMG on `S`, on the same vertex type.
 * `ADMG.deleteIncoming G X`, `ADMG.deleteOutgoing G X`: the mutilations of Pearl.
 * `ADMG.IsAncestral G S`: `S` equals its ancestral closure.
+* `ADMG.ancestorsOfFinset G S`: the ancestral closure of a finset, for a finite vertex type.
 
 ## Main results
 
 * `ADMG.isAncestral_ancestorsOf`: the ancestral closure of any set is ancestral.
-* `ADMG.IsAcyclic.exists_adj_lt`: a finite acyclic ADMG has a topological order.
+* `ADMG.isAncestral_iff_forall_adj`: a set is ancestral exactly when it contains every parent of
+  each of its members.
+* `ADMG.IsAcyclic.exists_adj_lt`, `ADMG.IsAcyclic.exists_injective_adj_lt`,
+  `ADMG.IsAcyclic.exists_equiv_fin_adj_lt`: a finite acyclic ADMG has a topological order, and
+  an enumeration `V ≃ Fin (Fintype.card V)` of its vertices along which every edge increases.
 * Each operation preserves acyclicity, and `DecidableRel` instances make the finite decision
-  procedures of the directed substrate apply.
+  procedures of the directed substrate apply; membership in `G.ancestorsOf S` and
+  `G.IsAncestral S` are decidable on a finite vertex type.
 
 Sources: Richardson (2003), *Markov properties for acyclic directed mixed graphs*; Pearl (2009),
 *Causality: Models, Reasoning, and Inference*, 2nd edition.
@@ -97,7 +105,8 @@ def ancestorsOf (G : ADMG V) (S : Set V) : Set V := G.directed.ancestorsOf S
 /-- The inclusive descendant closure of `S` in the directed part. -/
 def descendantsOf (G : ADMG V) (S : Set V) : Set V := G.directed.descendantsOf S
 
-/-- The siblings (spouses) of `v`: the vertices `w` with a bidirected edge `v ↔ w`. -/
+/-- The siblings of `v`: the vertices `w` with a bidirected edge `v ↔ w`. These are not the
+spouses of `v`: in Pearl's usage a spouse is a co-parent, a vertex sharing a child with `v`. -/
 def siblings (G : ADMG V) (v : V) : Set V := G.bidirected.neighborSet v
 
 /-- A set `S` is ancestral when it equals its ancestral closure: every ancestor of a member of
@@ -138,6 +147,15 @@ theorem subset_ancestorsOf (S : Set V) : S ⊆ G.ancestorsOf S :=
   Digraph.subset_ancestorsOf S
 
 theorem isAncestral_iff : G.IsAncestral S ↔ G.ancestorsOf S = S := Iff.rfl
+
+/-- An ADMG-ancestral set is an ancestral set of the directed part. -/
+theorem isAncestral_iff_directed : G.IsAncestral S ↔ G.directed.IsAncestral S := Iff.rfl
+
+/-- The closure test: `S` is ancestral exactly when every parent of a member of `S` lies in
+`S`. -/
+theorem isAncestral_iff_forall_adj :
+    G.IsAncestral S ↔ ∀ ⦃u v⦄, G.directed.Adj u v → v ∈ S → u ∈ S :=
+  Digraph.isAncestral_iff_forall_adj
 
 /-- A set is ancestral exactly when it contains the ancestral closure of itself. -/
 theorem isAncestral_iff_subset : G.IsAncestral S ↔ G.ancestorsOf S ⊆ S :=
@@ -285,6 +303,17 @@ theorem IsAcyclic.exists_adj_lt [Finite V] {G : ADMG V} (hG : G.IsAcyclic) :
     ∃ f : V → ℕ, ∀ ⦃u v⦄, G.directed.Adj u v → f u < f v :=
   Digraph.IsAcyclic.exists_adj_lt hG
 
+/-- A finite acyclic ADMG has an injective topological order of its directed part. -/
+theorem IsAcyclic.exists_injective_adj_lt [Finite V] {G : ADMG V} (hG : G.IsAcyclic) :
+    ∃ f : V → ℕ, Function.Injective f ∧ ∀ ⦃u v⦄, G.directed.Adj u v → f u < f v :=
+  Digraph.IsAcyclic.exists_injective_adj_lt hG
+
+/-- A finite acyclic ADMG has an enumeration `e : V ≃ Fin (Fintype.card V)` of its vertices
+along which every directed edge increases. -/
+theorem IsAcyclic.exists_equiv_fin_adj_lt [Fintype V] {G : ADMG V} (hG : G.IsAcyclic) :
+    ∃ e : V ≃ Fin (Fintype.card V), ∀ ⦃u v⦄, G.directed.Adj u v → e u < e v :=
+  Digraph.IsAcyclic.exists_equiv_fin_adj_lt hG
+
 /-! ### Decidability -/
 
 section Decidable
@@ -335,7 +364,54 @@ instance decidableIsAncestor [Fintype V] [DecidableEq V] [DecidableRel G.directe
     (u v : V) : Decidable (G.IsAncestor u v) :=
   inferInstanceAs (Decidable (G.directed.IsAncestor u v))
 
+/-- Membership in the ancestral closure of a decidable set is decidable on a finite vertex
+type. -/
+instance decidablePredMemAncestorsOf [Fintype V] [DecidableEq V] [DecidableRel G.directed.Adj]
+    [DecidablePred (· ∈ S)] : DecidablePred (· ∈ G.ancestorsOf S) :=
+  inferInstanceAs (DecidablePred (· ∈ G.directed.ancestorsOf S))
+
+/-- Being ancestral is decidable on a finite vertex type, through the closure test
+`isAncestral_iff_forall_adj`. -/
+instance decidableIsAncestral [Fintype V] [DecidableEq V] [DecidableRel G.directed.Adj]
+    [DecidablePred (· ∈ S)] : Decidable (G.IsAncestral S) :=
+  inferInstanceAs (Decidable (G.directed.IsAncestral S))
+
 end Decidable
+
+/-! ### Finite versions -/
+
+section Finite
+
+variable (G : ADMG V) [Fintype V]
+
+/-- The siblings of `v` as a finset: the vertices `w` with a bidirected edge `v ↔ w`. -/
+def siblingsFinset [DecidableRel G.bidirected.Adj] (v : V) : Finset V :=
+  Finset.univ.filter (G.bidirected.Adj v)
+
+/-- The inclusive ancestral closure of a finset `S` in the directed part. -/
+def ancestorsOfFinset [DecidableEq V] [DecidableRel G.directed.Adj] (S : Finset V) : Finset V :=
+  G.directed.ancestorsOfFinset S
+
+variable {G}
+
+@[simp] theorem mem_siblingsFinset [DecidableRel G.bidirected.Adj] {v w : V} :
+    w ∈ G.siblingsFinset v ↔ G.bidirected.Adj v w := by
+  simp [siblingsFinset]
+
+@[simp, norm_cast] theorem coe_siblingsFinset [DecidableRel G.bidirected.Adj] (v : V) :
+    (G.siblingsFinset v : Set V) = G.siblings v := by
+  ext; simp
+
+@[simp] theorem mem_ancestorsOfFinset [DecidableEq V] [DecidableRel G.directed.Adj]
+    {S : Finset V} {u : V} :
+    u ∈ G.ancestorsOfFinset S ↔ ∃ s ∈ S, ReflTransGen G.directed.Adj u s :=
+  Digraph.mem_ancestorsOfFinset
+
+@[simp, norm_cast] theorem coe_ancestorsOfFinset [DecidableEq V] [DecidableRel G.directed.Adj]
+    (S : Finset V) : (G.ancestorsOfFinset S : Set V) = G.ancestorsOf (S : Set V) :=
+  Digraph.coe_ancestorsOfFinset S
+
+end Finite
 
 end ADMG
 

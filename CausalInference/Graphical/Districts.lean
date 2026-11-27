@@ -23,6 +23,9 @@ related to `SimpleGraph.ConnectedComponent`. Districts are the c-components of T
 * `ADMG.district G v`: the district of `v`.
 * `ADMG.districtFinset G v`, `ADMG.districts G`: the finite versions, for a finite vertex type
   with decidable bidirected adjacency, computed by saturation and usable by `decide`.
+* `ADMG.districtsOn G S`: the districts of the induced sub-ADMG on a finset `S`, one for each
+  vertex of `S`. Since `restrict` keeps the vertex type, `(G.restrict S).districts` also lists a
+  singleton for every vertex outside `S`; `districtsOn` lists only the districts inside `S`.
 
 ## Main results
 
@@ -31,6 +34,9 @@ related to `SimpleGraph.ConnectedComponent`. Districts are the c-components of T
   `ADMG.district_eq_or_disjoint`.
 * `ADMG.district_eq_connectedComponent`: the district is the support of the connected component.
 * `ADMG.district_ofDigraph`: in a DAG every district is a singleton.
+* `ADMG.subset_of_mem_districtsOn`, `ADMG.existsUnique_mem_districtsOn`: the members of
+  `G.districtsOn S` are nonempty subsets of `S` and every vertex of `S` lies in exactly one of
+  them, so they partition `S`.
 * `ADMG.district_restrict_subset`: the district of `v` in an induced sub-ADMG is contained in the
   district of `v` in the whole graph. The containment can be strict; an example is in
   `CausalInference.Graphical.ADMGExamples`.
@@ -210,6 +216,45 @@ theorem existsUnique_mem_districts (v : V) : ∃! s, s ∈ G.districts ∧ v ∈
   rw [coe_districtFinset, coe_districtFinset, district_eq_of_mem hvs]
 
 end Finite
+
+section On
+
+variable (G : ADMG V) [Fintype V] [DecidableEq V] [DecidableRel G.bidirected.Adj]
+
+/-- The districts of the induced sub-ADMG on the finset `S`: the district in `G.restrict S` of
+each vertex of `S`. -/
+def districtsOn (S : Finset V) : Finset (Finset V) :=
+  S.image (G.restrict (S : Set V)).districtFinset
+
+variable {G} {S : Finset V} {d : Finset V} {v : V}
+
+theorem mem_districtsOn :
+    d ∈ G.districtsOn S ↔ ∃ v ∈ S, (G.restrict (S : Set V)).districtFinset v = d := by
+  simp [districtsOn]
+
+/-- Every member of `G.districtsOn S` is contained in `S`. -/
+theorem subset_of_mem_districtsOn (hd : d ∈ G.districtsOn S) : d ⊆ S := by
+  obtain ⟨v, hv, rfl⟩ := mem_districtsOn.1 hd
+  intro w hw
+  rw [mem_districtFinset] at hw
+  exact district_restrict_subset_of_mem (S := (S : Set V)) hv hw
+
+/-- Every member of `G.districtsOn S` is nonempty. -/
+theorem nonempty_of_mem_districtsOn (hd : d ∈ G.districtsOn S) : d.Nonempty := by
+  obtain ⟨v, -, rfl⟩ := mem_districtsOn.1 hd
+  exact ⟨v, mem_districtFinset.2 (mem_district_self v)⟩
+
+/-- Every vertex of `S` lies in exactly one member of `G.districtsOn S`. -/
+theorem existsUnique_mem_districtsOn (hv : v ∈ S) : ∃! d, d ∈ G.districtsOn S ∧ v ∈ d := by
+  refine ⟨(G.restrict (S : Set V)).districtFinset v,
+    ⟨mem_districtsOn.2 ⟨v, hv, rfl⟩, mem_districtFinset.2 (mem_district_self v)⟩, ?_⟩
+  rintro d ⟨hd, hvd⟩
+  obtain ⟨u, -, rfl⟩ := mem_districtsOn.1 hd
+  rw [mem_districtFinset] at hvd
+  apply Finset.coe_injective
+  rw [coe_districtFinset, coe_districtFinset, district_eq_of_mem hvd]
+
+end On
 
 end ADMG
 
