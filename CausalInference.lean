@@ -80,3 +80,7 @@ public import CausalInference.Bias.Selection
 public import CausalInference.Graphical.GlobalMarkov
 public import CausalInference.Graphical.GlobalMarkovCompleteness
 public import CausalInference.Sensitivity.Probability
+public import CausalInference.Attribution.Bounds
+public import CausalInference.Attribution.Definitions
+public import CausalInference.Attribution.Examples
+public import CausalInference.Attribution.Identification

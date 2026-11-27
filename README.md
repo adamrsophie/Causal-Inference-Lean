@@ -24,6 +24,7 @@ The project is at an early stage. Modules are added only when they contain check
 | `CausalInference/Longitudinal` | Time-varying treatments: sequential exchangeability, the g-formula at any finite horizon, inverse probability weighting, treatment-confounder feedback |
 | `CausalInference/Measures` | Risk difference, risk ratio, odds ratio; collapsibility and the odds ratio counterexample; effect modification; the sure-thing principle and Simpson's reversal; paradox examples |
 | `CausalInference/Interaction` | Response types for two treatments, additive interaction, synergism, sufficient causes |
+| `CausalInference/Attribution` | Probabilities of necessity, sufficiency, and both: identification under exogeneity and monotonicity, sharp bounds from experimental and combined data, non-identification, textbook examples |
 | `CausalInference/Bias` | Selection bias and conditioning on a collider, selection without bias, the built-in selection bias of hazard ratios, measurement error and misclassification with correction formulas |
 | `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting, regression identities, a non-identification counterexample |
 | `CausalInference/Sensitivity` | Rosenbaum bounds for sign and signed-rank statistics, bias formulas for unmeasured confounding, the bounding factor and the E-value |
