@@ -33,20 +33,27 @@ binary confounder and `mhOR` the Mantel and Haenszel odds ratio of the resulting
 ## Main results
 
 * `toVec_misCorrect`, `toVec_misclassify`, `oddsRatio_misCorrect`: the transported correction is
-  the matrix method (Equations 6.11 and 6.12) and has the closed form odds ratio of Chapter 6.
+  the matrix method (Equations 6.11 and 6.12) and, for admissible corrected cells with a positive
+  odds ratio denominator, has the closed form odds ratio of Chapter 6
+  (`Examples.oddsRatio_misCorrect_degenerate`: without that guard the corrected odds ratio need
+  not exist).
 * Order of selection and misclassification adjustments: `misCorrect_ipw_of_disease_only`
   (selection depending on disease only commutes with the misclassification correction) and
   `selected_misclassify_of_disease_only` (the mechanisms commute as well);
-  `misCorrect_ipw_comm_iff`: with imperfect specificity, the two corrections commute on every
-  table if and only if selection does not depend on exposure.
+  `misCorrect_ipw_comm_iff`: the two corrections commute on every table if and only if, in each
+  disease row, selection does not depend on exposure or classification is perfect.
 * Order of selection and confounder adjustments: `splitCases_smul`, `confoundingStrata_ipw`: the
-  projection commutes with any reweighting of the cells, so these adjustments always commute.
+  projection commutes with the inverse probability weighting for positive selection
+  proportions, so these adjustments always commute.
 * `mhOR_confoundingStrata`, `confoundingStrata_collapse`: the projection multiplies the odds
   ratio by `(ψ p₀ + 1 - p₀) / (ψ p₁ + 1 - p₁)` and recovers a stratified table with the stated
   prevalences and confounder to disease odds ratio.
 * Composition in the reverse order of the data generation: `generate` (confounding, then
   selection, then misclassification) and `serialAdjust` (the corrections in reverse order);
-  `serialAdjust_generate`: the serial adjustment recovers the stratified source table;
+  `serialAdjust_generate`: the serial adjustment recovers the stratified source table, and
+  `serialAdjust_generate_admissible` is its reading with admissible bias parameters;
+  `Examples.serialAdjust_failed_example` is an observed table that the correction maps outside
+  the admissible region;
   `mhOR_serialAdjust_generate`: its Mantel and Haenszel odds ratio is the confounder-adjusted
   odds ratio of the source; `mhOR_serialAdjust`: in general it is the misclassification corrected
   odds ratio divided by the selection odds ratio times the confounding factor;
@@ -55,9 +62,9 @@ binary confounder and `mhOR` the Mantel and Haenszel odds ratio of the resulting
 * Worked example (namespace `Examples`): the Chien et al. data of Tables 12.1 to 12.5, chained
   through the three corrections with every parameter computed from the book's inputs
   (Table 12.2 and Equation 12.1). `table123_eq`, `table124_eq`, `chien_serial`,
-  `table125_values` reproduce Tables 12.3 to 12.5; `chien_order_matters` (odds ratio `1.447`
-  against `1.353`), `chien_serial_reversed` and `chien_confounding_misclassification_order`
-  show orders of adjustment that give different answers.
+  `table125_values` reproduce Tables 12.3 to 12.5; `chien_not_comm`, `chien_order_matters` (odds
+  ratio `1.447` against `1.353`), `chien_serial_reversed` and
+  `chien_confounding_misclassification_order` show orders of adjustment that give different answers.
 
 ## Printed values
 
@@ -147,17 +154,53 @@ theorem misCorrect_misclassify (se sp : Bool → ℝ) (h : ∀ d, se d + sp d �
   rw [toExposureFirst_toDiseaseFirst, exposureCorrected_misclassified _ se sp h,
     toDiseaseFirst_toExposureFirst]
 
-/-- The odds ratio of the corrected table, in closed form (`crossOddsRatio_exposureCorrected`):
+/-- The odds ratio of the corrected table, in closed form, as an identity of totalized
+quotients (`crossOddsRatio_exposureCorrected`):
 `(P₁ + SP₁ - 1)(SE₀ - P₀) / ((P₀ + SP₀ - 1)(SE₁ - P₁))` with `P_d` the observed exposed
-proportion of disease row `d`. -/
-theorem oddsRatio_misCorrect (se sp : Bool → ℝ) (t : Table) (h1 : t true true + t true false ≠ 0)
-    (h0 : t false true + t false false ≠ 0) (hk : ∀ d, se d + sp d ≠ 1) :
+proportion of disease row `d`. Nonzero row totals and `SE_d + SP_d ≠ 1` do not make either side a
+real odds ratio: both sides can be the value `0` of a zero denominator
+(`Examples.oddsRatio_misCorrect_degenerate`); `oddsRatio_misCorrect` adds the guards. -/
+theorem oddsRatio_misCorrect_algebraic (se sp : Bool → ℝ) (t : Table)
+    (h1 : t true true + t true false ≠ 0) (h0 : t false true + t false false ≠ 0)
+    (hk : ∀ d, se d + sp d ≠ 1) :
     oddsRatio (misCorrect se sp t) =
       (exposedProportion (toExposureFirst t) true + sp true - 1) *
           (se false - exposedProportion (toExposureFirst t) false) /
         ((exposedProportion (toExposureFirst t) false + sp false - 1) *
           (se true - exposedProportion (toExposureFirst t) true)) :=
   crossOddsRatio_exposureCorrected _ se sp h1 h0 hk
+
+/-- The correction preserves each disease row total. -/
+theorem misCorrect_row_sum (se sp : Bool → ℝ) (t : Table) (d : Bool) :
+    misCorrect se sp t d true + misCorrect se sp t d false = t d true + t d false := by
+  rw [misCorrect_true, misCorrect_false]
+  ring
+
+/-- **The odds ratio of the corrected table, in closed form**, read as a real odds ratio: if the
+corrected cells are admissible (nonnegative) and the two denominator cells of the corrected odds
+ratio (unexposed cases, exposed controls) are positive, and `SE_d + SP_d ≠ 1`, then the
+denominator `(P₀ + SP₀ - 1)(SE₁ - P₁)` of the closed form is nonzero and the corrected odds ratio
+is `(P₁ + SP₁ - 1)(SE₀ - P₀) / ((P₀ + SP₀ - 1)(SE₁ - P₁))`, with `P_d` the observed exposed
+proportion of disease row `d`. -/
+theorem oddsRatio_misCorrect (se sp : Bool → ℝ) (t : Table) (hk : ∀ d, se d + sp d ≠ 1)
+    (hc : ∀ d e, 0 ≤ misCorrect se sp t d e)
+    (hden : 0 < misCorrect se sp t true false * misCorrect se sp t false true) :
+    (exposedProportion (toExposureFirst t) false + sp false - 1) *
+          (se true - exposedProportion (toExposureFirst t) true) ≠ 0 ∧
+      oddsRatio (misCorrect se sp t) =
+        (exposedProportion (toExposureFirst t) true + sp true - 1) *
+            (se false - exposedProportion (toExposureFirst t) false) /
+          ((exposedProportion (toExposureFirst t) false + sp false - 1) *
+            (se true - exposedProportion (toExposureFirst t) true)) := by
+  have hB : 0 < misCorrect se sp t true false :=
+    lt_of_le_of_ne (hc true false) fun h ↦ by rw [← h, zero_mul] at hden; exact lt_irrefl _ hden
+  have hC : 0 < misCorrect se sp t false true :=
+    lt_of_le_of_ne (hc false true) fun h ↦ by rw [← h, mul_zero] at hden; exact lt_irrefl _ hden
+  have h1 : t true true + t true false ≠ 0 := by
+    rw [← misCorrect_row_sum]; linarith [hc true true]
+  have h0 : t false true + t false false ≠ 0 := by
+    rw [← misCorrect_row_sum]; linarith [hc false false]
+  exact crossOddsRatio_exposureCorrected_of_ne _ se sp h1 h0 hk hB.ne' hC.ne'
 
 /-- The cells of a disease first table as a vector indexed by `(e, d)`, the convention of
 `MisclassificationMatrix`. -/
@@ -229,36 +272,52 @@ theorem misCorrect_ipw_disease_only_recovers (se sp s : Bool → ℝ) (hs : ∀ 
     rw [misCorrect_misclassify se sp hk, ipw_selected _ _ fun d _ ↦ hs d]
   exact ⟨h1, by rw [misCorrect_ipw_of_disease_only, h1]⟩
 
-/-- **The commutation criterion.** With nonzero selection proportions and, in every disease row,
-`SE_d + SP_d ≠ 1` and imperfect specificity `SP_d ≠ 1`, correcting for misclassification and
-weighting for selection commute on every table if and only if the selection proportions do not
-depend on exposure. With exposure-dependent selection the order of the adjustments matters
-(`Examples.chien_order_matters` gives the book's instance). -/
+/-- **The commutation criterion.** With nonzero selection proportions and `SE_d + SP_d ≠ 1` in
+every disease row, correcting for misclassification and weighting for selection commute on every
+table if and only if, in each disease row `d`, either the selection proportions do not depend on
+exposure, `S d 1 = S d 0`, or the row is perfectly classified, `SE_d = SP_d = 1` (then the
+correction is the identity on that row). The rows are tested separately: a row with `SP_d = 1`
+and `SE_d ≠ 1` still mixes its two cells and needs `S d 1 = S d 0`. With exposure-dependent
+selection and imperfect classification the order of the adjustments matters
+(`Examples.chien_not_comm`, `Examples.chien_order_matters`). -/
 theorem misCorrect_ipw_comm_iff (se sp : Bool → ℝ) (S : Table) (hS : ∀ d e, S d e ≠ 0)
-    (hk : ∀ d, se d + sp d ≠ 1) (hsp : ∀ d, sp d ≠ 1) :
+    (hk : ∀ d, se d + sp d ≠ 1) :
     (∀ t, misCorrect se sp (ipw S t) = ipw S (misCorrect se sp t)) ↔
-      ∀ d, S d true = S d false := by
+      ∀ d, S d true = S d false ∨ (se d = 1 ∧ sp d = 1) := by
   constructor
   · intro h d
-    have hd := congrFun (congrFun (h fun _ e ↦ if e then 0 else 1) d) true
-    simp only [misCorrect_true, ipw, ↓reduceIte, Bool.false_eq_true] at hd
     have hk' : se d + sp d - 1 ≠ 0 := sub_ne_zero.mpr (hk d)
-    have hsp' : 1 - sp d ≠ 0 := sub_ne_zero.mpr (hsp d).symm
     have h1 := hS d true
     have h0 := hS d false
+    have hd := congrFun (congrFun (h fun _ e ↦ if e then 0 else 1) d) true
+    simp only [misCorrect_true, ipw, ↓reduceIte, Bool.false_eq_true] at hd
     field_simp at hd
-    have : (1 - sp d) * (S d true - S d false) = 0 := by linear_combination (-1 : ℝ) * hd
-    rcases mul_eq_zero.mp this with h' | h'
-    · exact absurd h' hsp'
-    · exact sub_eq_zero.mp h'
+    have hA : (1 - sp d) * (S d true - S d false) = 0 := by linear_combination (-1 : ℝ) * hd
+    have hd' := congrFun (congrFun (h fun _ e ↦ if e then 1 else 0) d) false
+    simp only [misCorrect_false, ipw, ↓reduceIte, Bool.false_eq_true] at hd'
+    field_simp at hd'
+    have hB : (1 - se d) * (S d true - S d false) = 0 := by linear_combination hd'
+    by_cases hSd : S d true = S d false
+    · exact Or.inl hSd
+    · have hSd' : S d true - S d false ≠ 0 := sub_ne_zero.mpr hSd
+      refine Or.inr ⟨?_, ?_⟩
+      · have := (mul_eq_zero.mp hB).resolve_right hSd'
+        linarith
+      · have := (mul_eq_zero.mp hA).resolve_right hSd'
+        linarith
   · intro h t
-    have hS' : S = fun d _ ↦ S d false := by
-      funext d e
-      cases e
-      · rfl
-      · exact h d
-    rw [hS']
-    exact misCorrect_ipw_of_disease_only se sp (fun d ↦ S d false) t
+    funext d e
+    rcases h d with hSd | ⟨h1, h2⟩
+    · cases e
+      · simp only [misCorrect_false, ipw, hSd]
+        ring
+      · simp only [misCorrect_true, ipw, hSd]
+        ring
+    · cases e
+      · simp only [misCorrect_false, ipw, h1, h2]
+        ring
+      · simp only [misCorrect_true, ipw, h1, h2]
+        ring
 
 /-! ### The unmeasured confounder adjustment on disease first tables -/
 
@@ -325,11 +384,12 @@ theorem splitCases_smul (rr t₁ t x k l : ℝ) (hk : k ≠ 0) :
     show rr * (k * t₁) * (l * x) = k * (l * (rr * t₁ * x)) by ring, mul_div_mul_left _ _ hk]
   ring
 
-/-- **The selection and confounder adjustments commute.** Weighting the cells by `1 / S d e`
+/-- The algebraic identity behind `confoundingStrata_ipw`: weighting the cells by `1 / S d e`
 before the projection gives the projection of the unweighted table with each stratum weighted by
-the same proportions (the selection proportions do not depend on the confounder), for nonzero
-selection proportions of the controls. -/
-theorem confoundingStrata_ipw (ψ p₁ p₀ : ℝ) (S t : Table) (hS : ∀ e, S false e ≠ 0) :
+the same proportions, for nonzero selection proportions of the controls. The case row holds for
+every value of `S true e`, including `0`, only through the convention `x / 0 = 0`; at a zero case
+selection proportion the weighting is not an inverse probability adjustment. -/
+theorem confoundingStrata_ipw_algebraic (ψ p₁ p₀ : ℝ) (S t : Table) (hS : ∀ e, S false e ≠ 0) :
     confoundingStrata ψ p₁ p₀ (ipw S t) = fun c ↦ ipw S (confoundingStrata ψ p₁ p₀ t c) := by
   have hsplit : ∀ e, splitCases ψ (ipw S t false e * (if e then p₁ else p₀)) (ipw S t false e)
       (ipw S t true e) =
@@ -343,6 +403,14 @@ theorem confoundingStrata_ipw (ψ p₁ p₀ : ℝ) (S t : Table) (hS : ∀ e, S 
   funext c d e
   cases d <;> cases c <;> simp only [confoundingStrata, ↓reduceIte, Bool.false_eq_true, hsplit] <;>
     simp only [ipw, confoundingStrata, ↓reduceIte, Bool.false_eq_true] <;> ring
+
+/-- **The selection and confounder adjustments commute.** For positive selection proportions in
+every cell, inverse probability of participation weighting followed by the projection onto the
+confounder equals the projection followed by the same weighting of each stratum (the selection
+proportions do not depend on the confounder). -/
+theorem confoundingStrata_ipw (ψ p₁ p₀ : ℝ) (S t : Table) (hS : ∀ d e, 0 < S d e) :
+    confoundingStrata ψ p₁ p₀ (ipw S t) = fun c ↦ ipw S (confoundingStrata ψ p₁ p₀ t c) :=
+  confoundingStrata_ipw_algebraic ψ p₁ p₀ S t fun e ↦ (hS false e).ne'
 
 /-! ### Serial adjustment in the reverse order of the data generation -/
 
@@ -411,6 +479,43 @@ theorem mhOR_serialAdjust_generate {se sp : Bool → ℝ} {S : Table} {ψ p₁ p
     have := hT false true true; have := hT false false false
     simp only [Fintype.sum_bool]
     positivity
+
+/-- **Serial adjustment with admissible bias parameters.** The statistical reading of
+`serialAdjust_generate`: selection proportions in `(0, 1]`, sensitivities and specificities in
+`[0, 1]` with `SE_d + SP_d > 1` (better than chance classification), and a stratified source table
+with positive cells, control prevalences `p₁`, `p₀` and common confounder to disease odds ratio
+`ψ > 0`. Then the selected table has no more members than the source in any cell, the expected
+observed table has positive cells, the serial adjustment recovers the stratified source table,
+and its Mantel and Haenszel odds ratio is the common stratum odds ratio. -/
+theorem serialAdjust_generate_admissible {se sp : Bool → ℝ} {S : Table} {ψ p₁ p₀ : ℝ}
+    {T : Bool → Table} (hS : ∀ d e, 0 < S d e ∧ S d e ≤ 1)
+    (hse : ∀ d, se d ∈ Set.Icc (0 : ℝ) 1) (hsp : ∀ d, sp d ∈ Set.Icc (0 : ℝ) 1)
+    (hk : ∀ d, 1 < se d + sp d) (hT : ∀ c d e, 0 < T c d e) (hψ : 0 < ψ)
+    (hprev : ∀ e, T true false e = collapse T false e * (if e then p₁ else p₀))
+    (hor : ∀ e, T true true e * T false false e = ψ * T true false e * T false true e) :
+    (∀ d e, selected S (collapse T) d e ≤ collapse T d e) ∧
+      (∀ d e, 0 < generate se sp S T d e) ∧
+      serialAdjust se sp S ψ p₁ p₀ (generate se sp S T) = T ∧
+      mhOR (serialAdjust se sp S ψ p₁ p₀ (generate se sp S T)) = oddsRatio (T true) := by
+  have hc : ∀ d e, 0 < collapse T d e := fun d e ↦ add_pos (hT true d e) (hT false d e)
+  have hsel : ∀ d e, 0 < selected S (collapse T) d e := fun d e ↦ mul_pos (hS d e).1 (hc d e)
+  have hk' : ∀ d, se d + sp d ≠ 1 := fun d ↦ (hk d).ne'
+  have hS' : ∀ d e, S d e ≠ 0 := fun d e ↦ (hS d e).1.ne'
+  refine ⟨fun d e ↦ ?_, fun d e ↦ ?_, serialAdjust_generate hk' hS' hT hψ hprev hor,
+    mhOR_serialAdjust_generate hk' hS' hT hψ hprev hor⟩
+  · unfold selected
+    nlinarith [(hS d e).2, hc d e]
+  · have h1 := hsel d true
+    have h0 := hsel d false
+    obtain ⟨hse0, hse1⟩ := hse d
+    obtain ⟨hsp0, hsp1⟩ := hsp d
+    have hk1 := hk d
+    unfold generate
+    cases e
+    · rw [misclassify_false]
+      nlinarith [mul_nonneg h1.le (sub_nonneg.2 hse1)]
+    · rw [misclassify_true]
+      nlinarith [mul_nonneg h0.le (sub_nonneg.2 hsp1)]
 
 /-- **The three corrections compose as Chapter 12 describes.** For an observed table whose
 misclassification corrected cells are positive and for positive selection proportions, the
@@ -564,10 +669,27 @@ theorem tableReversed_oddsRatio :
     1.352 < oddsRatio tableReversed ∧ oddsRatio tableReversed < 1.353 := by
   norm_num [tableReversed, oddsRatio]
 
+/-- With the parameters of Chien et al. the misclassification correction and the selection
+weighting do not commute on every table: by `misCorrect_ipw_comm_iff`, since in the case row the
+selection proportions depend on exposure and the sensitivity is not `1`. -/
+theorem chien_not_comm :
+    ¬ ∀ t, misCorrect chienSe chienSp (ipw chienS t) =
+      ipw chienS (misCorrect chienSe chienSp t) := by
+  obtain ⟨hse, hsp⟩ := chienSe_chienSp
+  have hS : ∀ d e, chienS d e ≠ 0 := fun d e ↦ (chienS_pos d e).ne'
+  have hk : ∀ d, chienSe d + chienSp d ≠ 1 := by
+    rw [hse, hsp]; intro d; cases d <;> norm_num
+  rw [misCorrect_ipw_comm_iff chienSe chienSp chienS hS hk]
+  intro h
+  rcases h true with h | ⟨h, _⟩
+  · rw [chienS_eq] at h; norm_num at h
+  · rw [hse] at h; norm_num at h
+
 /-- **The order of the adjustments matters** (Fox, MacLehose and Lash 2021, text after Table
 12.4): on the data of Chien et al., misclassification then selection gives an odds ratio about
-`1.447`, selection then misclassification about `1.353`. The selection proportions depend on
-exposure, so `misCorrect_ipw_comm_iff` does not apply. -/
+`1.447`, selection then misclassification about `1.353`. That the two corrections do not commute
+on every table already follows from `misCorrect_ipw_comm_iff` (`chien_not_comm`); this theorem
+gives the particular discrepancy on the observed table. -/
 theorem chien_order_matters :
     oddsRatio (ipw chienS (misCorrect chienSe chienSp chienObs)) ≠
       oddsRatio (misCorrect chienSe chienSp (ipw chienS chienObs)) := by
@@ -667,6 +789,49 @@ theorem chien_confounding_misclassification_order :
     (by norm_num) (by norm_num) (by norm_num)]
   simp only [mhOR, mhOddsRatio, Fintype.sum_bool, misCorrect_true, misCorrect_false, hse, hsp]
   norm_num [confoundingStrata, splitCases, chienObs, table123, oddsRatio, mixFactor]
+
+/-- **A corrected odds ratio that does not exist.** Observed cases `(5, 5)` and controls `(2, 8)`
+(exposed, unexposed) have nonzero row totals, and `SE = SP = 0.8` in both rows is invertible, but
+the corrected controls are `(0, 10)`: the corrected odds ratio has a zero denominator, the closed
+form of `oddsRatio_misCorrect_algebraic` has a zero denominator too, and both evaluate to the
+totalized value `0`. The guard `hden` of `oddsRatio_misCorrect` excludes this table. -/
+theorem oddsRatio_misCorrect_degenerate :
+    let t : Table := fun d e ↦ if d then 5 else (if e then 2 else 8)
+    let k : Bool → ℝ := fun _ ↦ 0.8
+    t true true + t true false ≠ 0 ∧ t false true + t false false ≠ 0 ∧ (∀ d, k d + k d ≠ 1) ∧
+      misCorrect k k t true true = 5 ∧ misCorrect k k t true false = 5 ∧
+      misCorrect k k t false true = 0 ∧ misCorrect k k t false false = 10 ∧
+      oddsRatio (misCorrect k k t) = 0 ∧
+      (exposedProportion (toExposureFirst t) false + k false - 1) *
+          (k true - exposedProportion (toExposureFirst t) true) = 0 := by
+  intro t k
+  norm_num [t, k, misCorrect_true, misCorrect_false, oddsRatio, exposedProportion,
+    toExposureFirst]
+
+/-- **A failed correction.** With no selection bias (`S = 1`), `SE = SP = 0.8` in both rows and
+observed exposed proportion `0.9` in both rows (cells `(9, 1)`), the corrected exposed and
+unexposed proportions are `7/6` and `-1/6`: the correction leaves the admissible region, and no
+source table with nonnegative cells generates this observed table. The admissibility hypotheses
+of `serialAdjust_generate_admissible` are about the data-generating model and do not make every
+observed table correctable. -/
+theorem serialAdjust_failed_example :
+    let obs : Table := fun _ e ↦ if e then 9 else 1
+    let k : Bool → ℝ := fun _ ↦ 0.8
+    (∀ d, misCorrect k k obs d true / (obs d true + obs d false) = 7 / 6 ∧
+      misCorrect k k obs d false / (obs d true + obs d false) = -1 / 6) ∧
+      ¬ ∃ T : Bool → Table, (∀ c d e, 0 ≤ T c d e) ∧ generate k k (fun _ _ ↦ 1) T = obs := by
+  intro obs k
+  refine ⟨fun d ↦ by norm_num [obs, k, misCorrect_true, misCorrect_false], ?_⟩
+  rintro ⟨T, hT, hgen⟩
+  have hrec : misCorrect k k obs = collapse T := by
+    rw [← hgen, generate, misCorrect_misclassify k k (fun _ ↦ by norm_num [k])]
+    funext d e
+    simp [selected]
+  have h := congrFun (congrFun hrec true) false
+  have hneg : misCorrect k k obs true false < 0 := by
+    norm_num [obs, k, misCorrect_true, misCorrect_false]
+  rw [h, collapse] at hneg
+  linarith [hT true true false, hT false true false]
 
 end Examples
 

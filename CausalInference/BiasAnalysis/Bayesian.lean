@@ -22,26 +22,36 @@ Misclassification") and Chapter 9 (record level reclassification, Tables 9.5 to 
 ## Main results
 
 * Metropolis algorithm (Equation 11.9), finite state version: `metropolisKernel` with the
-  rejected mass on the diagonal; `metropolisKernel_sum` (rows sum to one),
-  `metropolis_detailedBalance` and `metropolis_stationary` (a positive target is invariant for a
-  symmetric proposal), `acceptance_const_mul` (the normalizing integral of Equation 11.7
-  cancels), and `metropolis_asymmetric_counterexample` (without a symmetric proposal the target
-  need not be invariant). The book's random walk proposal on `[0, 1]` is continuous; only the
-  finite state version is proved.
+  rejected mass on the diagonal; `metropolisKernel_sum` (rows sum to one, an identity),
+  `metropolisKernel_nonneg` (entrywise nonnegative for a nonnegative target and a stochastic
+  proposal), `metropolis_detailedBalance` and `metropolis_stationary` (a nonnegative target is
+  invariant for a symmetric proposal), `metropolis_invariant_probability` (with a symmetric
+  stochastic proposal the kernel is a stochastic matrix and the normalized target is an invariant
+  probability vector), `acceptance_const_mul` (the normalizing integral of Equation 11.7
+  cancels), and `metropolis_asymmetric_counterexample` (with a stochastic but asymmetric proposal
+  the target need not be invariant). The book's random walk proposal on `[0, 1]` is continuous;
+  only the finite state version is proved.
 * Likelihood through the apparent prevalence (Equations 11.3 and 11.4): `misclassLikelihood`,
   `misclassLikelihood_eq`, `misclassLikelihood_congr`, `caseControl_likelihood_congr` (the
   two-group likelihood of Equations 11.10 to 11.13), and the non-identification results
   `exists_classification_of_observedPrevalence` and `exists_same_misclassLikelihood`: every true
   prevalence is compatible, through some better than chance classification, with every apparent
-  prevalence in `(0, 1)`. Builds on `Bias.observedPrevalence` and strengthens
-  `Bias.prevalence_not_identified`.
+  prevalence in `(0, 1)`; `caseControl_not_identified` and its numerical instance
+  `caseControl_not_identified_example`: with one classification shared by cases and controls
+  (Equation 11.13) the prevalences, and the odds ratio, are not identified either. Builds on
+  `Bias.observedPrevalence` and strengthens `Bias.prevalence_not_identified`.
 * Beta and binomial conjugacy (the beta prior of Equation 11.5, binomial likelihood of Equation
   11.2, Bayes' theorem of Equation 11.7): `betaPDFReal_mul_binomPMF`,
   `betaMeasure_withDensity_binomPMF`, `betaBinomial_posterior`.
-* Gibbs full conditionals of the Chapter 11 appendix (Tables 11.7 and 11.8): `gibbsJoint_se`,
-  `gibbsJoint_sp`, `gibbsJoint_prevalence` (beta conditionals), `gibbsJoint_W` and
-  `gibbsJoint_Z` (binomial conditionals with the predictive values), `binomPMF_one_sub` (sampling
-  `Y` or `Z` agrees), `nondifferential_se` and `nondifferential_sp` (pooled counts).
+* Gibbs full conditionals of the Chapter 11 appendix (Tables 11.7 and 11.8): the kernel
+  identities `gibbsJoint_se`, `gibbsJoint_sp`, `gibbsJoint_prevalence` (beta conditionals),
+  `gibbsJoint_W` and `gibbsJoint_Z` (binomial conditionals with the predictive values),
+  `binomPMF_one_sub` (sampling `Y` or `Z` agrees), `nondifferential_se` and `nondifferential_sp`
+  (pooled counts); and their normalized forms, with positive prior shapes and conditioning values
+  in `(0, 1)`: `gibbs_se_conditional`, `gibbs_sp_conditional`, `gibbs_prevalence_conditional`,
+  `nondifferential_se_conditional`, `nondifferential_sp_conditional` (positive normalizer, and the
+  normalized slice is the beta law) and `gibbs_WZ_conditional` (the blocked update of the latent
+  cells on fixed margins is `Bin(a, ppv) ⊗ Bin(b, npv)`).
 * Binomial thinning (Chapter 8 appendix): `binomial_thinning` and its form for Mathlib's
   binomial law `binomial_thinning_binomial`.
 * Record level versus summary level reclassification (Chapter 9): `integral_reclassified_count`
@@ -49,9 +59,10 @@ Misclassification") and Chapter 9 (record level reclassification, Tables 9.5 to 
 * `Examples`: the depression screening example of Chapter 11, Tables 9.7 and 9.8, and the first
   Gibbs iteration of the Chapter 11 appendix.
 
-The thinning and Gibbs results are identities between mass functions and densities (the joint
-law written as a function of the parameters and latent counts); they are not stated for random
-variables or for a multinomial measure.
+The thinning and Gibbs results are stated for mass functions and densities (the joint law
+written as a function of the parameters and latent counts, and its slices as measures on `ℝ` or
+as normalized mass functions); they are not stated for random variables or for a multinomial
+measure.
 
 `binomPMF` is the binomial mass function `C(n, k) p^k (1 - p)^(n - k)`; `binomPMF_eq_binomial`
 identifies it with Mathlib's `ProbabilityTheory.binomial`. The kernel identity
@@ -83,7 +94,8 @@ noncomputable def metropolisKernel [Fintype S] [DecidableEq S] (w : S → ℝ) (
   if x = y then 1 - ∑ z ∈ univ.erase x, q x z * acceptance w x z
   else q x y * acceptance w x y
 
-/-- The Metropolis kernel is a probability kernel: each row sums to one. -/
+/-- Each row of the Metropolis kernel sums to one. This is an identity for every `w` and `q`;
+the entries are nonnegative only under the hypotheses of `metropolisKernel_nonneg`. -/
 theorem metropolisKernel_sum [Fintype S] [DecidableEq S] (w : S → ℝ) (q : S → S → ℝ) (x : S) :
     ∑ y, metropolisKernel w q x y = 1 := by
   rw [← Finset.add_sum_erase _ _ (mem_univ x)]
@@ -92,6 +104,28 @@ theorem metropolisKernel_sum [Fintype S] [DecidableEq S] (w : S → ℝ) (q : S 
   rw [Finset.sum_congr rfl h]
   simp [metropolisKernel]
 
+/-- The acceptance probability lies in `[0, 1]` for a nonnegative target. -/
+theorem acceptance_mem_Icc {w : S → ℝ} (hw : ∀ x, 0 ≤ w x) (x y : S) :
+    acceptance w x y ∈ Set.Icc (0 : ℝ) 1 :=
+  ⟨le_min zero_le_one (div_nonneg (hw y) (hw x)), min_le_left _ _⟩
+
+/-- **The Metropolis kernel is entrywise nonnegative** for a nonnegative target and a stochastic
+proposal (nonnegative entries, rows summing to one): the off-diagonal entries are products of
+probabilities, and the rejected mass on the diagonal is at least
+`1 - ∑_{z ≠ x} q x z ≥ q x x ≥ 0`. From a state with `w x = 0` every acceptance probability is
+`min 1 (w y / 0) = 0` by the division convention, so that row of the kernel is the identity row. -/
+theorem metropolisKernel_nonneg [Fintype S] [DecidableEq S] {w : S → ℝ} (hw : ∀ x, 0 ≤ w x)
+    {q : S → S → ℝ} (hq0 : ∀ x y, 0 ≤ q x y) (hq1 : ∀ x, ∑ y, q x y = 1) (x y : S) :
+    0 ≤ metropolisKernel w q x y := by
+  unfold metropolisKernel
+  split_ifs with hxy
+  · have hle : ∑ z ∈ univ.erase x, q x z * acceptance w x z ≤ ∑ z ∈ univ.erase x, q x z :=
+      sum_le_sum fun z _ => mul_le_of_le_one_right (hq0 x z) (acceptance_mem_Icc hw x z).2
+    have hsum := hq1 x
+    rw [← Finset.add_sum_erase _ _ (mem_univ x)] at hsum
+    linarith [hq0 x x]
+  · exact mul_nonneg (hq0 x y) (acceptance_mem_Icc hw x y).1
+
 /-- The acceptance step depends on the target only through ratios: multiplying the target by a
 nonzero constant (for instance dividing an unnormalized posterior `likelihood × prior` by the
 intractable normalizing integral of Equation 11.7) leaves it unchanged. -/
@@ -99,38 +133,79 @@ theorem acceptance_const_mul (w : S → ℝ) {c : ℝ} (hc : c ≠ 0) (x y : S) 
     acceptance (fun z => c * w z) x y = acceptance w x y := by
   simp only [acceptance, mul_div_mul_left _ _ hc]
 
-/-- Detailed balance of the Metropolis kernel: for a positive target `w` and a symmetric
-proposal `q`, `w x K(x, y) = w y K(y, x)`. -/
-theorem metropolis_detailedBalance [Fintype S] [DecidableEq S] (w : S → ℝ) (hw : ∀ x, 0 < w x)
+/-- Detailed balance of the Metropolis kernel: for a nonnegative target `w` and a symmetric
+proposal `q`, `w x K(x, y) = w y K(y, x)`. At a state with `w x = 0` the acceptance
+probability of every move into it is `min 1 (0 / w y) = 0` and both sides vanish. The identity
+needs neither nonnegativity of `q` nor unit row sums. -/
+theorem metropolis_detailedBalance [Fintype S] [DecidableEq S] (w : S → ℝ) (hw : ∀ x, 0 ≤ w x)
     (q : S → S → ℝ) (hq : ∀ x y, q x y = q y x) (x y : S) :
     w x * metropolisKernel w q x y = w y * metropolisKernel w q y x := by
   by_cases hxy : x = y
   · subst hxy; rfl
   simp only [metropolisKernel, hxy, Ne.symm hxy, ↓reduceIte, acceptance, hq y x]
-  have hx := hw x
-  have hy := hw y
-  have key : ∀ a b : ℝ, 0 < a → 0 < b → a * min 1 (b / a) = min a b := by
-    intro a b ha _
-    rw [mul_min_of_nonneg _ _ ha.le, mul_one, mul_div_cancel₀ _ ha.ne']
-  rw [mul_left_comm, key _ _ hx hy, mul_left_comm, key _ _ hy hx, min_comm]
+  have key : ∀ a b : ℝ, 0 ≤ a → 0 ≤ b → a * min 1 (b / a) = min a b := by
+    intro a b ha hb
+    rcases ha.eq_or_lt with ha0 | ha0
+    · subst ha0; simp [min_eq_left hb]
+    · rw [mul_min_of_nonneg _ _ ha0.le, mul_one, mul_div_cancel₀ _ ha0.ne']
+  rw [mul_left_comm, key _ _ (hw x) (hw y), mul_left_comm, key _ _ (hw y) (hw x), min_comm]
 
-/-- Stationarity: a positive target `w` is invariant for the Metropolis kernel with a symmetric
-proposal, `∑ x w x K(x, y) = w y`. -/
-theorem metropolis_stationary [Fintype S] [DecidableEq S] (w : S → ℝ) (hw : ∀ x, 0 < w x)
+/-- Stationarity: a nonnegative target `w` is invariant for the Metropolis kernel with a
+symmetric proposal, `∑ x w x K(x, y) = w y`. As an identity it needs no hypothesis on `q` beyond
+symmetry; `metropolis_invariant_probability` gives the probabilistic reading. -/
+theorem metropolis_stationary [Fintype S] [DecidableEq S] (w : S → ℝ) (hw : ∀ x, 0 ≤ w x)
     (q : S → S → ℝ) (hq : ∀ x y, q x y = q y x) (y : S) :
     ∑ x, w x * metropolisKernel w q x y = w y := by
   simp_rw [metropolis_detailedBalance w hw q hq _ y, ← mul_sum, metropolisKernel_sum, mul_one]
 
-/-- The symmetry of the proposal cannot be dropped: on two states with the constant target
-`w = 1` and the asymmetric proposal `q(true, false) = 1/2`, `q(false, true) = 0`, the target is
-not invariant (`∑ x w x K(x, false) = 3/2 ≠ 1`) and detailed balance fails. -/
+/-- **The Metropolis kernel is a stochastic matrix with the normalized target as invariant
+law.** For a nonnegative target `w` with positive total mass and a symmetric stochastic proposal
+`q`, the kernel has nonnegative entries and unit row sums, the normalized target
+`π x = w x / ∑ z, w z` is a probability vector, and `∑ x π x K(x, y) = π y`. The kernel is the
+same for `w` and `π` (`acceptance_const_mul`). -/
+theorem metropolis_invariant_probability [Fintype S] [DecidableEq S] {w : S → ℝ}
+    (hw : ∀ x, 0 ≤ w x) (hw1 : 0 < ∑ z, w z) {q : S → S → ℝ} (hq0 : ∀ x y, 0 ≤ q x y)
+    (hq1 : ∀ x, ∑ y, q x y = 1) (hq : ∀ x y, q x y = q y x) :
+    let π : S → ℝ := fun x => w x / ∑ z, w z
+    (∀ x y, 0 ≤ metropolisKernel π q x y) ∧ (∀ x, ∑ y, metropolisKernel π q x y = 1) ∧
+      (∀ x, 0 ≤ π x) ∧ ∑ x, π x = 1 ∧
+      metropolisKernel π q = metropolisKernel w q ∧
+      ∀ y, ∑ x, π x * metropolisKernel π q x y = π y := by
+  intro π
+  have hπ : ∀ x, 0 ≤ π x := fun x => div_nonneg (hw x) hw1.le
+  have hK : metropolisKernel π q = metropolisKernel w q := by
+    have hacc : acceptance π = acceptance w := by
+      funext x y
+      have := acceptance_const_mul w (inv_ne_zero hw1.ne') x y
+      simpa only [π, div_eq_inv_mul] using this
+    funext x y
+    simp only [metropolisKernel, hacc]
+  refine ⟨metropolisKernel_nonneg hπ hq0 hq1, metropolisKernel_sum π q, hπ, ?_, hK,
+    metropolis_stationary π hπ q hq⟩
+  simp only [π, ← sum_div]
+  exact div_self hw1.ne'
+
+/-- The symmetry of the proposal cannot be dropped. On two states take the uniform target
+`w = 1/2` (a probability vector) and the stochastic proposal `q(true, true) = q(true, false) =
+1/2`, `q(false, false) = 1`, `q(false, true) = 0`. Every other hypothesis of
+`metropolis_invariant_probability` holds, yet `∑ x w x K(x, false) = 3/4 ≠ 1/2`: the target is not
+invariant, and detailed balance fails. -/
 theorem metropolis_asymmetric_counterexample :
-    let w : Bool → ℝ := fun _ => 1
-    let q : Bool → Bool → ℝ := fun x y => if x = true ∧ y = false then 1 / 2 else 0
-    ∑ x, w x * metropolisKernel w q x false = 3 / 2 ∧
+    let w : Bool → ℝ := fun _ => 1 / 2
+    let q : Bool → Bool → ℝ := fun x y => if x then 1 / 2 else (if y then 0 else 1)
+    (∀ x, 0 ≤ w x) ∧ ∑ x, w x = 1 ∧ (∀ x y, 0 ≤ q x y) ∧ (∀ x, ∑ y, q x y = 1) ∧
+      q true false ≠ q false true ∧
+      ∑ x, w x * metropolisKernel w q x false = 3 / 4 ∧
       w true * metropolisKernel w q true false ≠ w false * metropolisKernel w q false true := by
-  simp only [metropolisKernel, acceptance, Fintype.sum_bool]
-  norm_num [Finset.sum_erase_eq_sub, Fintype.sum_bool]
+  intro w q
+  refine ⟨fun _ => by norm_num [w], by norm_num [w], fun x y => ?_, fun x => ?_, by norm_num [q],
+    ?_, ?_⟩
+  · cases x <;> cases y <;> norm_num [q]
+  · cases x <;> norm_num [q]
+  · simp only [metropolisKernel, acceptance, Fintype.sum_bool]
+    norm_num [Finset.sum_erase_eq_sub, Fintype.sum_bool, w, q]
+  · simp only [metropolisKernel, acceptance]
+    norm_num [w, q]
 
 end Metropolis
 
@@ -257,9 +332,13 @@ are not identified from the data):
 for every apparent prevalence `p` in `(0, 1)` and every candidate true prevalence `π'` in
 `[0, 1]` there is a classification with `se'`, `sp'` in `[0, 1]` and `se' + sp' > 1` (better than
 chance) whose apparent prevalence is `p`. Explicitly `se' = p + p(1 - p)(1 - π')` and
-`sp' = 1 - p + p(1 - p)π'`. Hence the data cannot exclude any prevalence; only the priors on
-`se`, `sp` separate them. This strengthens `Bias.prevalence_not_identified`, which uses an
-uninformative classification `se + sp = 1`. -/
+`sp' = 1 - p + p(1 - p)π'`. Hence the data cannot exclude any prevalence. Since the likelihood
+is constant on the set of parameters with a given apparent prevalence, the relative posterior
+density of two points of that set is the ratio of their joint prior densities (of `π`, `se` and
+`sp` together, not of `se` and `sp` alone). The witness depends on `p`: applied to cases and
+controls separately it gives a differential classification. The case of one classification
+shared by cases and controls, Equation 11.13, is `caseControl_not_identified`. This strengthens
+`Bias.prevalence_not_identified`, which uses an uninformative classification `se + sp = 1`. -/
 theorem exists_classification_of_observedPrevalence {p π' : ℝ} (hp : p ∈ Set.Ioo (0 : ℝ) 1)
     (hπ' : π' ∈ Set.Icc (0 : ℝ) 1) :
     ∃ se' sp' : ℝ, se' ∈ Set.Icc (0 : ℝ) 1 ∧ sp' ∈ Set.Icc (0 : ℝ) 1 ∧ 1 < se' + sp' ∧
@@ -298,6 +377,65 @@ theorem caseControl_likelihood_congr {se₁ sp₁ π₁ se₀ sp₀ π₀ se₁'
     misclassLikelihood N₁ a se₁ sp₁ π₁ * misclassLikelihood N₀ c se₀ sp₀ π₀ =
       misclassLikelihood N₁ a se₁' sp₁' π₁' * misclassLikelihood N₀ c se₀' sp₀' π₀' := by
   rw [misclassLikelihood_congr h₁, misclassLikelihood_congr h₀]
+
+/-- Inverting Equation 11.3 inside the admissible region: if `P ≤ se'`, `1 - P ≤ sp'` and
+`se' + sp' > 1`, the prevalence `π' = (P - (1 - sp')) / (se' + sp' - 1)` lies in `[0, 1]` and has
+apparent prevalence `P` under `(se', sp')`. -/
+theorem prevalence_of_classification {P se' sp' : ℝ} (hse : P ≤ se') (hsp : 1 - P ≤ sp')
+    (hk : 1 < se' + sp') :
+    (P - (1 - sp')) / (se' + sp' - 1) ∈ Set.Icc (0 : ℝ) 1 ∧
+      Bias.observedPrevalence se' sp' ((P - (1 - sp')) / (se' + sp' - 1)) = P := by
+  have hk' : 0 < se' + sp' - 1 := by linarith
+  refine ⟨⟨div_nonneg (by linarith) hk'.le, (div_le_one hk').2 (by linarith)⟩, ?_⟩
+  rw [Bias.observedPrevalence_eq]
+  field_simp
+  ring
+
+/-- **Non-identification under nondifferential misclassification** (Equation 11.13 and the text
+after it). Let `(se, sp, π₁, π₀)` be any parameter with apparent prevalences `P₁`, `P₀` of cases
+and controls. Every classification `(se', sp')` shared by cases and controls with
+`max P₁ P₀ ≤ se'`, `1 - min P₁ P₀ ≤ sp'` and `se' + sp' > 1` (for instance any such pair in
+`[0, 1]`) comes with prevalences `π₁'`, `π₀'` in `[0, 1]` for which the case-control likelihood is
+the same for all data. -/
+theorem caseControl_not_identified {se sp π₁ π₀ se' sp' : ℝ}
+    (hse : max (Bias.observedPrevalence se sp π₁) (Bias.observedPrevalence se sp π₀) ≤ se')
+    (hsp : 1 - min (Bias.observedPrevalence se sp π₁) (Bias.observedPrevalence se sp π₀) ≤ sp')
+    (hk : 1 < se' + sp') :
+    ∃ π₁' π₀' : ℝ, π₁' ∈ Set.Icc (0 : ℝ) 1 ∧ π₀' ∈ Set.Icc (0 : ℝ) 1 ∧
+      ∀ N₁ a N₀ c : ℕ, misclassLikelihood N₁ a se sp π₁ * misclassLikelihood N₀ c se sp π₀ =
+        misclassLikelihood N₁ a se' sp' π₁' * misclassLikelihood N₀ c se' sp' π₀' := by
+  have m1 := min_le_left (Bias.observedPrevalence se sp π₁) (Bias.observedPrevalence se sp π₀)
+  have m0 := min_le_right (Bias.observedPrevalence se sp π₁) (Bias.observedPrevalence se sp π₀)
+  obtain ⟨h1, e1⟩ := prevalence_of_classification (le_trans (le_max_left _ _) hse)
+    (by linarith) hk
+  obtain ⟨h0, e0⟩ := prevalence_of_classification (le_trans (le_max_right _ _) hse)
+    (by linarith) hk
+  exact ⟨_, _, h1, h0, caseControl_likelihood_congr e1.symm e0.symm⟩
+
+/-- A numerical instance of `caseControl_not_identified`: with apparent prevalences `0.4`
+(cases) and `0.2` (controls), the shared classifications `se = sp = 0.95` with prevalences
+`(7/18, 1/6)` and `se = sp = 0.9` with prevalences `(3/8, 1/8)` have the same case-control
+likelihood for all data, but true odds ratios `35/11` and `21/5`. -/
+theorem caseControl_not_identified_example :
+    Bias.observedPrevalence 0.95 0.95 (7 / 18) = 0.4 ∧
+      Bias.observedPrevalence 0.95 0.95 (1 / 6) = 0.2 ∧
+      Bias.observedPrevalence 0.9 0.9 (3 / 8) = 0.4 ∧
+      Bias.observedPrevalence 0.9 0.9 (1 / 8) = 0.2 ∧
+      (∀ N₁ a N₀ c : ℕ,
+        misclassLikelihood N₁ a 0.95 0.95 (7 / 18) * misclassLikelihood N₀ c 0.95 0.95 (1 / 6) =
+          misclassLikelihood N₁ a 0.9 0.9 (3 / 8) * misclassLikelihood N₀ c 0.9 0.9 (1 / 8)) ∧
+      (7 / 18 / (1 - 7 / 18)) / (1 / 6 / (1 - 1 / 6)) = (35 / 11 : ℝ) ∧
+      (3 / 8 / (1 - 3 / 8)) / (1 / 8 / (1 - 1 / 8)) = (21 / 5 : ℝ) := by
+  have e1 : Bias.observedPrevalence 0.95 0.95 (7 / 18) = 0.4 := by
+    rw [Bias.observedPrevalence_eq]; norm_num
+  have e2 : Bias.observedPrevalence 0.95 0.95 (1 / 6) = 0.2 := by
+    rw [Bias.observedPrevalence_eq]; norm_num
+  have e3 : Bias.observedPrevalence 0.9 0.9 (3 / 8) = 0.4 := by
+    rw [Bias.observedPrevalence_eq]; norm_num
+  have e4 : Bias.observedPrevalence 0.9 0.9 (1 / 8) = 0.2 := by
+    rw [Bias.observedPrevalence_eq]; norm_num
+  refine ⟨e1, e2, e3, e4, fun N₁ a N₀ c => caseControl_likelihood_congr (e1.trans e3.symm)
+    (e2.trans e4.symm) N₁ a N₀ c, by norm_num, by norm_num⟩
 
 /-- A concrete instance: `(π, se, sp) = (0.2, 0.9, 0.9)` and `(0.25, 0.8, 0.92)` both have
 apparent prevalence `0.26`, so they have the same likelihood for all data although the true
@@ -604,6 +742,223 @@ theorem nondifferential_sp (γ δ se sp π₁ π₀ : ℝ) (hγ : 0 < γ) (hδ :
   linear_combination ((se ^ W₁ * (1 - se) ^ Y₁) * (π₁ ^ (W₁ + Y₁) * (1 - π₁) ^ (X₁ + Z₁)) *
     ((se ^ W₀ * (1 - se) ^ Y₀) * (π₀ ^ (W₀ + Y₀) * (1 - π₀) ^ (X₀ + Z₀)))) * h
 
+/-! ### Normalized full conditionals
+
+The identities above are proportionality statements: the constant can vanish (for instance at a
+conditioning value outside `(0, 1)`) and the binomial parameters can leave `[0, 1]` when the
+conditioning values do. Below, with positive prior shapes and conditioning values in `(0, 1)`, the
+constants are positive and each slice of the joint density, normalized by its total mass, is the
+stated beta law or the stated product of binomial laws. -/
+
+open MeasureTheory
+
+/-- A density that is a positive constant times a beta density defines a finite measure with
+total mass that constant, and normalizing it gives the beta law. -/
+theorem withDensity_const_mul_betaPDFReal {f : ℝ → ℝ} {c a b : ℝ} (hc : 0 < c) (ha : 0 < a)
+    (hb : 0 < b) (hf : ∀ x, f x = c * betaPDFReal a b x) :
+    volume.withDensity (fun x => ENNReal.ofReal (f x)) Set.univ = ENNReal.ofReal c ∧
+      (volume.withDensity (fun x => ENNReal.ofReal (f x)) Set.univ)⁻¹ •
+          volume.withDensity (fun x => ENNReal.ofReal (f x)) = betaMeasure a b := by
+  have hprob := isProbabilityMeasureBeta ha hb
+  have hμ : volume.withDensity (fun x => ENNReal.ofReal (f x)) =
+      ENNReal.ofReal c • betaMeasure a b := by
+    have hpdf : Measurable (betaPDF a b) := (measurable_betaPDFReal a b).ennreal_ofReal
+    unfold betaMeasure
+    rw [← withDensity_smul _ hpdf]
+    congr 1
+    funext x
+    simp only [hf, Pi.smul_apply, smul_eq_mul, betaPDF, ENNReal.ofReal_mul hc.le]
+  have huniv : volume.withDensity (fun x => ENNReal.ofReal (f x)) Set.univ = ENNReal.ofReal c := by
+    rw [hμ, smul_apply, measure_univ, smul_eq_mul, mul_one]
+  refine ⟨huniv, ?_⟩
+  rw [huniv, hμ, smul_smul, ENNReal.inv_mul_cancel (ENNReal.ofReal_pos.2 hc).ne'
+    ENNReal.ofReal_ne_top, one_smul]
+
+/-- The multinomial coefficient is positive. -/
+theorem multinomCoeff_pos (W X Y Z : ℕ) : 0 < multinomCoeff W X Y Z := by
+  unfold multinomCoeff
+  positivity
+
+/-- The kernel `x^m (1 - x)^l` is positive on `(0, 1)`. -/
+theorem pow_mul_one_sub_pow_pos {x : ℝ} (hx : x ∈ Set.Ioo (0 : ℝ) 1) (m l : ℕ) :
+    0 < x ^ m * (1 - x) ^ l :=
+  mul_pos (pow_pos hx.1 m) (pow_pos (sub_pos.2 hx.2) l)
+
+/-- **Normalized full conditional of the sensitivity.** With positive prior shapes and the
+conditioning values `sp`, `π` in `(0, 1)`, the slice `se ↦ gibbsJoint … se sp π W X Y Z` of the
+joint density has positive finite total mass `c`, and normalizing it gives `Beta(α + W, β + Y)`. -/
+theorem gibbs_se_conditional {α β γ δ εa εb sp π : ℝ} (hα : 0 < α) (hβ : 0 < β) (hγ : 0 < γ)
+    (hδ : 0 < δ) (ha : 0 < εa) (hb : 0 < εb) (hsp : sp ∈ Set.Ioo (0 : ℝ) 1)
+    (hπ : π ∈ Set.Ioo (0 : ℝ) 1) (W X Y Z : ℕ) :
+    let μ := volume.withDensity fun se => ENNReal.ofReal (gibbsJoint α β γ δ εa εb se sp π W X Y Z)
+    ∃ c : ℝ, 0 < c ∧ μ Set.univ = ENNReal.ofReal c ∧
+      (μ Set.univ)⁻¹ • μ = betaMeasure (α + W) (β + Y) := by
+  intro μ
+  have hB := beta_pos hα hβ
+  have hB' := beta_pos (by positivity : 0 < α + W) (by positivity : 0 < β + Y)
+  have h1 := betaPDFReal_pos hsp.1 hsp.2 hγ hδ
+  have h2 := betaPDFReal_pos hπ.1 hπ.2 ha hb
+  have h3 := multinomCoeff_pos W X Y Z
+  have h4 := pow_mul_one_sub_pow_pos hsp Z X
+  have h5 := pow_mul_one_sub_pow_pos hπ (W + Y) (X + Z)
+  refine ⟨_, by positivity, withDensity_const_mul_betaPDFReal (by positivity) (by positivity)
+    (by positivity) fun se => gibbsJoint_se α β γ δ εa εb se sp π hα hβ W X Y Z⟩
+
+/-- **Normalized full conditional of the specificity**: with positive prior shapes and `se`, `π`
+in `(0, 1)`, the slice in `sp` has positive finite total mass and normalizes to
+`Beta(γ + Z, δ + X)`. -/
+theorem gibbs_sp_conditional {α β γ δ εa εb se π : ℝ} (hα : 0 < α) (hβ : 0 < β) (hγ : 0 < γ)
+    (hδ : 0 < δ) (ha : 0 < εa) (hb : 0 < εb) (hse : se ∈ Set.Ioo (0 : ℝ) 1)
+    (hπ : π ∈ Set.Ioo (0 : ℝ) 1) (W X Y Z : ℕ) :
+    let μ := volume.withDensity fun sp => ENNReal.ofReal (gibbsJoint α β γ δ εa εb se sp π W X Y Z)
+    ∃ c : ℝ, 0 < c ∧ μ Set.univ = ENNReal.ofReal c ∧
+      (μ Set.univ)⁻¹ • μ = betaMeasure (γ + Z) (δ + X) := by
+  intro μ
+  have hB := beta_pos hγ hδ
+  have hB' := beta_pos (by positivity : 0 < γ + Z) (by positivity : 0 < δ + X)
+  have h1 := betaPDFReal_pos hse.1 hse.2 hα hβ
+  have h2 := betaPDFReal_pos hπ.1 hπ.2 ha hb
+  have h3 := multinomCoeff_pos W X Y Z
+  have h4 := pow_mul_one_sub_pow_pos hse W Y
+  have h5 := pow_mul_one_sub_pow_pos hπ (W + Y) (X + Z)
+  refine ⟨_, by positivity, withDensity_const_mul_betaPDFReal (by positivity) (by positivity)
+    (by positivity) fun sp => gibbsJoint_sp α β γ δ εa εb se sp π hγ hδ W X Y Z⟩
+
+/-- **Normalized full conditional of the prevalence**: with positive prior shapes and `se`, `sp`
+in `(0, 1)`, the slice in `π` has positive finite total mass and normalizes to
+`Beta(εa + W + Y, εb + X + Z)`. -/
+theorem gibbs_prevalence_conditional {α β γ δ εa εb se sp : ℝ} (hα : 0 < α) (hβ : 0 < β)
+    (hγ : 0 < γ) (hδ : 0 < δ) (ha : 0 < εa) (hb : 0 < εb) (hse : se ∈ Set.Ioo (0 : ℝ) 1)
+    (hsp : sp ∈ Set.Ioo (0 : ℝ) 1) (W X Y Z : ℕ) :
+    let μ := volume.withDensity fun π => ENNReal.ofReal (gibbsJoint α β γ δ εa εb se sp π W X Y Z)
+    ∃ c : ℝ, 0 < c ∧ μ Set.univ = ENNReal.ofReal c ∧
+      (μ Set.univ)⁻¹ • μ = betaMeasure (εa + (W + Y : ℕ)) (εb + (X + Z : ℕ)) := by
+  intro μ
+  have hB := beta_pos ha hb
+  have hB' := beta_pos (by positivity : 0 < εa + (W + Y : ℕ)) (by positivity : 0 < εb + (X + Z : ℕ))
+  have h1 := betaPDFReal_pos hse.1 hse.2 hα hβ
+  have h2 := betaPDFReal_pos hsp.1 hsp.2 hγ hδ
+  have h3 := multinomCoeff_pos W X Y Z
+  have h4 := pow_mul_one_sub_pow_pos hse W Y
+  have h5 := pow_mul_one_sub_pow_pos hsp Z X
+  refine ⟨_, by positivity, withDensity_const_mul_betaPDFReal (by positivity) (by positivity)
+    (by positivity) fun π => gibbsJoint_prevalence α β γ δ εa εb se sp π ha hb W X Y Z⟩
+
+/-- **Normalized pooled conditional of the sensitivity** (nondifferential misclassification):
+with positive prior shapes and `sp`, `π₁`, `π₀` in `(0, 1)`, the prior density of `se` times both
+multinomial kernels has positive finite total mass and normalizes to
+`Beta(α + W₁ + W₀, β + Y₁ + Y₀)`. -/
+theorem nondifferential_se_conditional {α β sp π₁ π₀ : ℝ} (hα : 0 < α) (hβ : 0 < β)
+    (hsp : sp ∈ Set.Ioo (0 : ℝ) 1) (hπ₁ : π₁ ∈ Set.Ioo (0 : ℝ) 1) (hπ₀ : π₀ ∈ Set.Ioo (0 : ℝ) 1)
+    (W₁ X₁ Y₁ Z₁ W₀ X₀ Y₀ Z₀ : ℕ) :
+    let μ := volume.withDensity fun se => ENNReal.ofReal
+      (betaPDFReal α β se * latentLik se sp π₁ W₁ X₁ Y₁ Z₁ * latentLik se sp π₀ W₀ X₀ Y₀ Z₀)
+    ∃ c : ℝ, 0 < c ∧ μ Set.univ = ENNReal.ofReal c ∧
+      (μ Set.univ)⁻¹ • μ = betaMeasure (α + (W₁ + W₀ : ℕ)) (β + (Y₁ + Y₀ : ℕ)) := by
+  intro μ
+  have hB := beta_pos hα hβ
+  have hB' := beta_pos (by positivity : 0 < α + (W₁ + W₀ : ℕ))
+    (by positivity : 0 < β + (Y₁ + Y₀ : ℕ))
+  have h1 := pow_mul_one_sub_pow_pos hsp Z₁ X₁
+  have h2 := pow_mul_one_sub_pow_pos hsp Z₀ X₀
+  have h3 := pow_mul_one_sub_pow_pos hπ₁ (W₁ + Y₁) (X₁ + Z₁)
+  have h4 := pow_mul_one_sub_pow_pos hπ₀ (W₀ + Y₀) (X₀ + Z₀)
+  refine ⟨_, by positivity, withDensity_const_mul_betaPDFReal (by positivity) (by positivity)
+    (by positivity) fun se => nondifferential_se α β se sp π₁ π₀ hα hβ W₁ X₁ Y₁ Z₁ W₀ X₀ Y₀ Z₀⟩
+
+/-- **Normalized pooled conditional of the specificity**: with positive prior shapes and `se`,
+`π₁`, `π₀` in `(0, 1)`, the slice normalizes to `Beta(γ + Z₁ + Z₀, δ + X₁ + X₀)`. -/
+theorem nondifferential_sp_conditional {γ δ se π₁ π₀ : ℝ} (hγ : 0 < γ) (hδ : 0 < δ)
+    (hse : se ∈ Set.Ioo (0 : ℝ) 1) (hπ₁ : π₁ ∈ Set.Ioo (0 : ℝ) 1) (hπ₀ : π₀ ∈ Set.Ioo (0 : ℝ) 1)
+    (W₁ X₁ Y₁ Z₁ W₀ X₀ Y₀ Z₀ : ℕ) :
+    let μ := volume.withDensity fun sp => ENNReal.ofReal
+      (betaPDFReal γ δ sp * latentLik se sp π₁ W₁ X₁ Y₁ Z₁ * latentLik se sp π₀ W₀ X₀ Y₀ Z₀)
+    ∃ c : ℝ, 0 < c ∧ μ Set.univ = ENNReal.ofReal c ∧
+      (μ Set.univ)⁻¹ • μ = betaMeasure (γ + (Z₁ + Z₀ : ℕ)) (δ + (X₁ + X₀ : ℕ)) := by
+  intro μ
+  have hB := beta_pos hγ hδ
+  have hB' := beta_pos (by positivity : 0 < γ + (Z₁ + Z₀ : ℕ))
+    (by positivity : 0 < δ + (X₁ + X₀ : ℕ))
+  have h1 := pow_mul_one_sub_pow_pos hse W₁ Y₁
+  have h2 := pow_mul_one_sub_pow_pos hse W₀ Y₀
+  have h3 := pow_mul_one_sub_pow_pos hπ₁ (W₁ + Y₁) (X₁ + Z₁)
+  have h4 := pow_mul_one_sub_pow_pos hπ₀ (W₀ + Y₀) (X₀ + Z₀)
+  refine ⟨_, by positivity, withDensity_const_mul_betaPDFReal (by positivity) (by positivity)
+    (by positivity) fun sp => nondifferential_sp γ δ se sp π₁ π₀ hγ hδ W₁ X₁ Y₁ Z₁ W₀ X₀ Y₀ Z₀⟩
+
+/-- The binomial probabilities sum to one: `∑_{k ≤ n} C(n, k) p^k (1 - p)^(n - k) = 1`. -/
+theorem sum_binomPMF (n : ℕ) (p : ℝ) : ∑ k ∈ range (n + 1), binomPMF n p k = 1 := by
+  have h := add_pow p (1 - p) n
+  rw [add_sub_cancel, one_pow] at h
+  rw [h]
+  refine sum_congr rfl fun k _ => ?_
+  unfold binomPMF
+  ring
+
+/-- `u / (u + v)` lies in `(0, 1)` for positive `u`, `v`. -/
+theorem div_add_mem_Ioo {u v : ℝ} (hu : 0 < u) (hv : 0 < v) : u / (u + v) ∈ Set.Ioo (0 : ℝ) 1 :=
+  ⟨div_pos hu (add_pos hu hv), (div_lt_one (add_pos hu hv)).2 (by linarith)⟩
+
+/-- **The blocked binomial update of the latent cells, normalized.** Fix the observed margins
+`a = W + X` and `b = Y + Z`, positive prior shapes and `se`, `sp`, `π` in `(0, 1)`. The predictive
+values `ppv = se π / (se π + (1 - sp)(1 - π))` and `npv = sp (1 - π) / (sp (1 - π) + (1 - se) π)`
+lie in `(0, 1)`; the joint density on the latent support `W ≤ a`, `Z ≤ b` (with `X = a - W`,
+`Y = b - Z`) is a positive constant times `Bin(a, ppv) {W} · Bin(b, npv) {Z}`; its total mass
+over the support is positive; and the normalized conditional law of `(W, Z)` is
+`Bin(a, ppv) ⊗ Bin(b, npv)`. -/
+theorem gibbs_WZ_conditional {α β γ δ εa εb se sp π : ℝ} (hα : 0 < α) (hβ : 0 < β)
+    (hγ : 0 < γ) (hδ : 0 < δ) (ha : 0 < εa) (hb : 0 < εb) (hse : se ∈ Set.Ioo (0 : ℝ) 1)
+    (hsp : sp ∈ Set.Ioo (0 : ℝ) 1) (hπ : π ∈ Set.Ioo (0 : ℝ) 1) (a b : ℕ) :
+    let ppv := se * π / (se * π + (1 - sp) * (1 - π))
+    let npv := sp * (1 - π) / (sp * (1 - π) + (1 - se) * π)
+    let f : ℕ → ℕ → ℝ := fun W Z => gibbsJoint α β γ δ εa εb se sp π W (a - W) (b - Z) Z
+    ppv ∈ Set.Ioo (0 : ℝ) 1 ∧ npv ∈ Set.Ioo (0 : ℝ) 1 ∧
+      0 < ∑ W ∈ range (a + 1), ∑ Z ∈ range (b + 1), f W Z ∧
+      ∀ W ≤ a, ∀ Z ≤ b,
+        f W Z / (∑ W' ∈ range (a + 1), ∑ Z' ∈ range (b + 1), f W' Z') =
+          binomPMF a ppv W * binomPMF b npv Z := by
+  intro ppv npv f
+  have hse1 : 0 < 1 - se := sub_pos.2 hse.2
+  have hsp1 : 0 < 1 - sp := sub_pos.2 hsp.2
+  have hπ1 : 0 < 1 - π := sub_pos.2 hπ.2
+  have hu1 : 0 < se * π := mul_pos hse.1 hπ.1
+  have hu2 : 0 < (1 - sp) * (1 - π) := mul_pos hsp1 hπ1
+  have hv1 : 0 < sp * (1 - π) := mul_pos hsp.1 hπ1
+  have hv2 : 0 < (1 - se) * π := mul_pos hse1 hπ.1
+  have hP := betaPDFReal_pos hse.1 hse.2 hα hβ
+  have hQ := betaPDFReal_pos hsp.1 hsp.2 hγ hδ
+  have hR := betaPDFReal_pos hπ.1 hπ.2 ha hb
+  have hm := multinomCoeff_pos a 0 b 0
+  set C := betaPDFReal α β se * betaPDFReal γ δ sp * betaPDFReal εa εb π *
+    multinomCoeff a 0 b 0 * (se * π + (1 - sp) * (1 - π)) ^ a *
+    (sp * (1 - π) + (1 - se) * π) ^ b with hC
+  have hCpos : 0 < C := by positivity
+  have key : ∀ W ≤ a, ∀ Z ≤ b, f W Z = C * (binomPMF a ppv W * binomPMF b npv Z) := by
+    intro W hW Z hZ
+    have h1 := choose_mul_pow_eq_binomPMF hW (add_pos hu1 hu2).ne'
+    have h2 := choose_mul_pow_eq_binomPMF hZ (add_pos hv1 hv2).ne'
+    have hmc : multinomCoeff W (a - W) (b - Z) Z =
+        multinomCoeff a 0 b 0 * b.choose Z * a.choose W := by
+      rw [multinomCoeff_sub_left hW, multinomCoeff_sub_right a 0 hZ]
+    simp only [f, gibbsJoint, latentLik, hmc, hC]
+    linear_combination (betaPDFReal α β se * betaPDFReal γ δ sp * betaPDFReal εa εb π *
+        multinomCoeff a 0 b 0 * ((b.choose Z : ℝ) * (sp * (1 - π)) ^ Z *
+          ((1 - se) * π) ^ (b - Z))) * h1 +
+      (betaPDFReal α β se * betaPDFReal γ δ sp * betaPDFReal εa εb π *
+        multinomCoeff a 0 b 0 * (se * π + (1 - sp) * (1 - π)) ^ a *
+          binomPMF a (se * π / (se * π + (1 - sp) * (1 - π))) W) * h2
+  have hsum : ∑ W ∈ range (a + 1), ∑ Z ∈ range (b + 1), f W Z = C := by
+    rw [sum_congr rfl fun W hW => sum_congr rfl fun Z hZ =>
+      key W (Nat.lt_succ_iff.1 (mem_range.1 hW)) Z (Nat.lt_succ_iff.1 (mem_range.1 hZ))]
+    calc ∑ W ∈ range (a + 1), ∑ Z ∈ range (b + 1), C * (binomPMF a ppv W * binomPMF b npv Z)
+        = C * ((∑ W ∈ range (a + 1), binomPMF a ppv W) *
+            ∑ Z ∈ range (b + 1), binomPMF b npv Z) := by
+          rw [sum_mul_sum, mul_sum]
+          exact sum_congr rfl fun _ _ => by rw [mul_sum]
+      _ = C := by rw [sum_binomPMF, sum_binomPMF, mul_one, mul_one]
+  refine ⟨div_add_mem_Ioo hu1 hu2, div_add_mem_Ioo hv1 hv2, hsum ▸ hCpos, fun W hW Z hZ => ?_⟩
+  rw [hsum, key W hW Z hZ, mul_div_cancel_left₀ _ hCpos.ne']
+
 end Gibbs
 
 section RecordLevel
@@ -685,10 +1040,16 @@ the initial latent cells `W₁ = 200`, `X₁ = 15`, `Y₁ = 449`, `Z₁ = 1000` 
 `X₀ = 68`, `Y₀ = 296`, `Z₀ = 4000` (controls), the margins match the observed table
 (`a = 215`, `b = 1449`, `c = 668`, `d = 4296`), and the conditionals of `nondifferential_se`,
 `nondifferential_sp` and `gibbsJoint_prevalence` are `Beta(50.6 + 800, 14.3 + 745)`,
-`Beta(70 + 5000, 1 + 83)` and `Beta(1 + 649, 1 + 1015)`, as printed. (The text labels the initial
-values `W_i = 200, W_1 = 600`; the update shows these are `W₁` and `W₀`.) With the sampled
+`Beta(70 + 5000, 1 + 83)` and `Beta(1 + 649, 1 + 1015)`, as printed. With the sampled
 `se = 0.362`, `sp = 0.990`, `π₁ = 0.395` the predictive values of `gibbsJoint_W` and
-`gibbsJoint_Z` are `ppv₁ ≈ 0.959` and `npv₁ ≈ 0.704`, as printed. -/
+`gibbsJoint_Z` are `ppv₁ ≈ 0.959` and `npv₁ ≈ 0.704`, as printed.
+
+The printed draw `se = 0.362` does not follow from the printed inputs. The conditional
+`Beta(850.6, 759.3)` has mean `850.6 / 1609.9 ≈ 0.528` and variance
+`850.6 · 759.3 / (1609.9² · 1610.9)`, and `0.362` lies more than 13 standard deviations below the
+mean (last conjunct). The printed initial cells of the cases also imply a sensitivity
+`200 / 649 ≈ 0.31`, not the stated initial value `0.78`. The arithmetic of the predictive values
+from the printed draws is correct. -/
 theorem gibbs_example :
     200 + 15 = 215 ∧ 449 + 1000 = 1449 ∧ 600 + 68 = 668 ∧ 296 + 4000 = 4296 ∧
       200 + 600 = 800 ∧ 449 + 296 = 745 ∧ 1000 + 4000 = 5000 ∧ 15 + 68 = 83 ∧
@@ -696,7 +1057,11 @@ theorem gibbs_example :
       (0.959 : ℝ) < 0.362 * 0.395 / (0.362 * 0.395 + (1 - 0.990) * (1 - 0.395)) ∧
       (0.362 * 0.395 / (0.362 * 0.395 + (1 - 0.990) * (1 - 0.395)) : ℝ) < 0.9595 ∧
       (0.7035 : ℝ) < 0.990 * (1 - 0.395) / (0.990 * (1 - 0.395) + (1 - 0.362) * 0.395) ∧
-      (0.990 * (1 - 0.395) / (0.990 * (1 - 0.395) + (1 - 0.362) * 0.395) : ℝ) < 0.7045 := by
+      (0.990 * (1 - 0.395) / (0.990 * (1 - 0.395) + (1 - 0.362) * 0.395) : ℝ) < 0.7045 ∧
+      (0.308 : ℝ) < 200 / 649 ∧ (200 / 649 : ℝ) < 0.309 ∧
+      (0.528 : ℝ) < 850.6 / (850.6 + 759.3) ∧ (850.6 / (850.6 + 759.3) : ℝ) < 0.529 ∧
+      13 ^ 2 * (850.6 * 759.3 / ((850.6 + 759.3) ^ 2 * (850.6 + 759.3 + 1))) <
+        (850.6 / (850.6 + 759.3) - 0.362 : ℝ) ^ 2 := by
   norm_num
 
 end Examples
