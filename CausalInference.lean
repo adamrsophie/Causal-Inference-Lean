@@ -219,3 +219,11 @@ public import CausalInference.Discovery.Pattern
 public import CausalInference.Discovery.PatternExamples
 public import CausalInference.Discovery.PC
 public import CausalInference.Discovery.PCExamples
+public import CausalInference.Identification.AgreeOnSums
+public import CausalInference.Identification.CFactor
+public import CausalInference.Identification.Tian
+public import CausalInference.Identification.IDExpr
+public import CausalInference.Identification.IDAlgorithm
+public import CausalInference.Identification.IDSoundness
+public import CausalInference.Identification.IDExamples
+public import CausalInference.Identification.IDFigure38
