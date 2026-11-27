@@ -41,6 +41,13 @@ equation (8.7)). A model is a weight `q_{jk} = P(r_x = j, r_y = k)` on the sixte
   `P(Dobs = x, Yobs = y | Z = z)`.
 * `IVModel.ace_responseLaw`: under the same assumptions, the average causal effect of the law of
   the response type is the average treatment effect of the model.
+* `IVResponse.realModel_spec`: the converse. Every response-type law `q` and every instrument
+  probability `0 ≤ π ≤ 1` are realized by an `IVModel` (`IVResponse.realModel` under
+  `IVResponse.realMeasure q`, on `Bool × Fin 4 × Fin 4`) with exclusion, instrument
+  independence, binary outcomes, `P(Z = z1) = π`, response law `q` and average treatment effect
+  `ace q`.
+
+Binary outcomes (`IVModel.BinaryOutcome`) are assumed almost surely, not pointwise.
 -/
 
 @[expose] public section
@@ -186,8 +193,15 @@ def typeCode (a b : Bool) : Fin 4 := if a then (if b then 3 else 2) else (if b t
 
 variable {Ω : Type*} [MeasurableSpace Ω] (M : IVModel Ω) {μ : Measure Ω}
 
-/-- Binary outcomes: every potential outcome takes the value `0` or `1`. -/
-def BinaryOutcome : Prop := ∀ z d ω, M.Y z d ω = 0 ∨ M.Y z d ω = 1
+/-- Binary outcomes: almost surely, every potential outcome takes the value `0` or `1`. Values
+on a null set are not constrained, so changing a potential outcome on a null set (which changes
+neither the observed law nor the average treatment effect) preserves the hypothesis. -/
+def BinaryOutcome (μ : Measure Ω) : Prop := ∀ z d, ∀ᵐ ω ∂μ, M.Y z d ω = 0 ∨ M.Y z d ω = 1
+
+/-- Pointwise binary outcomes are binary almost surely. -/
+theorem BinaryOutcome.of_forall (h : ∀ z d ω, M.Y z d ω = 0 ∨ M.Y z d ω = 1) :
+    M.BinaryOutcome μ :=
+  fun z d ↦ Filter.Eventually.of_forall (h z d)
 
 /-- The potential outcome `Y false d` read as a boolean: `true` when it equals `1`. The
 instrument value `false` is a convention; under the exclusion restriction `Y true d = Y false d`
@@ -253,7 +267,7 @@ restriction, instrument independence, binary outcomes and `P(Z = z) ≠ 0`. Then
 observable induced by the law `q` of the compliance and response type: the observed conditional
 law of the model is `R q` in the notation of Pearl (2009, Section 8.2.3). -/
 theorem obs_responseLaw [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
-    (hI : M.InstrumentIndependence μ) (hB : M.BinaryOutcome) {z : Bool}
+    (hI : M.InstrumentIndependence μ) (hB : M.BinaryOutcome μ) {z : Bool}
     (hz : μ (M.instrumentEq z) ≠ 0) (y x : Bool) :
     (μ[|M.instrumentEq z]).real {ω | M.Dobs ω = x ∧ M.Yobs ω = boolToReal y} =
       obs (M.responseLaw μ) y x z := by
@@ -262,10 +276,7 @@ theorem obs_responseLaw [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
       {ω | M.Dobs ω = x ∧ M.Yobs ω ∈ ({boolToReal y} : Set ℝ)} := rfl
   have hae : {ω | M.D z ω = x ∧ M.Y z x ω ∈ ({boolToReal y} : Set ℝ)} =ᵐ[μ]
       {ω | respond (M.typeOf ω).1 z = x ∧ respond (M.typeOf ω).2 x = y} := by
-    filter_upwards [hE.ae_eq z false x] with ω hω
-    have hb := hB false x ω
-    change (M.D z ω = x ∧ M.Y z x ω ∈ ({boolToReal y} : Set ℝ)) ↔
-      (respond (M.typeOf ω).1 z = x ∧ respond (M.typeOf ω).2 x = y)
+    filter_upwards [hE.ae_eq z false x, hB false x] with ω hω hb
     cases z <;> cases x <;> cases y <;> rcases hb with hb | hb <;>
       simp [typeOf, outcomeBool, hω, hb]
   rw [measureReal_def, hset, h1, measure_congr hae, ← measureReal_def,
@@ -275,21 +286,21 @@ theorem obs_responseLaw [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
 /-- **The average causal effect of the response law is the average treatment effect.** Under
 the exclusion restriction and binary outcomes, `ace q = E[Y z 1 - Y z 0]` for the law `q` of
 the compliance and response type and either instrument value `z`. -/
-theorem ace_responseLaw [IsProbabilityMeasure μ] (hE : M.Exclusion μ) (hB : M.BinaryOutcome)
+theorem ace_responseLaw [IsProbabilityMeasure μ] (hE : M.Exclusion μ) (hB : M.BinaryOutcome μ)
     (z : Bool) : ace (M.responseLaw μ) = M.ate μ z := by
+  have hs : ∀ d, MeasurableSet {ω | respond (M.typeOf ω).2 d = true} := fun d ↦
+    M.measurable_typeOf
+      (Set.to_countable {s : Fin 4 × Fin 4 | respond s.2 d = true}).measurableSet
+  have h : ∀ d, M.Y z d =ᵐ[μ] {ω | respond (M.typeOf ω).2 d = true}.indicator 1 := by
+    intro d
+    filter_upwards [hE.ae_eq z false d, hB false d] with ω hω hb
+    rcases hb with hb | hb <;> cases d <;>
+      simp [Set.indicator, typeOf, outcomeBool, hω, hb]
   have hint : ∀ d, Integrable (M.Y z d) μ := fun d ↦
-    Manski.integrable_of_mem_Icc (lo := 0) (hi := 1) (M.measurable_Y z d) fun ω ↦ by
-      rcases hB z d ω with h | h <;> simp [h]
+    ((integrable_const (1 : ℝ)).indicator (hs d)).congr (h d).symm
   have hY : ∀ d, ∫ ω, M.Y z d ω ∂μ = μ.real {ω | respond (M.typeOf ω).2 d = true} := by
     intro d
-    have hs : MeasurableSet {ω | respond (M.typeOf ω).2 d = true} :=
-      M.measurable_typeOf
-        (Set.to_countable {s : Fin 4 × Fin 4 | respond s.2 d = true}).measurableSet
-    have h : M.Y z d =ᵐ[μ] {ω | respond (M.typeOf ω).2 d = true}.indicator 1 := by
-      filter_upwards [hE.ae_eq z false d] with ω hω
-      rcases hB false d ω with hb | hb <;> cases d <;>
-        simp [Set.indicator, typeOf, outcomeBool, hω, hb]
-    rw [integral_congr_ae h, integral_indicator_one hs]
+    rw [integral_congr_ae (h d), integral_indicator_one (hs d)]
   simp only [ate, effect]
   rw [integral_sub (hint true) (hint false), hY, hY,
     M.measureReal_typeOf_setOf fun s ↦ respond s.2 true = true,
@@ -298,5 +309,107 @@ theorem ace_responseLaw [IsProbabilityMeasure μ] (hE : M.Exclusion μ) (hB : M.
   ring
 
 end IVModel
+
+/-! ### Realizing a response-type law by an `IVModel` -/
+
+namespace IVResponse
+
+open IVModel
+
+/-- The probability `P(Z = z)` of an instrument with `P(z1) = π`. -/
+def instrumentWeight (π : ℝ) (z : Bool) : ℝ := if z then π else 1 - π
+
+/-- The law of an instrument with `P(z1) = π`, for `0 ≤ π ≤ 1`. -/
+def instrumentDist {π : ℝ} (h0 : 0 ≤ π) (h1 : π ≤ 1) : FiniteDist Bool where
+  mass := instrumentWeight π
+  nonneg z := by cases z <;> simp [instrumentWeight] <;> linarith
+  sum_eq_one := by simp [instrumentWeight]
+
+/-- The sample space of the realization: an instrument value and a compliance and response
+type. -/
+abbrev RealSpace : Type := Bool × (Fin 4 × Fin 4)
+
+/-- The law of the realization: the instrument, with `P(z1) = π`, is drawn independently of the
+type, whose law is `q`. -/
+noncomputable def realMeasure (q : Weights) {π : ℝ} (h0 : 0 ≤ π) (h1 : π ≤ 1) :
+    Measure RealSpace :=
+  (instrumentDist h0 h1).toMeasure.prod q.toMeasure
+
+instance (q : Weights) {π : ℝ} (h0 : 0 ≤ π) (h1 : π ≤ 1) :
+    IsProbabilityMeasure (realMeasure q h0 h1) := by
+  unfold realMeasure; infer_instance
+
+/-- The `IVModel` realizing the response-type model: the instrument is the first coordinate,
+a unit of type `(j, k)` takes the treatment `respond j z` under the instrument value `z` and
+has outcome `1` under treatment `d` exactly when `respond k d = true`, whatever `z`. -/
+def realModel : IVModel RealSpace where
+  Z := Prod.fst
+  D z ω := respond ω.2.1 z
+  Y _ d ω := boolToReal (respond ω.2.2 d)
+  measurable_Z := measurable_fst
+  measurable_D _ := measurable_of_countable _
+  measurable_Y _ _ := measurable_of_countable _
+
+variable (q : Weights) {π : ℝ} (h0 : 0 ≤ π) (h1 : π ≤ 1)
+
+theorem realModel_exclusion (μ : Measure RealSpace) : realModel.Exclusion μ :=
+  fun _ ↦ Filter.EventuallyEq.rfl
+
+theorem realModel_independence : realModel.InstrumentIndependence (realMeasure q h0 h1) :=
+  indepFun_prod (X := id) (Y := fun t ↦ realModel.potentials (true, t)) measurable_id
+    (measurable_of_countable _)
+
+theorem realModel_binaryOutcome (μ : Measure RealSpace) : realModel.BinaryOutcome μ :=
+  BinaryOutcome.of_forall _ fun _ d ω ↦ by
+    cases respond ω.2.2 d <;> simp [realModel, boolToReal]
+
+/-- In the realization `P(Z = z)` is `π` for `z = z1` and `1 - π` for `z = z0`. -/
+theorem realMeasure_instrumentEq (z : Bool) :
+    (realMeasure q h0 h1).real (realModel.instrumentEq z) = instrumentWeight π z := by
+  have hz : realModel.instrumentEq z = ({z} : Set Bool) ×ˢ (Set.univ : Set (Fin 4 × Fin 4)) :=
+    (Set.prod_univ).symm
+  rw [hz, measureReal_def, realMeasure, Measure.prod_prod, measure_univ, mul_one,
+    ← Finset.coe_singleton, FiniteDist.toMeasure_real_finset]
+  simp [FiniteDist.prob, instrumentDist]
+
+/-- The type of a unit of the realization is its second coordinate. -/
+theorem realModel_typeOf (ω : RealSpace) : realModel.typeOf ω = ω.2 := by
+  have ho : ∀ d, realModel.outcomeBool d ω = respond ω.2.2 d := fun d ↦ by
+    unfold outcomeBool
+    cases h : respond ω.2.2 d <;> simp [realModel, h, boolToReal]
+  have hc : ∀ j : Fin 4, typeCode (respond j false) (respond j true) = j := fun j ↦ by
+    fin_cases j <;> rfl
+  rw [typeOf, ho, ho, hc]
+  exact hc ω.2.1 ▸ rfl
+
+/-- **The realization has response law `q`.** -/
+theorem realModel_responseLaw : realModel.responseLaw (realMeasure q h0 h1) = q := by
+  ext s
+  have hs : realModel.typeOf ⁻¹' {s} = (Set.univ : Set Bool) ×ˢ ({s} : Set (Fin 4 × Fin 4)) := by
+    ext ω; simp [realModel_typeOf]
+  rw [responseLaw_apply, hs, measureReal_def, realMeasure, Measure.prod_prod, measure_univ,
+    one_mul, ← Finset.coe_singleton, FiniteDist.toMeasure_real_finset]
+  simp [FiniteDist.prob]
+
+/-- **Realization of a response-type law** (the converse of `IVModel.obs_responseLaw`). For
+every weight `q` on the sixteen compliance and response types and every `0 ≤ π ≤ 1`, the model
+`realModel` under the law `realMeasure q`, in which the instrument with `P(z1) = π` is drawn
+independently of a type with law `q`, satisfies the exclusion restriction, instrument
+independence and binary outcomes, has `P(Z = z1) = π`, response law `q` and average treatment
+effect `ace q`. For `0 < π < 1` both instrument arms have positive probability, so its observed
+conditional law is `obs q` (`IVModel.obsTable_realModel` in `BalkePearl.lean`). -/
+theorem realModel_spec :
+    realModel.Exclusion (realMeasure q h0 h1) ∧
+      realModel.InstrumentIndependence (realMeasure q h0 h1) ∧
+      realModel.BinaryOutcome (realMeasure q h0 h1) ∧
+      (realMeasure q h0 h1).real (realModel.instrumentEq true) = π ∧
+      realModel.responseLaw (realMeasure q h0 h1) = q ∧
+      ∀ z, realModel.ate (realMeasure q h0 h1) z = ace q := by
+  refine ⟨realModel_exclusion _, realModel_independence q h0 h1, realModel_binaryOutcome _,
+    by rw [realMeasure_instrumentEq]; rfl, realModel_responseLaw q h0 h1, fun z ↦ ?_⟩
+  rw [← realModel.ace_responseLaw (realModel_exclusion _) (realModel_binaryOutcome _) z,
+    realModel_responseLaw]
+
+end IVResponse
 
 end CausalInference

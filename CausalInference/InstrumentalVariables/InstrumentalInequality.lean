@@ -42,6 +42,10 @@ independence alone.
 * `IVBounds.not_exclusion_and_independence_of_law_eq`: no `IVModel`, on any probability space,
   whose observed-data law is `exclusionViolatingLaw` satisfies exclusion and instrument
   independence; monotonicity plays no role.
+* `IVBounds.violatingLaw_instrumentalInequality`, `IVBounds.exists_model_law_eq_violatingLaw`:
+  the law `violatingLaw` of `Bounds.lean` satisfies the instrumental inequality and is the law of
+  a model with exclusion and independence, so what it refutes is monotonicity jointly with the
+  other two assumptions.
 -/
 
 @[expose] public section
@@ -273,6 +277,35 @@ theorem not_exclusion_and_independence_of_law_eq {Ω' : Type*} [MeasurableSpace 
     (measurableSet_singleton 0)
   rw [hlaw, exclusionViolatingLaw_eq_two] at h
   norm_num at h
+
+/-- The model `binaryModel` of `Bounds.lean` satisfies the exclusion restriction: its outcomes
+do not depend on the instrument. -/
+theorem binaryModel_exclusion : binaryModel.Exclusion (P 3) := fun _ ↦ Filter.EventuallyEq.rfl
+
+/-- **`violatingLaw` satisfies the instrumental inequality.** The law `violatingLaw` of
+`Bounds.lean`, which violates the monotone inequality for the treated (`violatingLaw_lt`),
+satisfies the instrumental inequality without monotonicity: for every treatment value `x`,
+instrument values `z`, `z'` and measurable `B`,
+`ν(D = x, Y ∈ B | Z = z) + ν(D = x, Y ∉ B | Z = z') ≤ 1`. It is the observed law of
+`binaryModel`, which satisfies exclusion and instrument independence, so
+`IVModel.law_instrumentalInequality` applies. Hence what
+`IVBounds.not_assumptions_of_law_eq_violatingLaw` refutes is monotonicity jointly with exclusion
+and independence, not exclusion and independence alone. -/
+theorem violatingLaw_instrumentalInequality (z z' x : Bool) {B : Set ℝ} (hB : MeasurableSet B) :
+    violatingLaw[obsEvent x B | Prod.fst ⁻¹' {z}] +
+      violatingLaw[obsEvent x Bᶜ | Prod.fst ⁻¹' {z'}] ≤ 1 :=
+  binaryModel.law_instrumentalInequality binaryModel_exclusion binaryModel_independence
+    (binaryModel_instrument_ne_zero z) (binaryModel_instrument_ne_zero z') x hB
+
+/-- **`violatingLaw` is compatible with exclusion and independence.** Some binary IV model,
+namely `binaryModel`, has observed law `violatingLaw` and satisfies the exclusion restriction
+and instrument independence; it violates monotonicity. -/
+theorem exists_model_law_eq_violatingLaw :
+    ∃ M : IVModel (Space 3), (P 3).map M.observed = violatingLaw ∧ M.Exclusion (P 3) ∧
+      M.InstrumentIndependence (P 3) ∧ ¬ M.Monotonicity (P 3) :=
+  ⟨binaryModel, rfl, binaryModel_exclusion, binaryModel_independence, fun h ↦
+    not_assumptions_of_law_eq_violatingLaw binaryModel rfl
+      ⟨binaryModel_exclusion, binaryModel_independence, h⟩⟩
 
 end IVBounds
 

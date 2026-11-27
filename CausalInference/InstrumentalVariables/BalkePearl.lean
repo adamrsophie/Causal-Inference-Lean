@@ -36,11 +36,23 @@ observable `obs q = R q` and the effect `ace q`.
 * `IVResponse.identifiedSet_ace`: sharpness. For a table satisfying the constraints the
   identified set of the average causal effect is exactly `[lower p, upper p]`;
   `IVResponse.identifiedSet_ace_obs` states it at the observable of any weight.
+* `IVResponse.identifiedSet_probTreated`, `IVResponse.identifiedSet_probUntreated`: sharp
+  bounds (8.16) and (8.15) on the two arm probabilities `P(y1 | do(x1))` and `P(y1 | do(x0))`.
 * `IVResponse.lowerTerm_zero_eq`, `IVResponse.upperTerm_zero_eq`: the first terms are the
   natural bounds (8.17) of Robins (1989) and Manski (1990).
 * `IVModel.ate_mem_Icc_balkePearl`: for an `IVModel` with binary outcomes satisfying exclusion
   and instrument independence, the average treatment effect lies between the Balke and Pearl
   bounds of its observed conditional law.
+* `IVModel.ate_identifiedSet_balkePearl`: sharpness for `IVModel`. For a table satisfying the
+  constraints and `0 < P(z1) < 1`, the average treatment effects of the binary IV models with that
+  observed law are exactly `[lower p, upper p]`; attainment uses the realization
+  `IVResponse.realModel` of `ResponseTypes.lean`.
+* `IVResponse.identifiedSet_attrInstrument_pepAid`, `IVResponse.identifiedSet_attrTreatment_pepAid`:
+  the two attribution probabilities of the PeptAid example (Section 8.3),
+  `P(Y_{z0} = y0 | z1, x1, y1)` and `P(Y_{x0} = y0 | z1, x1, y1)`, have identified set exactly
+  `[13/14, 1]` (printed `[0.93, 1.00]`).
+* `IVResponse.eq_wald_iff`, `IVResponse.wald_totalized`: the Wald ratio is read only under a
+  nonzero compliance difference; otherwise the quotient is totalized.
 * Numerical examples of Pearl (2009, Chapter 8), each checked by `norm_num` from the printed
   table: Table 8.1 (`identifiedSet_table81`: point identification at `0.55` despite `45%`
   noncompliance), the cholestyramine data of Section 8.2.6 (`identifiedSet_lipid`:
@@ -64,6 +76,10 @@ The printed text of Sections 8.2.6 and 8.3 calls the bounds `[0.392, 0.780]` and
 `[-0.23, -0.15]` bounds on "ETT"; they are bounds on the average causal effect, as stated here.
 The vitamin A bounds are printed as `[-0.19, 0.01]`; computed from the counts of Table 8.2 they
 are `-0.1946...` and `0.0053...`, of which the printed values are roundings.
+The sixth upper term of (8.14b) is printed as `p11.0 - p00.0` on p. 267; the valid term
+`p11.0 + p00.0` is used (see `upperTerm`). The printed lower bound `0.93` of the PeptAid
+attribution probabilities rounds `13/14 = 0.9285...` upward. The upper bound (8.16) on
+`P(y1 | do(x1))` prints `1 - p01.0` twice; the second term is `1 - p01.1` (see `upperTreated`).
 -/
 
 @[expose] public section
@@ -98,7 +114,13 @@ def lowerTerm (p : Observable) : Fin 8 → ℝ := ![
 /-- The eight upper terms of (8.14b): `1 - p01.1 - p10.0`, `1 - p01.0 - p10.1`,
 `-p01.0 + p01.1 + p00.1 + p11.0 + p00.0`, `-p01.1 + p11.1 + p00.1 + p01.0 + p00.0`,
 `p11.1 + p00.1`, `p11.0 + p00.0`, `-p10.1 + p11.1 + p00.1 + p11.0 + p10.0` and
-`-p10.0 + p11.0 + p00.0 + p11.1 + p10.1`. -/
+`-p10.0 + p11.0 + p00.0 + p11.1 + p10.1`.
+
+Erratum: Pearl (2009, p. 267) prints the sixth term as `p11.0 - p00.0`. The valid term, used
+here (its validity is `ace_le_upperTerm`), is `p11.0 + p00.0`, the image of the fifth term
+`p11.1 + p00.1` under exchanging the instrument values. The printed term is not a valid bound:
+with all weight on the type `(0, 0)` (never-takers who never recover) it is `-1`, while the
+average causal effect is `0`. -/
 def upperTerm (p : Observable) : Fin 8 → ℝ := ![
   1 - p false true true - p true false false,
   1 - p false true false - p true false true,
@@ -216,9 +238,11 @@ theorem binaryIVConstraints_obs (q : Weights) : BinaryIVConstraints (obs q) := b
 
 /-! ### A coupling of the two potential outcomes within each compliance type -/
 
-/-- The weights of the four response types inside a compliance type of total weight `a`, with
-`P(Y 1 = 1) = u` and `P(Y 0 = 1) = v` inside the type: the maximal coupling, which puts weight
-`min u v` on "always recover". -/
+/-- The weights of the four response types inside a compliance type `j` of total weight
+`a = P(r_x = j)`, with joint masses `u = P(r_x = j, Y_{x1} = y1)` and
+`v = P(r_x = j, Y_{x0} = y1)` (not probabilities within the type; for `a > 0` the conditional
+margins are `u / a` and `v / a`): the maximal coupling, which puts weight `min u v` on "always
+recover". The entries are nonnegative when `0 ≤ u ≤ a` and `0 ≤ v ≤ a`. -/
 noncomputable def cellWeights (a u v : ℝ) : Fin 4 → ℝ :=
   ![a - u - v + min u v, u - min u v, v - min u v, min u v]
 
@@ -305,11 +329,49 @@ theorem construction_le_lower {p : Observable} (hp : BinaryIVConstraints p) {t u
   rcases ht with h | h | h | h | h | h <;> rcases hu with h' | h' | h' <;>
     rcases hv with h'' | h'' | h'' <;> subst h h' h'' <;> linarith
 
-/-- **The lower bound is attained.** For every table `p` satisfying the constraints there is a
-weight `q` inducing `p` whose average causal effect equals the Balke and Pearl lower bound
-`lower p`. In particular every such table is induced by some weight. -/
-theorem exists_weights_ace_eq_lower {p : Observable} (hp : BinaryIVConstraints p) :
-    ∃ q : Weights, obs q = p ∧ ace q = lower p := by
+/-- The lower bound (8.16) on `P(y1 | do(x1))`: the maximum of `p11.0`, `p11.1`,
+`p00.1 + p11.1 - p00.0 - p01.0` and `p10.1 + p11.1 - p01.0 - p10.0`. -/
+def lowerTreated (p : Observable) : ℝ :=
+  max (max (p true true false) (p true true true))
+    (max (p false false true + p true true true - p false false false - p false true false)
+      (p true false true + p true true true - p false true false - p true false false))
+
+/-- **Validity of the lower bound (8.16).** For every weight `q`,
+`lowerTreated (obs q) ≤ P(y1 | do(x1))`. -/
+theorem lowerTreated_le_probTreated (q : Weights) : lowerTreated (obs q) ≤ probTreated q := by
+  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ :=
+    weights_nonneg q
+  simp only [lowerTreated, probTreated, Fin.sum_univ_four, obs_fff, obs_fft, obs_ftf,
+    obs_tff, obs_tft, obs_ttf, obs_ttt, max_le_iff]
+  refine ⟨⟨?_, ?_⟩, ?_, ?_⟩ <;> linarith
+
+/-- The treated-outcome mass `p11.1 + p11.0 - u3` of the construction of
+`exists_weights_lower` is at most `lowerTreated p`. -/
+theorem construction_le_lowerTreated {p : Observable} (hp : BinaryIVConstraints p) {t u3 : ℝ}
+    (ht : t = p true true false + p false true false ∨ t = p true true true + p false true true ∨
+      t = p true true true + p false true false ∨ t = p true true false + p false true true ∨
+      t = p true true true + p false true true - p true false false + p true false true ∨
+      t = p true true false + p false true false + p true false false - p true false true)
+    (hu : u3 = t ∨ u3 = p true true false ∨ u3 = p true true true) :
+    p true true true + p true true false - u3 ≤ lowerTreated p := by
+  have n := hp.nonneg
+  have n3 := n false true false; have n4 := n false true true
+  have s0 := hp.sum_eq_one false
+  have s1 := hp.sum_eq_one true
+  have l1 : p true true false ≤ lowerTreated p := le_max_of_le_left (le_max_left _ _)
+  have l2 : p true true true ≤ lowerTreated p := le_max_of_le_left (le_max_right _ _)
+  have l3 : p false false true + p true true true - p false false false - p false true false ≤
+      lowerTreated p := le_max_of_le_right (le_max_left _ _)
+  have l4 : p true false true + p true true true - p false true false - p true false false ≤
+      lowerTreated p := le_max_of_le_right (le_max_right _ _)
+  rcases ht with h | h | h | h | h | h <;> rcases hu with h' | h' | h' <;> subst h' <;>
+    linarith
+
+/-- **The lower bounds are attained**, by one weight. For every table `p` satisfying the
+constraints there is a weight `q` inducing `p` whose average causal effect equals the Balke and
+Pearl lower bound `lower p` and whose `P(y1 | do(x1))` equals the lower bound (8.16). -/
+theorem exists_weights_lower {p : Observable} (hp : BinaryIVConstraints p) :
+    ∃ q : Weights, obs q = p ∧ ace q = lower p ∧ probTreated q = lowerTreated p := by
   have n := hp.nonneg
   have n1 := n false false false; have n2 := n false false true; have n3 := n false true false
   have n4 := n false true true; have n5 := n true false false; have n6 := n true false true
@@ -358,12 +420,24 @@ theorem exists_weights_ace_eq_lower {p : Observable} (hp : BinaryIVConstraints p
     cases y <;> cases x <;> cases z <;>
       simp only [obs_fff, obs_fft, obs_ftf, obs_ftt, obs_tff, obs_tft, obs_ttf, obs_ttt] <;>
       linarith
-  refine ⟨q, hobs, le_antisymm ?_ (hobs ▸ (ace_mem_Icc q).1)⟩
-  have hace : ace q = p true true true + p true true false - u3 - p true false false -
-      p true false true + v0 - t := by
-    rw [ace_eq]; linarith
-  rw [hace]
-  exact construction_le_lower hp ht hu (by rcases hv with h | h | h <;> simp [h])
+  refine ⟨q, hobs, le_antisymm ?_ (hobs ▸ (ace_mem_Icc q).1),
+    le_antisymm ?_ (hobs ▸ lowerTreated_le_probTreated q)⟩
+  · have hace : ace q = p true true true + p true true false - u3 - p true false false -
+        p true false true + v0 - t := by
+      rw [ace_eq]; linarith
+    rw [hace]
+    exact construction_le_lower hp ht hu (by rcases hv with h | h | h <;> simp [h])
+  · have hpt : probTreated q = p true true true + p true true false - u3 := by
+      simp only [probTreated, Fin.sum_univ_four]; linarith
+    rw [hpt]
+    exact construction_le_lowerTreated hp ht hu
+
+/-- **The lower bound is attained.** For every table `p` satisfying the constraints there is a
+weight `q` inducing `p` whose average causal effect equals the Balke and Pearl lower bound
+`lower p`. In particular every such table is induced by some weight. -/
+theorem exists_weights_ace_eq_lower {p : Observable} (hp : BinaryIVConstraints p) :
+    ∃ q : Weights, obs q = p ∧ ace q = lower p :=
+  (exists_weights_lower hp).imp fun _ h ↦ ⟨h.1, h.2.1⟩
 
 /-! ### Attaining the upper bound, by exchanging the outcome values -/
 
@@ -484,6 +558,180 @@ theorem identifiedSet_ace_obs (q : Weights) :
       Icc (lower (obs q)) (upper (obs q)) :=
   identifiedSet_ace (binaryIVConstraints_obs q)
 
+/-! ### Sharp bounds on the two arm probabilities -/
+
+/-- The upper bound (8.16) on `P(y1 | do(x1))`: the minimum of `1 - p01.0`, `1 - p01.1`,
+`p10.0 + p11.0 + p00.1 + p11.1` and `p00.0 + p11.0 + p10.1 + p11.1`. Pearl (2009, p. 268)
+prints `1 - p01.0` twice; the second occurrence is `1 - p01.1`, the image of the first under
+exchanging the instrument values (compare the two terms `1 - p00.1`, `1 - p00.0` of (8.15)). -/
+def upperTreated (p : Observable) : ℝ :=
+  min (min (1 - p false true false) (1 - p false true true))
+    (min (p true false false + p true true false + p false false true + p true true true)
+      (p false false false + p true true false + p true false true + p true true true))
+
+/-- **Validity of the upper bound (8.16).** For every weight `q`,
+`P(y1 | do(x1)) ≤ upperTreated (obs q)`. -/
+theorem probTreated_le_upperTreated (q : Weights) : probTreated q ≤ upperTreated (obs q) := by
+  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ :=
+    weights_nonneg q
+  have hs := sum_weights q
+  simp only [upperTreated, probTreated, Fin.sum_univ_four, obs_fff, obs_fft, obs_ftf, obs_ftt,
+    obs_tff, obs_tft, obs_ttf, obs_ttt, le_min_iff]
+  refine ⟨⟨?_, ?_⟩, ?_, ?_⟩ <;> linarith
+
+/-- Under normalization of both arms, the upper bound is one minus the lower bound of the table
+with the outcome values exchanged. -/
+theorem upperTreated_eq {p : Observable} (hp : BinaryIVConstraints p) :
+    upperTreated p = 1 - lowerTreated (swapY p) := by
+  have s0 := hp.sum_eq_one false
+  have s1 := hp.sum_eq_one true
+  simp only [upperTreated, lowerTreated, swapY, Bool.not_true, Bool.not_false,
+    ← min_sub_sub_left]
+  congr 2 <;> linarith
+
+theorem probTreated_swapWeights (q : Weights) :
+    probTreated (swapWeights q) = 1 - probTreated q := by
+  have hs := sum_weights q
+  simp only [probTreated, Fin.sum_univ_four, swapWeights_apply, revType]
+  simp
+  linarith
+
+theorem probTreated_mixWeights (q q' : Weights) {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)
+    (hab : a + b = 1) :
+    probTreated (mixWeights q q' ha hb hab) = a * probTreated q + b * probTreated q' := by
+  simp only [probTreated, Finset.mul_sum, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun j _ ↦ ?_
+  change a * q (j, 1) + b * q' (j, 1) + (a * q (j, 3) + b * q' (j, 3)) = _
+  ring
+
+/-- **Sharp bounds on `P(y1 | do(x1))`** (Pearl 2009, (8.16); Balke and Pearl 1997). For every
+table `p` satisfying the constraints, the identified set of `P(y1 | do(x1))` over all weights
+inducing `p` is exactly `[lowerTreated p, upperTreated p]`. The lower endpoint is attained by
+the weight of `exists_weights_lower`, the upper one by its image under exchanging the outcome
+values. -/
+theorem identifiedSet_probTreated {p : Observable} (hp : BinaryIVConstraints p) :
+    identifiedSet (Set.univ : Set Weights) obs probTreated p =
+      Icc (lowerTreated p) (upperTreated p) := by
+  ext c
+  constructor
+  · rintro ⟨q, ⟨-, rfl⟩, rfl⟩
+    exact ⟨lowerTreated_le_probTreated q, probTreated_le_upperTreated q⟩
+  · intro hc
+    obtain ⟨qL, hqL, -, hL⟩ := exists_weights_lower hp
+    obtain ⟨qS, hqS, -, hS⟩ := exists_weights_lower hp.swapY
+    have hqU : obs (swapWeights qS) = p := by rw [obs_swapWeights, hqS, swapY_swapY]
+    have hU : probTreated (swapWeights qS) = upperTreated p := by
+      rw [probTreated_swapWeights, hS, upperTreated_eq hp]
+    obtain ⟨a, b, ha, hb, hab, rfl⟩ := Manski.exists_combo_of_mem_Icc hc
+    refine mem_identifiedSet.2 ⟨mixWeights qL (swapWeights qS) ha hb hab, mem_univ _, ?_, ?_⟩
+    · funext y x z
+      rw [obs_mixWeights, hqL, hqU, ← add_mul, hab, one_mul]
+    · rw [probTreated_mixWeights, hL, hU]
+
+/-- The table with the two treatment values exchanged: `(swapX p) y x z = p y (!x) z`. -/
+def swapX (p : Observable) : Observable := fun y x z ↦ p y (!x) z
+
+theorem BinaryIVConstraints.swapX {p : Observable} (hp : BinaryIVConstraints p) :
+    BinaryIVConstraints (IVResponse.swapX p) where
+  nonneg y x z := hp.nonneg y (!x) z
+  sum_eq_one z := by have := hp.sum_eq_one z; simp only [IVResponse.swapX]; simp; linarith
+  ineq₁ := by have := hp.ineq₂; simp only [IVResponse.swapX]; simp; linarith
+  ineq₂ := by have := hp.ineq₁; simp only [IVResponse.swapX]; simp; linarith
+  ineq₃ := by have := hp.ineq₄; simp only [IVResponse.swapX]; simp; linarith
+  ineq₄ := by have := hp.ineq₃; simp only [IVResponse.swapX]; simp; linarith
+
+/-- Exchanging the treatment values on response types: `respond (flipIn k) x = respond k (!x)`,
+so helped and hurt are exchanged. -/
+def flipIn : Fin 4 → Fin 4 := ![0, 2, 1, 3]
+
+/-- The weight with the treatment values exchanged:
+`(swapXWeights q) (j, k) = q (revType j, flipIn k)`. Since `respond (revType j) z` is
+`!respond j z`, never-takers and always-takers are exchanged, and so are compliers and
+defiers. -/
+def swapXWeights (q : Weights) : Weights where
+  mass s := q (revType s.1, flipIn s.2)
+  nonneg s := q.nonneg _
+  sum_eq_one := by
+    have := sum_weights q
+    simp only [Fintype.sum_prod_type, Fin.sum_univ_four, revType, flipIn]
+    simp
+    linarith
+
+theorem swapXWeights_apply (q : Weights) (j k : Fin 4) :
+    swapXWeights q (j, k) = q (revType j, flipIn k) := rfl
+
+theorem swapXWeights_swapXWeights (q : Weights) : swapXWeights (swapXWeights q) = q := by
+  ext ⟨j, k⟩
+  simp only [swapXWeights_apply]
+  fin_cases j <;> fin_cases k <;> rfl
+
+theorem obs_swapXWeights (q : Weights) : obs (swapXWeights q) = swapX (obs q) := by
+  funext y x z
+  cases y <;> cases x <;> cases z <;>
+    simp only [swapX, Bool.not_false, Bool.not_true, obs_fff, obs_fft, obs_ftf, obs_ftt, obs_tff,
+      obs_tft, obs_ttf, obs_ttt, swapXWeights_apply, revType, flipIn] <;> simp <;> ring
+
+theorem probTreated_swapXWeights (q : Weights) :
+    probTreated (swapXWeights q) = probUntreated q := by
+  simp only [probTreated, probUntreated, Fin.sum_univ_four, swapXWeights_apply, revType, flipIn]
+  simp
+  ring
+
+@[simp] theorem swapX_swapX (p : Observable) : swapX (swapX p) = p := by
+  funext y x z; simp [swapX]
+
+/-- The lower bound (8.15) on `P(y1 | do(x0))`: the maximum of `p10.0`, `p10.1`,
+`p10.0 + p11.0 - p00.1 - p11.1` and `p01.0 + p10.0 - p00.1 - p01.1` (the four printed terms,
+in another order). -/
+def lowerUntreated (p : Observable) : ℝ :=
+  max (max (p true false false) (p true false true))
+    (max (p true false false + p true true false - p false false true - p true true true)
+      (p false true false + p true false false - p false false true - p false true true))
+
+/-- The upper bound (8.15) on `P(y1 | do(x0))`: the minimum of `1 - p00.0`, `1 - p00.1`,
+`p11.0 + p10.0 + p01.1 + p10.1` and `p01.0 + p10.0 + p11.1 + p10.1` (the four printed terms,
+in another order). -/
+def upperUntreated (p : Observable) : ℝ :=
+  min (min (1 - p false false false) (1 - p false false true))
+    (min (p true true false + p true false false + p false true true + p true false true)
+      (p false true false + p true false false + p true true true + p true false true))
+
+/-- Under normalization of both arms, the lower bound (8.15) is the lower bound (8.16) of the
+table with the treatment values exchanged. -/
+theorem lowerUntreated_eq {p : Observable} (hp : BinaryIVConstraints p) :
+    lowerUntreated p = lowerTreated (swapX p) := by
+  have s0 := hp.sum_eq_one false
+  have s1 := hp.sum_eq_one true
+  have e1 : p true false false + p true true false - p false false true - p true true true =
+      p false true true + p true false true - p false true false - p false false false := by
+    linarith
+  have e2 : p false true false + p true false false - p false false true - p false true true =
+      p true true true + p true false true - p false false false - p true true false := by
+    linarith
+  simp only [lowerUntreated, lowerTreated, swapX, Bool.not_true, Bool.not_false, e1, e2]
+
+/-- The upper bound (8.15) is the upper bound (8.16) of the table with the treatment values
+exchanged. -/
+theorem upperUntreated_eq (p : Observable) : upperUntreated p = upperTreated (swapX p) := rfl
+
+/-- **Sharp bounds on `P(y1 | do(x0))`** (Pearl 2009, (8.15); Balke and Pearl 1997). For every
+table `p` satisfying the constraints, the identified set of `P(y1 | do(x0))` over all weights
+inducing `p` is exactly `[lowerUntreated p, upperUntreated p]`. This is
+`identifiedSet_probTreated` for the table with the treatment values exchanged. -/
+theorem identifiedSet_probUntreated {p : Observable} (hp : BinaryIVConstraints p) :
+    identifiedSet (Set.univ : Set Weights) obs probUntreated p =
+      Icc (lowerUntreated p) (upperUntreated p) := by
+  rw [lowerUntreated_eq hp, upperUntreated_eq, ← identifiedSet_probTreated hp.swapX]
+  ext c
+  simp only [mem_identifiedSet]
+  constructor
+  · rintro ⟨q, -, hq, rfl⟩
+    exact ⟨swapXWeights q, mem_univ _, by rw [obs_swapXWeights, hq],
+      probTreated_swapXWeights q⟩
+  · rintro ⟨q, -, hq, rfl⟩
+    refine ⟨swapXWeights q, mem_univ _, by rw [obs_swapXWeights, hq, swapX_swapX], ?_⟩
+    rw [← probTreated_swapXWeights, swapXWeights_swapXWeights]
+
 /-! ### The natural bounds -/
 
 /-- The first lower term is the natural lower bound (8.17) of Robins (1989) and Manski (1990):
@@ -522,7 +770,7 @@ noncomputable def obsTable (μ : Measure Ω) : Observable := fun y x z ↦
 /-- Under exclusion, instrument independence, binary outcomes and positive instrument
 probabilities, the observed table is induced by the law of the response type. -/
 theorem obsTable_eq [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
-    (hI : M.InstrumentIndependence μ) (hB : M.BinaryOutcome)
+    (hI : M.InstrumentIndependence μ) (hB : M.BinaryOutcome μ)
     (h₁ : μ (M.instrumentEq true) ≠ 0) (h₀ : μ (M.instrumentEq false) ≠ 0) :
     M.obsTable μ = obs (M.responseLaw μ) := by
   funext y x z
@@ -535,11 +783,56 @@ independence, binary potential outcomes and `P(Z = z) ≠ 0` for both `z`. Then 
 treatment effect `E[Y z 1 - Y z 0]` lies between the Balke and Pearl bounds (8.14a), (8.14b) of
 the observed conditional law `P(Dobs = x, Yobs = y | Z = z)`. Monotonicity is not assumed. -/
 theorem ate_mem_Icc_balkePearl [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
-    (hI : M.InstrumentIndependence μ) (hB : M.BinaryOutcome)
+    (hI : M.InstrumentIndependence μ) (hB : M.BinaryOutcome μ)
     (h₁ : μ (M.instrumentEq true) ≠ 0) (h₀ : μ (M.instrumentEq false) ≠ 0) (z : Bool) :
     M.ate μ z ∈ Icc (lower (M.obsTable μ)) (upper (M.obsTable μ)) := by
   rw [M.obsTable_eq hE hI hB h₁ h₀, ← M.ace_responseLaw hE hB z]
   exact ace_mem_Icc _
+
+/-- For `0 < π < 1` the realization `realModel` of `ResponseTypes.lean` has observed conditional
+law `obs q`. -/
+theorem obsTable_realModel (q : Weights) {π : ℝ} (h0 : 0 < π) (h1 : π < 1) :
+    realModel.obsTable (realMeasure q h0.le h1.le) = obs q := by
+  obtain ⟨hE, hI, hB, -, hq, -⟩ := realModel_spec q h0.le h1.le
+  have hne : ∀ z, realMeasure q h0.le h1.le (realModel.instrumentEq z) ≠ 0 := fun z h ↦ by
+    have hz := realMeasure_instrumentEq q h0.le h1.le z
+    rw [measureReal_def, h] at hz
+    cases z <;> simp [instrumentWeight] at hz <;> linarith
+  rw [realModel.obsTable_eq hE hI hB (hne true) (hne false), hq]
+
+/-- **Sharpness of the Balke and Pearl bounds for `IVModel`.** Let `p` be a table satisfying the
+constraints (nonnegativity, normalization and (8.21)) and `0 < π < 1`. The set of average
+treatment effects `M.ate μ z` of binary IV models on the sample space `Bool × Fin 4 × Fin 4`
+(any probability measure `μ`, any model `M`) satisfying the exclusion restriction, instrument
+independence and binary outcomes, with `P(Z = z1) = π` and observed conditional law `p`, is
+exactly `[lower p, upper p]`. Validity holds on every probability space
+(`ate_mem_Icc_balkePearl`); attainment uses the realization `realModel` of the weights of
+`identifiedSet_ace`. Monotonicity is not assumed. -/
+theorem ate_identifiedSet_balkePearl {p : Observable} (hp : BinaryIVConstraints p) {π : ℝ}
+    (h0 : 0 < π) (h1 : π < 1) (z : Bool) :
+    {c | ∃ (μ : Measure RealSpace) (M : IVModel RealSpace), IsProbabilityMeasure μ ∧
+        M.Exclusion μ ∧ M.InstrumentIndependence μ ∧ M.BinaryOutcome μ ∧
+        μ.real (M.instrumentEq true) = π ∧ M.obsTable μ = p ∧ M.ate μ z = c} =
+      Icc (lower p) (upper p) := by
+  ext c
+  constructor
+  · rintro ⟨μ, M, hμ, hE, hI, hB, hπ, hp', rfl⟩
+    have hc : M.instrumentEq false = (M.instrumentEq true)ᶜ := by
+      ext ω; simp [instrumentEq]
+    have h₁ : μ (M.instrumentEq true) ≠ 0 := fun h ↦ by
+      rw [measureReal_def, h] at hπ; simp at hπ; linarith
+    have h₀ : μ (M.instrumentEq false) ≠ 0 := fun h ↦ by
+      have h' : μ.real (M.instrumentEq false) = 1 - π := by
+        rw [hc, probReal_compl_eq_one_sub (M.measurableSet_instrumentEq true), hπ]
+      rw [measureReal_def, h] at h'; simp at h'; linarith
+    rw [← hp']
+    exact M.ate_mem_Icc_balkePearl hE hI hB h₁ h₀ z
+  · intro hc
+    rw [← identifiedSet_ace hp] at hc
+    obtain ⟨q, -, hq, rfl⟩ := mem_identifiedSet.1 hc
+    obtain ⟨hE, hI, hB, hπ, -, hate⟩ := realModel_spec q h0.le h1.le
+    exact ⟨realMeasure q h0.le h1.le, realModel, inferInstance, hE, hI, hB, hπ,
+      by rw [obsTable_realModel q h0 h1, hq], hate z⟩
 
 end IVModel
 
@@ -568,8 +861,33 @@ def complianceDiff (p : Observable) : ℝ :=
   (p false true true + p true true true) - (p false true false + p true true false)
 
 /-- The instrumental variable (Wald) estimate: the intent to treat effect divided by the
-compliance difference. -/
+compliance difference. The quotient is totalized: when `complianceDiff p = 0` Lean's convention
+`x / 0 = 0` returns `0`, which estimates nothing (`wald_totalized`). It is a ratio only under
+`complianceDiff p ≠ 0`, as in `eq_wald_iff`; the compliance difference may be negative. -/
 noncomputable def wald (p : Observable) : ℝ := itt p / complianceDiff p
+
+/-- **The guarded Wald ratio.** When the compliance difference is nonzero, `c` is the Wald
+estimate exactly when `c * (P(x1 | z1) - P(x1 | z0)) = P(y1 | z1) - P(y1 | z0)`. -/
+theorem eq_wald_iff {p : Observable} (h : complianceDiff p ≠ 0) {c : ℝ} :
+    c = wald p ↔ c * complianceDiff p = itt p := by
+  rw [wald, eq_div_iff h]
+
+/-- Half helped compliers (type `(1, 1)`) and half defiers who never recover (type `(2, 0)`). -/
+noncomputable def complierDefierWeights : Weights where
+  mass s := if s = (1, 1) ∨ s = (2, 0) then 1 / 2 else 0
+  nonneg s := by split_ifs <;> norm_num
+  sum_eq_one := by simp [Fintype.sum_prod_type, Fin.sum_univ_four]; norm_num
+
+/-- **The totalized Wald quotient.** For `complierDefierWeights` the compliance difference is `0`
+while the intent to treat effect is `1 / 2`, so the Wald ratio is undefined; Lean's `wald`
+returns `0`. -/
+theorem wald_totalized :
+    complianceDiff (obs complierDefierWeights) = 0 ∧ itt (obs complierDefierWeights) = 1 / 2 ∧
+      wald (obs complierDefierWeights) = 0 := by
+  have hc : complianceDiff (obs complierDefierWeights) = 0 := by
+    simp [complianceDiff, obs_ftt, obs_ttt, obs_ftf, obs_ttf, complierDefierWeights]
+  refine ⟨hc, ?_, by rw [wald, hc, div_zero]⟩
+  simp [itt, obs_tft, obs_ttt, obs_tff, obs_ttf, complierDefierWeights]
 
 /-- Table 8.1 of Pearl (2009): the joint distribution `P(x, y, z)` with `P(z0) = P(z1) = 0.5`,
 divided by `P(z)`: `P(y0, x0 | z0) = 0.55`, `P(y0, x1 | z0) = 0.45`, `P(y0, x0 | z1) = 0.45`,
@@ -646,8 +964,14 @@ theorem identifiedSet_pepAid :
 
 theorem itt_pepAid : itt pepAid = 45 / 100 := by norm_num [itt, pepAid, mkTable]
 
-theorem wald_pepAid : wald pepAid = -15 / 11 := by
-  norm_num [wald, itt, complianceDiff, pepAid, mkTable]
+theorem complianceDiff_pepAid : complianceDiff pepAid = -33 / 100 := by
+  norm_num [complianceDiff, pepAid, mkTable]
+
+/-- The Wald estimate for the PeptAid data is a genuine ratio (the compliance difference is
+`-0.33 ≠ 0`) and equals `-15/11`. -/
+theorem wald_pepAid : wald pepAid = -15 / 11 :=
+  ((eq_wald_iff (by rw [complianceDiff_pepAid]; norm_num)).2
+    (by rw [complianceDiff_pepAid]; norm_num [itt, pepAid, mkTable])).symm
 
 /-- **The intent to treat estimate lies outside the sharp bounds** (Pearl 2009, Section 8.6):
 for the PeptAid data the intent to treat effect `0.45` is not in the identified set. -/
@@ -660,6 +984,138 @@ the Wald estimate `0.45 / (0.31 - 0.64) = -15/11` is not in the identified set. 
 theorem wald_pepAid_not_mem :
     wald pepAid ∉ identifiedSet (Set.univ : Set Weights) obs ace pepAid := by
   rw [identifiedSet_pepAid, wald_pepAid]; norm_num
+
+/-! ### Attribution in the PeptAid example (Pearl 2009, Section 8.3) -/
+
+/-- Given the evidence `E = {Z = z1, X = x1, Y = y1}`, the probability that the outcome would
+have been `y0` had the instrument been set to `z0`: `P(Y_{z0} = y0 | z1, x1, y1)`. The types
+compatible with `E` are those with `respond j z1 = x1` and `respond k x1 = y1`; under `z0` a unit
+of type `(j, k)` takes `respond j z0` and has outcome `respond k (respond j z0)`. Since the
+instrument is independent of the types, `P(type ∈ T, Z = z1) / P(y1, x1, z1)` is
+`P(z1) q(T) / (P(z1) p11.1) = q(T) / p11.1`; the quotient is a conditional probability when
+`p11.1 = P(y1, x1 | z1) > 0`. -/
+noncomputable def attrInstrument (q : Weights) : ℝ :=
+  (∑ s, if respond s.1 true = true ∧ respond s.2 true = true ∧
+      respond s.2 (respond s.1 false) = false then q s else 0) / obs q true true true
+
+/-- Given the evidence `E = {Z = z1, X = x1, Y = y1}`, the probability that the outcome would
+have been `y0` had the treatment been set to `x0`: `P(Y_{x0} = y0 | z1, x1, y1)`, the weight of
+the types compatible with `E` with `respond k x0 = y0`, divided by `p11.1`. -/
+noncomputable def attrTreatment (q : Weights) : ℝ :=
+  (∑ s, if respond s.1 true = true ∧ respond s.2 true = true ∧
+      respond s.2 false = false then q s else 0) / obs q true true true
+
+/-- Only helped compliers would not have been ulcerated without encouragement:
+`P(Y_{z0} = y0 | z1, x1, y1) = q11 / p11.1`. -/
+theorem attrInstrument_eq (q : Weights) : attrInstrument q = q (1, 1) / obs q true true true := by
+  simp [attrInstrument, Fintype.sum_prod_type, Fin.sum_univ_four]
+
+/-- Helped compliers and helped always-takers would not have been ulcerated without the drug:
+`P(Y_{x0} = y0 | z1, x1, y1) = (q11 + q31) / p11.1`. -/
+theorem attrTreatment_eq (q : Weights) :
+    attrTreatment q = (q (1, 1) + q (3, 1)) / obs q true true true := by
+  simp [attrTreatment, Fintype.sum_prod_type, Fin.sum_univ_four]
+
+/-- A weight inducing `pepAid` with both attribution probabilities equal to `13/14`: in
+hundredths, rows `j = 0, 1, 2, 3` are `(2, 0, 3, 0)`, `(17, 13, 0, 1)`, `(0, 0, 32, 32)` and
+`(0, 0, 0, 0)`. -/
+noncomputable def pepAidAttrLow : Weights where
+  mass s := (![![2, 0, 3, 0], ![17, 13, 0, 1], ![0, 0, 32, 32], ![0, 0, 0, 0]] :
+    Fin 4 → Fin 4 → ℝ) s.1 s.2 / 100
+  nonneg s := by obtain ⟨j, k⟩ := s; fin_cases j <;> fin_cases k <;> norm_num
+  sum_eq_one := by simp [Fintype.sum_prod_type, Fin.sum_univ_four]; norm_num
+
+/-- A weight inducing `pepAid` with both attribution probabilities equal to `1`: as
+`pepAidAttrLow` with row `j = 1` replaced by `(16, 14, 1, 0)`. -/
+noncomputable def pepAidAttrHigh : Weights where
+  mass s := (![![2, 0, 3, 0], ![16, 14, 1, 0], ![0, 0, 32, 32], ![0, 0, 0, 0]] :
+    Fin 4 → Fin 4 → ℝ) s.1 s.2 / 100
+  nonneg s := by obtain ⟨j, k⟩ := s; fin_cases j <;> fin_cases k <;> norm_num
+  sum_eq_one := by simp [Fintype.sum_prod_type, Fin.sum_univ_four]; norm_num
+
+theorem obs_pepAidAttrLow : obs pepAidAttrLow = pepAid := by
+  funext y x z
+  cases y <;> cases x <;> cases z <;>
+    simp [obs_fff, obs_fft, obs_ftf, obs_ftt, obs_tff, obs_tft, obs_ttf, obs_ttt, pepAidAttrLow,
+      pepAid, mkTable] <;> norm_num
+
+theorem obs_pepAidAttrHigh : obs pepAidAttrHigh = pepAid := by
+  funext y x z
+  cases y <;> cases x <;> cases z <;>
+    simp [obs_fff, obs_fft, obs_ftf, obs_ftt, obs_tff, obs_tft, obs_ttf, obs_ttt, pepAidAttrHigh,
+      pepAid, mkTable] <;> norm_num
+
+/-- For every weight inducing `pepAid`, `0.13 ≤ q11` and `q11 + q31 ≤ 0.14 = p11.1`. The weight
+`q13 + q31 + q33` of the evidence types who would recover anyway is at most
+`1 - p00.0 - p10.1 = 0.01`. -/
+theorem pepAid_q11_bounds {q : Weights} (hq : obs q = pepAid) :
+    obs q true true true = 14 / 100 ∧ 13 / 100 ≤ q (1, 1) ∧ q (1, 1) + q (3, 1) ≤ 14 / 100 := by
+  have e1 : obs q true true true = 14 / 100 := by rw [hq]; norm_num [pepAid, mkTable]
+  have e2 : obs q false false false = 32 / 100 := by rw [hq]; norm_num [pepAid, mkTable]
+  have e3 : obs q true false true = 67 / 100 := by rw [hq]; norm_num [pepAid, mkTable]
+  refine ⟨e1, ?_, ?_⟩ <;> rw [obs_ttt] at e1 <;> rw [obs_fff] at e2 <;> rw [obs_tft] at e3 <;>
+  · obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ :=
+      weights_nonneg q
+    have hs := sum_weights q
+    linarith
+
+/-- The attribution probabilities of a mixture of the two witnesses. -/
+theorem attr_mix_pepAid {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hab : a + b = 1) :
+    obs (mixWeights pepAidAttrLow pepAidAttrHigh ha hb hab) = pepAid ∧
+      attrInstrument (mixWeights pepAidAttrLow pepAidAttrHigh ha hb hab) = a * (13 / 14) + b ∧
+      attrTreatment (mixWeights pepAidAttrLow pepAidAttrHigh ha hb hab) = a * (13 / 14) + b := by
+  have hobs : obs (mixWeights pepAidAttrLow pepAidAttrHigh ha hb hab) = pepAid := by
+    funext y x z
+    rw [obs_mixWeights, obs_pepAidAttrLow, obs_pepAidAttrHigh, ← add_mul, hab, one_mul]
+  have hden : obs (mixWeights pepAidAttrLow pepAidAttrHigh ha hb hab) true true true =
+      14 / 100 := by rw [hobs]; norm_num [pepAid, mkTable]
+  refine ⟨hobs, ?_, ?_⟩
+  · rw [attrInstrument_eq, hden]
+    simp [mixWeights, pepAidAttrLow, pepAidAttrHigh]
+    linarith
+  · rw [attrTreatment_eq, hden]
+    simp [mixWeights, pepAidAttrLow, pepAidAttrHigh]
+    linarith
+
+/-- **Attribution to the encouragement in the PeptAid example** (Pearl 2009, Section 8.3). For
+the PeptAid data, the identified set of `P(Y_{z0} = y0 | z1, x1, y1)`, the probability that a
+plaintiff who was encouraged, took PeptAid and developed ulcers would not have developed them
+without the encouragement, is exactly `[13/14, 1]`. The evidence cell `p11.1 = 0.14` is positive.
+The printed lower bound `0.93` is `13/14 = 0.9285...` rounded upward, so it is not itself a valid
+lower bound. -/
+theorem identifiedSet_attrInstrument_pepAid :
+    identifiedSet (Set.univ : Set Weights) obs attrInstrument pepAid = Icc (13 / 14) 1 := by
+  ext c
+  rw [mem_identifiedSet]
+  constructor
+  · rintro ⟨q, -, hq, rfl⟩
+    obtain ⟨e, h1, h2⟩ := pepAid_q11_bounds hq
+    have h3 := q.nonneg (3, 1)
+    rw [attrInstrument_eq, e]
+    constructor <;> [rw [le_div_iff₀ (by norm_num)]; rw [div_le_one (by norm_num)]] <;> linarith
+  · intro hc
+    obtain ⟨a, b, ha, hb, hab, rfl⟩ := Manski.exists_combo_of_mem_Icc hc
+    obtain ⟨hobs, h, -⟩ := attr_mix_pepAid ha hb hab
+    exact ⟨_, mem_univ _, hobs, by rw [h, mul_one]⟩
+
+/-- **Attribution to the treatment in the PeptAid example** (Pearl 2009, Section 8.3). For the
+PeptAid data, the identified set of `P(Y_{x0} = y0 | z1, x1, y1)`, the probability that the
+plaintiff would not have developed ulcers had he not taken PeptAid, is exactly `[13/14, 1]`
+(printed as `[0.93, 1.00]`). -/
+theorem identifiedSet_attrTreatment_pepAid :
+    identifiedSet (Set.univ : Set Weights) obs attrTreatment pepAid = Icc (13 / 14) 1 := by
+  ext c
+  rw [mem_identifiedSet]
+  constructor
+  · rintro ⟨q, -, hq, rfl⟩
+    obtain ⟨e, h1, h2⟩ := pepAid_q11_bounds hq
+    have h3 := q.nonneg (3, 1)
+    rw [attrTreatment_eq, e]
+    constructor <;> [rw [le_div_iff₀ (by norm_num)]; rw [div_le_one (by norm_num)]] <;> linarith
+  · intro hc
+    obtain ⟨a, b, ha, hb, hab, rfl⟩ := Manski.exists_combo_of_mem_Icc hc
+    obtain ⟨hobs, -, h⟩ := attr_mix_pepAid ha hb hab
+    exact ⟨_, mem_univ _, hobs, by rw [h, mul_one]⟩
 
 /-- The vitamin A data of Table 8.2 of Pearl (2009) (Sommer et al. 1986), as conditional
 frequencies: the arm `z0` has `11588` children (`74` with `y0, x0` and `11514` with `y1, x0`),
