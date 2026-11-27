@@ -22,11 +22,10 @@ factorization, the local Markov property and the global Markov property are equi
 
 ## Main results
 
-* `FiniteDist.condIndep_sdiff_iff`: coordinates in the conditioning set are irrelevant,
-  `X \ Z ⫫ Y \ Z | Z ↔ X ⫫ Y | Z`; this matches `Digraph.dSep_diff_iff`.
 * `Digraph.DSep.reach_family`: the graph lemma behind the proof. On the ancestral closure of
-  `X ∪ Y ∪ Z`, the set of vertices reached from `X` by active trails given `Z` never splits the
-  family `{v} ∪ parents v` of a vertex (outside `Z`).
+  `X ∪ Y ∪ Z`, the set of vertices reached by the Bayes-ball search from `X` given `Z` never
+  splits the family `{v} ∪ parents v` of a vertex; `Digraph.DSep.dConn_family` is the
+  d-connection form, for family members outside `Z`.
 * `Digraph.Factorizes.condIndep_of_dSep`: **d-separation implies conditional independence**, for
   arbitrary finsets and without any positivity assumption.
 * `Digraph.factorizes_tfae`, `Digraph.factorizes_iff_globalMarkov`,
@@ -60,75 +59,6 @@ criterion gives `S ⫫ T | Z`, hence `X ⫫ Y | Z`. This is the moral graph argu
 
 @[expose] public section
 
-/-! ### Coordinates in the conditioning set are irrelevant -/
-
-namespace CausalInference.FiniteDist
-
-open Finset
-
-section RandomVariables
-
-variable {Ω β β' γ δ : Type*} [Fintype Ω] [Finite β] [Finite γ] [Finite β']
-  [DecidableEq β] [DecidableEq β'] [DecidableEq γ] [DecidableEq δ]
-  {p : FiniteDist Ω} {X : Ω → β} {Y : Ω → γ} {Z : Ω → δ}
-
-/-- Conditional independence passes to any function of the first variable and the conditioning
-variable: `X ⫫ Y | Z` implies `φ(X, Z) ⫫ Y | Z`. -/
-theorem CondIndepFun.of_left_cond (h : p.CondIndepFun X Y Z) {X' : Ω → β'}
-    (φ : β → δ → β') (hX : ∀ ω, X' ω = φ (X ω) (Z ω)) : p.CondIndepFun X' Y Z := by
-  cases nonempty_fintype β
-  obtain ⟨f, g, hfg⟩ := condIndepFun_iff_exists_mul.1 h
-  refine condIndepFun_iff_exists_mul.2
-    ⟨fun a' c => ∑ a ∈ univ.filter (fun a => φ a c = a'), f a c, g, fun a' b c => ?_⟩
-  rw [p.probOf_eq_sum X (univ.filter fun a => φ a c = a') (fun ω hω => by
-    simp [← hω.2.2, ← hX, hω.1]), sum_mul]
-  refine sum_congr rfl fun a ha => ?_
-  rw [← hfg]
-  refine p.probOf_congr fun ω => ?_
-  simp only [mem_filter, mem_univ, true_and] at ha
-  constructor
-  · rintro ⟨⟨-, h2, h3⟩, h4⟩
-    exact ⟨h4, h2, h3⟩
-  · rintro ⟨h4, h2, h3⟩
-    exact ⟨⟨by rw [hX, h4, h3, ha], h2, h3⟩, h4⟩
-
-/-- Conditional independence passes to any function of the second variable and the conditioning
-variable: `X ⫫ Y | Z` implies `X ⫫ ψ(Y, Z) | Z`. -/
-theorem CondIndepFun.of_right_cond {γ' : Type*} [Finite γ'] [DecidableEq γ']
-    (h : p.CondIndepFun X Y Z) {Y' : Ω → γ'} (ψ : γ → δ → γ')
-    (hY : ∀ ω, Y' ω = ψ (Y ω) (Z ω)) : p.CondIndepFun X Y' Z :=
-  (h.symm.of_left_cond ψ hY).symm
-
-end RandomVariables
-
-section Coordinates
-
-variable {V : Type*} [Fintype V] [DecidableEq V] {α : V → Type*} [∀ v, Fintype (α v)]
-  [∀ v, DecidableEq (α v)] {p : FiniteDist (∀ v, α v)} {X Y Z : Finset V}
-
-/-- Adding the conditioning coordinates to the first set preserves conditional independence. -/
-theorem CondIndep.union_cond_left (h : p.CondIndep X Y Z) : p.CondIndep (X ∪ Z) Y Z :=
-  CondIndepFun.of_left_cond h (glue X Z) fun x => restrict_union_eq_glue X Z x
-
-/-- Adding the conditioning coordinates to the second set preserves conditional independence. -/
-theorem CondIndep.union_cond_right (h : p.CondIndep X Y Z) : p.CondIndep X (Y ∪ Z) Z :=
-  h.symm.union_cond_left.symm
-
-/-- Coordinates in the conditioning set are irrelevant on either side:
-`X ⫫ Y | Z` holds exactly when `X \ Z ⫫ Y \ Z | Z` does. -/
-theorem condIndep_sdiff_iff : p.CondIndep (X \ Z) (Y \ Z) Z ↔ p.CondIndep X Y Z := by
-  constructor
-  · intro h
-    have h' := h.union_cond_left.union_cond_right
-    rw [sdiff_union_self_eq_union, sdiff_union_self_eq_union] at h'
-    exact (h'.mono_left subset_union_left).mono_right subset_union_left
-  · intro h
-    exact (h.mono_left sdiff_subset).mono_right sdiff_subset
-
-end Coordinates
-
-end CausalInference.FiniteDist
-
 namespace Digraph
 
 open Relation
@@ -152,8 +82,10 @@ theorem reflTransGen_bayesBall_of_reflTransGen_rev {v t : V} (h : ReflTransGen G
 
 /-- **Families are not split by d-separation.** Suppose `X` is disjoint from `Z`, `X` and `Y` are
 d-separated by `Z`, the vertex `v` lies in the ancestral closure of `X ∪ Y ∪ Z`, and `u` and `w`
-are members of the family `{v} ∪ parents v` with `u ∉ Z`. If an active trail given `Z` leads from
-a vertex of `X` to `u`, then an active trail given `Z` leads from a vertex of `X` to `w`. -/
+are members of the family `{v} ∪ parents v` with `u ∉ Z`. If the Bayes-ball search from `X`
+given `Z` arrives at `u` (in some arrival state), then it also arrives at `w`. The conclusion is
+reachability of a Bayes-ball state, not d-connection: `w` may lie in `Z`, and then it is not the
+endpoint of an active trail. `Digraph.DSep.dConn_family` is the d-connection form for `w ∉ Z`. -/
 theorem DSep.reach_family (hsep : G.DSep X Y Z) (hXZ : ∀ x ∈ X, x ∉ Z) {v u w : V}
     (hvA : v ∈ G.ancestorsOf (X ∪ Y ∪ Z)) (hu : u = v ∨ G.Adj u v) (hw : w = v ∨ G.Adj w v)
     (huZ : u ∉ Z) {x : V} (hx : x ∈ X) {b : Bool}
@@ -180,6 +112,15 @@ theorem DSep.reach_family (hsep : G.DSep X Y Z) (hXZ : ∀ x ∈ X, x ∉ Z) {v 
       obtain ⟨c, hc⟩ := exists_reflTransGen_bayesBall_of_reflTransGen hvs hvZ d
       exact hsep ⟨x, hx, s, hsY, hXZ x hx, fun h => hvZ ⟨s, h, hvs⟩, c, hxv.trans hc⟩
     · exact absurd ⟨s, hsZ, hvs⟩ hvZ
+
+/-- The d-connection form of `Digraph.DSep.reach_family`: under the same hypotheses, if moreover
+`w ∉ Z`, then `X` and `{w}` are d-connected given `Z`. -/
+theorem DSep.dConn_family (hsep : G.DSep X Y Z) (hXZ : ∀ x ∈ X, x ∉ Z) {v u w : V}
+    (hvA : v ∈ G.ancestorsOf (X ∪ Y ∪ Z)) (hu : u = v ∨ G.Adj u v) (hw : w = v ∨ G.Adj w v)
+    (huZ : u ∉ Z) (hwZ : w ∉ Z) {x : V} (hx : x ∈ X) {b : Bool}
+    (hxu : ReflTransGen (G.bayesBall Z).Adj (x, false) (u, b)) : G.DConn X {w} Z := by
+  obtain ⟨x', hx', c, h⟩ := hsep.reach_family hXZ hvA hu hw huZ hx hxu
+  exact ⟨x', hx', w, Set.mem_singleton w, hXZ x' hx', hwZ, c, h⟩
 
 end Graph
 
@@ -243,7 +184,7 @@ theorem MarkovKernels.condIndep_of_dSep_of_disjoint (k : G.MarkovKernels α) (hG
       (fun h => huZ (mem_coe.1 h)) (mem_coe.2 hx) hxu
     exact mem_filter.2 ⟨hfamA v hv w hw, hwZ, x', hx', c, hx'w⟩
   set P : V → Prop := fun v => ∀ u, (u = v ∨ G.Adj u v) → u ∈ S ∪ Z
-  refine ((FiniteDist.condIndep_of_margAt_eq_mul hST hSZ hTZ
+  refine ((FiniteDist.condIndep_of_margAt_eq_mul (by simp [disjoint_iff_inter_eq_empty.1 hST])
     (fun x => ∏ v ∈ A.filter P, k.factor v x)
     (fun x => ∏ v ∈ A.filter (fun v => ¬ P v), k.factor v x) ?_ ?_ ?_).mono_left hXS).mono_right
     hYT
@@ -401,7 +342,7 @@ theorem xorDist_apply (y : Fin 3 → Bool) :
 /-- In the exclusive-or distribution, the cause `0` and the effect `2` are independent, although
 they are adjacent in the graph. -/
 theorem xorDist_condIndep : xorDist.CondIndep {0} {2} ∅ := by
-  refine FiniteDist.condIndep_of_margAt_eq_mul (by decide) (by decide) (by decide)
+  refine FiniteDist.condIndep_of_margAt_eq_mul (by decide)
     (fun _ => 1 / 2) (fun _ => 1 / 2) (fun _ _ _ => rfl) (fun _ _ _ => rfl) fun x => ?_
   rw [xorDist.margAt_eq_sum_margAt (subset_univ _),
     show (univ \ ({0} ∪ {2} ∪ ∅) : Finset (Fin 3)) = {1} by decide,

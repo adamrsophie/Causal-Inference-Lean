@@ -23,13 +23,16 @@ public import CausalInference.Graphical.Factorization
 
 * `Digraph.MarkovKernels.localMarkov`, `Digraph.Factorizes.localMarkov`: a distribution that
   factorizes according to an acyclic graph satisfies the local Markov property.
-* A concrete noisy chain `0 → 1 → 2` over `Bool` (`CausalInference.GraphExamples.chainDist`),
-  with its factorization, the conditional independence `{2} ⫫ {0} | {1}` and the dependence of
-  `0` and `1`, the latter checked by computation.
-
 * `Digraph.LocalMarkov.factorizes`: conversely, for an acyclic graph a distribution with the
   local Markov property factorizes, with the kernels `condKernels G p`; hence
   `Digraph.factorizes_iff_localMarkov`.
+* `Digraph.factorizes_of_complete`: every distribution factorizes according to an acyclic graph
+  in which any two distinct vertices are adjacent.
+* A concrete noisy chain `0 → 1 → 2` over `Bool` (`CausalInference.GraphExamples.chainDist`),
+  with its factorization, the conditional independence `{2} ⫫ {0} | {1}` (derived from the local
+  Markov property, and checked directly from the masses in
+  `CausalInference.GraphExamples.chainDist_condIndep_of_masses`) and the dependence of `0` and
+  `1`, checked by computation.
 
 Sources: Lauritzen (1996), Graphical Models, chapter 3; Pearl (1988); Pearl (2009), Causality,
 section 1.2.
@@ -104,9 +107,7 @@ theorem MarkovKernels.localMarkov (k : G.MarkovKernels α) (hG : G.IsAcyclic)
       rcases hu with rfl | hu
       · exact mem_insert_self _ _
       · exact mem_insert_of_mem (mem_parentsFinset.2 hu))) h
-  rw [FiniteDist.condIndep_iff_margAt_mul
-    (disjoint_singleton_left.2 fun h => hvND (mem_sdiff.1 h).1)
-    (disjoint_singleton_left.2 hvpa) sdiff_disjoint]
+  rw [FiniteDist.condIndep_iff_margAt_mul]
   intro x
   rw [union_assoc, sdiff_union_of_subset hpa, ← insert_eq, ← insert_eq, h x, hlift x]
   ring
@@ -221,6 +222,26 @@ theorem factorizes_iff_localMarkov (hG : G.IsAcyclic) {p : FiniteDist (∀ v, α
     G.Factorizes p ↔ G.LocalMarkov p :=
   ⟨Factorizes.localMarkov hG, LocalMarkov.factorizes hG⟩
 
+omit [∀ v, DecidableEq (α v)] in
+/-- **Every distribution factorizes according to a complete acyclic graph**, one in which any two
+distinct vertices are adjacent (for instance the transitive tournament of a linear order, with or
+without further edges). Every nondescendant of a vertex is then a parent, so the local Markov
+property holds trivially. -/
+theorem factorizes_of_complete (hG : G.IsAcyclic) (hc : ∀ u v, u ≠ v → G.Adj u v ∨ G.Adj v u)
+    (p : FiniteDist (∀ v, α v)) : G.Factorizes p := by
+  classical
+  refine LocalMarkov.factorizes hG fun v => ?_
+  have : G.nondescendantsFinset v \ G.parentsFinset v = ∅ := by
+    ext u
+    simp only [mem_sdiff, mem_nondescendantsFinset, mem_parentsFinset, notMem_empty, iff_false,
+      not_and, not_not]
+    rintro ⟨huv, hanc⟩
+    rcases hc u v huv with h | h
+    · exact h
+    · exact absurd (isAncestor_of_adj h) hanc
+  rw [this]
+  exact FiniteDist.condIndep_empty_right p
+
 end Digraph
 
 /-! ### A noisy chain over `Bool` -/
@@ -254,6 +275,10 @@ theorem chainKernels_factor_one (y : Fin 3 → Bool) :
     chainKernels.factor 1 y = if y 1 = y 0 then 3 / 4 else 1 / 4 := by
   simp [MarkovKernels.factor, chainKernels, chainParent, Finset.restrict]
 
+theorem chainKernels_factor_two (y : Fin 3 → Bool) :
+    chainKernels.factor 2 y = if y 2 = y 1 then 3 / 4 else 1 / 4 := by
+  simp [MarkovKernels.factor, chainKernels, chainParent, Finset.restrict]
+
 /-- The joint distribution of the noisy chain: the product of its kernels. -/
 noncomputable def chainDist : FiniteDist (Fin 3 → Bool) := chainKernels.jointDist (by decide)
 
@@ -266,6 +291,44 @@ theorem chainDist_condIndep : chainDist.CondIndep {2} {0} {1} := by
   have h := chainDist_factorizes.localMarkov (by decide) 2
   rwa [show chain.nondescendantsFinset 2 \ chain.parentsFinset 2 = {0} by decide,
     show chain.parentsFinset 2 = {1} by decide] at h
+
+/-- The masses of the noisy chain:
+`p(x) = 1/2 * q(x_1 | x_0) * q(x_2 | x_1)`, with `q = 3/4` on agreement and `1/4` otherwise. -/
+theorem chainDist_apply (x : Fin 3 → Bool) :
+    chainDist x = 1 / 2 * (if x 1 = x 0 then 3 / 4 else 1 / 4) *
+      (if x 2 = x 1 then 3 / 4 else 1 / 4) := by
+  change ∏ v, chainKernels.factor v x = _
+  rw [Fin.prod_univ_three, chainKernels_factor_zero, chainKernels_factor_one,
+    chainKernels_factor_two]
+
+/-- The independence `2 ⫫ 0 | 1` of the noisy chain checked directly from the explicit masses,
+without the local Markov theorem: the marginal masses are computed by summing the masses, and the
+cylinder identity `p(x_0, x_1, x_2) * p(x_1) = p(x_1, x_2) * p(x_0, x_1)` is verified at all
+eight configurations. -/
+theorem chainDist_condIndep_of_masses : chainDist.CondIndep {2} {0} {1} := by
+  have h01 : ∀ y, chainDist.margAt ({0} ∪ {1}) y =
+      ∑ a : Bool, chainDist (Function.update y 2 a) := fun y => by
+    rw [chainDist.margAt_eq_sum_margAt (subset_univ _),
+      show (univ \ ({0} ∪ {1}) : Finset (Fin 3)) = {2} by decide,
+      FiniteDist.sum_agreeOn_compl_singleton]
+    simp only [FiniteDist.margAt_univ]
+  rw [FiniteDist.condIndep_iff_margAt_mul]
+  intro x
+  have h012 : chainDist.margAt ({2} ∪ {0} ∪ {1}) x = chainDist x := by
+    rw [show ({2} ∪ {0} ∪ {1} : Finset (Fin 3)) = univ by decide, FiniteDist.margAt_univ]
+  have h21 : chainDist.margAt ({2} ∪ {1}) x = ∑ a : Bool, chainDist (Function.update x 0 a) := by
+    rw [chainDist.margAt_eq_sum_margAt (subset_univ _),
+      show (univ \ ({2} ∪ {1}) : Finset (Fin 3)) = {0} by decide,
+      FiniteDist.sum_agreeOn_compl_singleton]
+    simp only [FiniteDist.margAt_univ]
+  have h1 : chainDist.margAt {1} x =
+      ∑ a : Bool, chainDist.margAt ({0} ∪ {1}) (Function.update x 0 a) := by
+    rw [chainDist.margAt_eq_sum_margAt (show ({1} : Finset (Fin 3)) ⊆ {0} ∪ {1} by decide),
+      show (({0} ∪ {1}) \ {1} : Finset (Fin 3)) = {0} by decide,
+      FiniteDist.sum_agreeOn_compl_singleton]
+  rw [h012, h21, h1, h01, show ({0} ∪ {1} : Finset (Fin 3)) = {1} ∪ {0} by decide] at *
+  simp only [h01, Fintype.sum_bool, chainDist_apply, Function.update_apply]
+  cases x 0 <;> cases x 1 <;> cases x 2 <;> norm_num
 
 /-- In the noisy chain, `0` and `1` are dependent: `P(X₀ = X₁ = true) = 3 / 8` while
 `P(X₀ = true) * P(X₁ = true) = 1 / 4`. -/

@@ -46,42 +46,6 @@ namespace CausalInference
 
 open Finset
 
-namespace FiniteDist
-
-variable {ι : Type*} [Fintype ι] [DecidableEq ι] {κ : ι → Type*} [∀ i, Fintype (κ i)]
-  [∀ i, DecidableEq (κ i)]
-
-/-- Two distinct coordinates of a product law are independent with the given laws: the joint law
-of `(ω i, ω j)` is the product of `p i` and `p j`. -/
-theorem map_pi_eval_pair (p : ∀ i, FiniteDist (κ i)) {i j : ι} (hij : i ≠ j) :
-    (pi p).map (fun ω => (ω i, ω j)) = (p i).prod (p j) := by
-  ext ⟨a, b⟩
-  rw [map_apply_eq_prob]
-  have h : (univ.filter fun ω : ∀ i, κ i => (ω i, ω j) = (a, b)) =
-      Fintype.piFinset (Function.update (Function.update (fun _ => univ) i {a}) j {b}) := by
-    ext ω
-    simp only [mem_filter, mem_univ, true_and, Fintype.mem_piFinset, Prod.mk.injEq]
-    constructor
-    · rintro ⟨rfl, rfl⟩ k
-      by_cases hkj : k = j
-      · subst hkj; simp
-      · rw [Function.update_of_ne hkj]
-        by_cases hki : k = i
-        · subst hki; simp
-        · simp [Function.update_of_ne hki]
-    · intro h
-      refine ⟨?_, by simpa using h j⟩
-      have := h i
-      rwa [Function.update_of_ne hij, Function.update_self, mem_singleton] at this
-  rw [h, prob_piFinset, Fintype.prod_eq_mul i j hij]
-  · rw [Function.update_of_ne hij, Function.update_self, Function.update_self]
-    simp [prob]
-  · intro k hk
-    rw [Function.update_of_ne hk.2, Function.update_of_ne hk.1]
-    simpa [prob] using (p k).sum_eq_one
-
-end FiniteDist
-
 namespace SCM
 
 variable {V : Type*} [Fintype V] [DecidableEq V] {G : Digraph V} [DecidableRel G.Adj]

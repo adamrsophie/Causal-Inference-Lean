@@ -8,6 +8,7 @@ module
 public import Mathlib.Probability.ProbabilityMassFunction.Constructions
 public import Mathlib.Data.Finset.Pi
 public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.MeasureTheory.Integral.Bochner.SumMeasure
 
 /-!
 # Finite probability distributions
@@ -24,13 +25,17 @@ connects it to Mathlib's measure theory.
   event described by a decidable predicate `P`.
 * `FiniteDist.expect p f`: the expectation of a real function.
 * `FiniteDist.map p f`: the pushforward (law) of `p` along `f`.
-* `FiniteDist.pure a`, `FiniteDist.uniform`, `FiniteDist.prod p q`: the point mass, the uniform
-  distribution and the product distribution.
+* `FiniteDist.pure a`, `FiniteDist.uniform`, `FiniteDist.prod p q`, `FiniteDist.pi p`: the point
+  mass, the uniform distribution, the product distribution and the product of a family.
+* `FiniteDist.cond p P h`: the conditional distribution given an event `P` of positive
+  probability.
 * `FiniteDist.toPMF`, `FiniteDist.toMeasure`: the associated `PMF` and probability measure.
 * `FiniteDist.marginal p S`: for a joint distribution on configurations `x : ∀ v, α v`, the
   marginal on the coordinates in `S : Finset V`, a distribution on `∀ v : S, α v`.
 * `FiniteDist.margAt p S x`: the marginal mass of the cylinder of configurations that agree with
   `x` on `S`. It equals `p.marginal S (S.restrict x)` (`FiniteDist.marginal_restrict`).
+* `FiniteDist.condMargAt p S T s t h`: the coordinate conditional probability
+  `P(X_S = s_S | X_T = t_T)` for `h : 0 < P(X_T = t_T)`.
 
 ## Representation of marginals
 
@@ -47,10 +52,18 @@ avoids casts between the configuration types of different finsets.
 * `FiniteDist.map_map`, `FiniteDist.marginal_marginal` (marginalizing twice),
   `FiniteDist.margAt_univ` (the marginal onto everything is `p`), `FiniteDist.margAt_empty`,
   and `FiniteDist.margAt_eq_sum_margAt` (marginalizing a marginal, in cylinder form).
-* `FiniteDist.toMeasure_apply_finset`: the measure of a finset is the sum of the masses.
+* `FiniteDist.toMeasure_apply_finset`: the measure of a finset is the sum of the masses;
+  `FiniteDist.integral_toMeasure`, the integral is the expectation; `FiniteDist.toMeasure_map`,
+  the measure of a pushforward is the pushforward measure.
+* `FiniteDist.probOf_map`, `FiniteDist.prob_piFinset`, `FiniteDist.map_pi_eval`,
+  `FiniteDist.map_pi_eval_pair`: probabilities under pushforwards and product laws.
+* `FiniteDist.probOf_cond`: `P(Q | P) = P(P ∧ Q) / P(P)`.
+* `FiniteDist.condMargAt_self`, `FiniteDist.margAt_union_eq_condMargAt_mul`,
+  `FiniteDist.condMargAt_union` (the chain rule), `FiniteDist.sum_condMargAt` (normalization),
+  `FiniteDist.condMargAt_eq_zero_of_ne` (inconsistent assignments on an overlap).
 
-Conditional probabilities are not defined as ratios; later files state everything in product
-form, which needs no division.
+Conditional probabilities are defined only given events of positive probability. Conditional
+independence and factorization are stated in product form, which needs no division.
 
 This is the finite discrete setting of Lauritzen (1996), Graphical Models, chapter 3.
 -/
@@ -157,6 +170,12 @@ theorem probOf_eq_sum_univ {γ : Type*} [Fintype γ] [DecidableEq γ] (Y : Ω �
     p.probOf P = ∑ b, p.probOf (fun ω => P ω ∧ Y ω = b) :=
   p.probOf_eq_sum Y univ fun _ _ => mem_univ _
 
+/-- Law of total probability over the values that a random variable actually takes; no
+finiteness of the codomain is needed. -/
+theorem probOf_eq_sum_image {γ : Type*} [DecidableEq γ] (Y : Ω → γ) :
+    p.probOf P = ∑ b ∈ univ.image Y, p.probOf (fun ω => P ω ∧ Y ω = b) :=
+  p.probOf_eq_sum Y _ fun ω _ => mem_image_of_mem Y (mem_univ ω)
+
 end probOf
 
 /-- The expectation of a real function `f`. -/
@@ -207,6 +226,18 @@ theorem expect_map [DecidableEq Ω'] (p : FiniteDist Ω) (f : Ω → Ω') (g : �
   rw [← sum_fiberwise univ f (fun ω => p ω * g (f ω))]
   refine sum_congr rfl fun b _ => sum_congr rfl fun ω hω => ?_
   rw [(mem_filter.1 hω).2]
+
+/-- The probability of an event under a pushforward is the probability of its preimage. -/
+theorem probOf_map [DecidableEq Ω'] (p : FiniteDist Ω) (f : Ω → Ω') (P : Ω' → Prop)
+    [DecidablePred P] : (p.map f).probOf P = p.probOf (fun ω => P (f ω)) := by
+  unfold probOf prob
+  simp only [map_apply]
+  rw [← sum_fiberwise_of_maps_to (s := univ.filter fun ω => P (f ω))
+    (t := univ.filter P) (g := f) (fun ω hω => by simpa using hω)]
+  refine sum_congr rfl fun b hb => sum_congr ?_ fun _ _ => rfl
+  ext ω
+  simp only [mem_filter, mem_univ, true_and] at hb ⊢
+  exact ⟨fun h => ⟨h ▸ hb, h⟩, fun h => h.2⟩
 
 /-- Pushing forward twice is pushing forward along the composite. -/
 theorem map_map [DecidableEq Ω'] [DecidableEq Ω''] (p : FiniteDist Ω) (f : Ω → Ω')
@@ -263,6 +294,115 @@ theorem map_snd_prod [DecidableEq Ω'] (p : FiniteDist Ω) (q : FiniteDist Ω') 
   rw [map_apply, ← univ_product_univ, filter_product_right (fun ω => ω = b), sum_product]
   simp [filter_eq', ← sum_mul, p.sum_eq_one]
 
+/-! ### Products of families -/
+
+section Pi
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι] {κ : ι → Type*} [∀ i, Fintype (κ i)]
+
+/-- The product of a family of finite distributions: the joint law of independent coordinates,
+with mass `∏ i, p i (ω i)`. -/
+def pi (p : ∀ i, FiniteDist (κ i)) : FiniteDist (∀ i, κ i) where
+  mass ω := ∏ i, p i (ω i)
+  nonneg ω := prod_nonneg fun i _ => (p i).nonneg _
+  sum_eq_one := by
+    rw [← Fintype.prod_sum]
+    exact prod_eq_one fun i _ => (p i).sum_eq_one
+
+@[simp] theorem pi_apply (p : ∀ i, FiniteDist (κ i)) (ω : ∀ i, κ i) :
+    pi p ω = ∏ i, p i (ω i) := rfl
+
+/-- The product law of a rectangle `∏ i, t i` is the product of the probabilities of its
+sides. -/
+theorem prob_piFinset (p : ∀ i, FiniteDist (κ i)) (t : ∀ i, Finset (κ i)) :
+    (pi p).prob (Fintype.piFinset t) = ∏ i, (p i).prob (t i) := by
+  simp only [prob, pi_apply]
+  exact (prod_univ_sum t fun i e => p i e).symm
+
+/-- The coordinate `i` of a product law has law `p i`. -/
+theorem map_pi_eval [∀ i, DecidableEq (κ i)] (p : ∀ i, FiniteDist (κ i))
+    (i : ι) : (pi p).map (fun ω => ω i) = p i := by
+  ext a
+  rw [map_apply_eq_prob]
+  have h : (univ.filter fun ω : ∀ i, κ i => ω i = a) =
+      Fintype.piFinset (Function.update (fun _ => univ) i {a}) := by
+    ext ω
+    simp only [mem_filter, mem_univ, true_and, Fintype.mem_piFinset]
+    constructor
+    · rintro rfl j
+      by_cases hj : j = i
+      · subst hj; simp
+      · simp [Function.update_of_ne hj]
+    · intro h
+      simpa using h i
+  rw [h, prob_piFinset, Fintype.prod_eq_single i]
+  · simp [prob]
+  · intro j hj
+    simp [Function.update_of_ne hj]
+
+/-- The probability that the coordinate `i` of a product law satisfies `P` is the probability
+of `P` under `p i`. -/
+theorem probOf_pi_eval (p : ∀ i, FiniteDist (κ i)) (i : ι) (P : κ i → Prop)
+    [DecidablePred P] : (pi p).probOf (fun ω => P (ω i)) = (p i).probOf P := by
+  classical
+  rw [← probOf_map, map_pi_eval]
+
+/-- Two distinct coordinates of a product law are independent with the given laws: the joint law
+of `(ω i, ω j)` is the product of `p i` and `p j`. -/
+theorem map_pi_eval_pair [∀ i, DecidableEq (κ i)] (p : ∀ i, FiniteDist (κ i)) {i j : ι}
+    (hij : i ≠ j) : (pi p).map (fun ω => (ω i, ω j)) = (p i).prod (p j) := by
+  ext ⟨a, b⟩
+  rw [map_apply_eq_prob]
+  have h : (univ.filter fun ω : ∀ i, κ i => (ω i, ω j) = (a, b)) =
+      Fintype.piFinset (Function.update (Function.update (fun _ => univ) i {a}) j {b}) := by
+    ext ω
+    simp only [mem_filter, mem_univ, true_and, Fintype.mem_piFinset, Prod.mk.injEq]
+    constructor
+    · rintro ⟨rfl, rfl⟩ k
+      by_cases hkj : k = j
+      · subst hkj; simp
+      · rw [Function.update_of_ne hkj]
+        by_cases hki : k = i
+        · subst hki; simp
+        · simp [Function.update_of_ne hki]
+    · intro h
+      refine ⟨?_, by simpa using h j⟩
+      have := h i
+      rwa [Function.update_of_ne hij, Function.update_self, mem_singleton] at this
+  rw [h, prob_piFinset, Fintype.prod_eq_mul i j hij]
+  · rw [Function.update_of_ne hij, Function.update_self, Function.update_self]
+    simp [prob]
+  · intro k hk
+    rw [Function.update_of_ne hk.2, Function.update_of_ne hk.1]
+    simpa [prob] using (p k).sum_eq_one
+
+end Pi
+
+/-! ### Conditioning on an event of positive probability -/
+
+/-- The conditional distribution of `p` given an event `P` of positive probability: mass
+`p ω / P(P)` on the outcomes of `P` and `0` elsewhere. -/
+noncomputable def cond (p : FiniteDist Ω) (P : Ω → Prop) [DecidablePred P]
+    (h : 0 < p.probOf P) : FiniteDist Ω where
+  mass ω := if P ω then p ω / p.probOf P else 0
+  nonneg ω := by
+    split_ifs
+    · exact div_nonneg (p.nonneg ω) h.le
+    · exact le_rfl
+  sum_eq_one := by
+    rw [← sum_filter, ← sum_div]
+    exact div_self h.ne'
+
+/-- Probabilities under a conditional distribution: `P(Q | P) = P(P ∧ Q) / P(P)`. -/
+theorem probOf_cond (p : FiniteDist Ω) (P : Ω → Prop) [DecidablePred P] (h : 0 < p.probOf P)
+    (Q : Ω → Prop) [DecidablePred Q] :
+    (p.cond P h).probOf Q = p.probOf (fun ω => P ω ∧ Q ω) / p.probOf P := by
+  unfold probOf prob
+  rw [sum_filter, sum_filter, sum_div]
+  refine sum_congr rfl fun ω _ => ?_
+  change (if Q ω then (if P ω then p ω / p.probOf P else 0) else 0) = _
+  by_cases hP : P ω <;> by_cases hQ : Q ω <;> simp [hP, hQ, probOf, prob]
+
 /-! ### Bridge to Mathlib's `PMF` and measures -/
 
 /-- The `PMF` with the same masses (converted to `ENNReal`). -/
@@ -294,6 +434,35 @@ theorem toMeasure_apply_finset [MeasurableSpace Ω] [MeasurableSingletonClass Ω
 theorem toMeasure_real_finset [MeasurableSpace Ω] [MeasurableSingletonClass Ω]
     (p : FiniteDist Ω) (s : Finset Ω) : (p.toMeasure s).toReal = p.prob s := by
   rw [toMeasure_apply_finset, ENNReal.toReal_ofReal (p.prob_nonneg s)]
+
+/-- The integral of a real function against the associated measure is the expectation. -/
+theorem integral_toMeasure [MeasurableSpace Ω] [MeasurableSingletonClass Ω]
+    (p : FiniteDist Ω) (f : Ω → ℝ) : ∫ ω, f ω ∂p.toMeasure = p.expect f := by
+  rw [MeasureTheory.integral_fintype (MeasureTheory.Integrable.of_finite), expect]
+  refine sum_congr rfl fun ω _ => ?_
+  have h := p.toMeasure_real_finset {ω}
+  rw [coe_singleton] at h
+  rw [MeasureTheory.measureReal_def, h, smul_eq_mul]
+  simp [prob]
+
+/-- The measure associated with a pushforward is the pushforward of the associated measure. -/
+theorem toMeasure_map [MeasurableSpace Ω] [MeasurableSingletonClass Ω] [MeasurableSpace Ω']
+    [MeasurableSingletonClass Ω'] [DecidableEq Ω'] (p : FiniteDist Ω) (f : Ω → Ω') :
+    (p.map f).toMeasure = p.toMeasure.map f := by
+  classical
+  have hf : Measurable f := fun s _ => (Set.toFinite _).measurableSet
+  ext s hs
+  rw [MeasureTheory.Measure.map_apply hf hs, ← (Set.toFinite (f ⁻¹' s)).coe_toFinset,
+    toMeasure_apply_finset]
+  conv_lhs => rw [← (Set.toFinite s).coe_toFinset, toMeasure_apply_finset]
+  congr 1
+  have : (Set.toFinite (f ⁻¹' s)).toFinset = univ.filter fun ω => f ω ∈ s := by
+    ext ω; simp
+  rw [this, show p.prob (univ.filter fun ω => f ω ∈ s) = p.probOf (fun ω => f ω ∈ s) from rfl,
+    ← probOf_map (P := (· ∈ s))]
+  unfold probOf
+  congr 1
+  ext b; simp
 
 /-! ### Joint distributions of several variables and their marginals -/
 
@@ -430,6 +599,68 @@ theorem sum_agreeOn_compl_singleton {M : Type*} [AddCommMonoid M] (f : (∀ v, �
     · rintro ⟨a, rfl⟩ v hv
       simp [hv]
   rw [this, sum_image fun a _ b _ h => Function.update_injective x s h]
+
+/-! ### Coordinate conditional probabilities -/
+
+/-- The coordinate conditional probability `P(X_S = s_S | X_T = t_T)`, for a conditioning value
+of positive probability: the marginal mass on `S` at `s` under the conditional distribution given
+that the configuration agrees with `t` on `T`. The values on `S` and on `T` are taken from two
+separate configurations, so an assignment that is inconsistent on `S ∩ T` gets probability zero
+(`FiniteDist.condMargAt_eq_zero_of_ne`). -/
+noncomputable def condMargAt (p : FiniteDist (∀ v, α v)) (S T : Finset V) (s t : ∀ v, α v)
+    (h : 0 < p.margAt T t) : ℝ :=
+  (p.cond (fun y => ∀ v ∈ T, y v = t v) (p.margAt_eq_probOf T t ▸ h)).margAt S s
+
+variable (p : FiniteDist (∀ v, α v)) {S T U : Finset V}
+
+/-- The coordinate conditional probability as a ratio:
+`P(X_S = s_S | X_T = t_T) = P(X_S = s_S, X_T = t_T) / P(X_T = t_T)`. -/
+theorem condMargAt_eq (s t : ∀ v, α v) (h : 0 < p.margAt T t) :
+    p.condMargAt S T s t h =
+      p.probOf (fun y => (∀ v ∈ S, y v = s v) ∧ ∀ v ∈ T, y v = t v) / p.margAt T t := by
+  rw [condMargAt, margAt_eq_probOf _ S s, probOf_cond]
+  congr 1
+  exact p.probOf_congr fun y => and_comm
+
+theorem condMargAt_nonneg (s t : ∀ v, α v) (h : 0 < p.margAt T t) :
+    0 ≤ p.condMargAt S T s t h :=
+  margAt_nonneg _ _ _
+
+/-- At a single configuration the coordinate conditional probability is the ratio of two
+marginal masses, `p(x_{S ∪ T}) / p(x_T)`. -/
+theorem condMargAt_self (x : ∀ v, α v) (h : 0 < p.margAt T x) :
+    p.condMargAt S T x x h = p.margAt (S ∪ T) x / p.margAt T x := by
+  rw [condMargAt_eq, margAt_eq_probOf]
+  congr 1
+  exact p.probOf_congr fun y => by simp only [mem_union, or_imp, forall_and]
+
+/-- An assignment that is inconsistent on the overlap `S ∩ T` has conditional probability
+zero. -/
+theorem condMargAt_eq_zero_of_ne (s t : ∀ v, α v) (h : 0 < p.margAt T t) {v : V} (hvS : v ∈ S)
+    (hvT : v ∈ T) (hst : s v ≠ t v) : p.condMargAt S T s t h = 0 := by
+  rw [condMargAt_eq, p.probOf_eq_zero fun y hy => hst ((hy.1 v hvS).symm.trans (hy.2 v hvT)),
+    zero_div]
+
+/-- The chain rule, first form: `p(x_{S ∪ T}) = P(x_S | x_T) * p(x_T)`. -/
+theorem margAt_union_eq_condMargAt_mul (x : ∀ v, α v) (h : 0 < p.margAt T x) :
+    p.margAt (S ∪ T) x = p.condMargAt S T x x h * p.margAt T x := by
+  rw [condMargAt_self, div_mul_cancel₀ _ h.ne']
+
+/-- The chain rule: `P(x_{S ∪ T} | x_U) = P(x_S | x_{T ∪ U}) * P(x_T | x_U)`. -/
+theorem condMargAt_union (x : ∀ v, α v) (hTU : 0 < p.margAt (T ∪ U) x)
+    (hU : 0 < p.margAt U x) :
+    p.condMargAt (S ∪ T) U x x hU = p.condMargAt S (T ∪ U) x x hTU * p.condMargAt T U x x hU := by
+  rw [condMargAt_self, condMargAt_self, condMargAt_self, union_assoc,
+    div_mul_div_cancel₀ hTU.ne']
+
+/-- Normalization: summing the coordinate conditional probability over the configurations of `S`
+(the configurations that agree with a fixed `x` outside `S`) gives one. -/
+theorem sum_condMargAt (x t : ∀ v, α v) (h : 0 < p.margAt T t) :
+    ∑ y ∈ agreeOn Sᶜ x, p.condMargAt S T y t h = 1 := by
+  have := (p.cond (fun y => ∀ v ∈ T, y v = t v)
+    (p.margAt_eq_probOf T t ▸ h)).margAt_eq_sum_margAt (empty_subset S) x
+  rw [margAt_empty, sdiff_empty] at this
+  exact this.symm
 
 end Marginal
 

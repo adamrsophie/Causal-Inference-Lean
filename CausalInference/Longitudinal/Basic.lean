@@ -6,7 +6,6 @@ Authors: Adam R Sophie
 module
 
 public import CausalInference.Basic.FiniteDistribution
-public import CausalInference.SCM.Counterfactuals
 
 /-!
 # Longitudinal causal inference: finite setting, histories and regimes

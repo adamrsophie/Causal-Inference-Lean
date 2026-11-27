@@ -19,8 +19,6 @@ space, the factual and counterfactual worlds share the same `u`.
 
 * `SCM.potentialResponse M X x u`: the potential response `V_x(u)`, the solution of the submodel
   of `do(X := x)` at the noise value `u`.
-* `FiniteDist.cond p P h`: the conditional distribution of `p` given an event `P` of positive
-  probability.
 * `SCM.counterfactualProb M E hE X x Q`: the probability of the counterfactual event `Q` under
   `do(X := x)` given the factual evidence `E`, computed by abduction (condition the noise law on
   `E`), action (pass to the submodel of `do(X := x)`), and prediction (push the conditioned noise
@@ -54,35 +52,6 @@ Sources: Pearl (2009), *Causality*, 2nd edition, sections 1.4.4, 7.1 and 7.3.1; 
 namespace CausalInference
 
 open Finset
-
-namespace FiniteDist
-
-variable {Ω : Type*} [Fintype Ω]
-
-/-- The conditional distribution of `p` given an event `P` of positive probability: mass
-`p ω / P(P)` on the outcomes of `P` and `0` elsewhere. -/
-noncomputable def cond (p : FiniteDist Ω) (P : Ω → Prop) [DecidablePred P]
-    (h : 0 < p.probOf P) : FiniteDist Ω where
-  mass ω := if P ω then p ω / p.probOf P else 0
-  nonneg ω := by
-    split_ifs
-    · exact div_nonneg (p.nonneg ω) h.le
-    · exact le_rfl
-  sum_eq_one := by
-    rw [← sum_filter, ← sum_div]
-    exact div_self h.ne'
-
-/-- Probabilities under a conditional distribution: `P(Q | P) = P(P ∧ Q) / P(P)`. -/
-theorem probOf_cond (p : FiniteDist Ω) (P : Ω → Prop) [DecidablePred P] (h : 0 < p.probOf P)
-    (Q : Ω → Prop) [DecidablePred Q] :
-    (p.cond P h).probOf Q = p.probOf (fun ω => P ω ∧ Q ω) / p.probOf P := by
-  unfold probOf prob
-  rw [sum_filter, sum_filter, sum_div]
-  refine sum_congr rfl fun ω _ => ?_
-  change (if Q ω then (if P ω then p ω / p.probOf P else 0) else 0) = _
-  by_cases hP : P ω <;> by_cases hQ : Q ω <;> simp [hP, hQ, probOf, prob]
-
-end FiniteDist
 
 namespace SCM
 

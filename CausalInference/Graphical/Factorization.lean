@@ -7,6 +7,7 @@ module
 
 public import CausalInference.Basic.FiniteCondIndep
 public import CausalInference.Graphical.Mutilation
+public import CausalInference.Graphical.Induce
 
 /-!
 # Markov factorization along a directed graph
@@ -39,7 +40,14 @@ given its parents, and distributions that factorize as the product of these kern
   ancestral set `A` is the product of the kernels of the vertices of `A`.
 * `Digraph.MarkovKernels.margAt_insert_parents`: the kernel of `v` is the conditional
   distribution of `x v` given its parents, in product form
-  `p(x_v, x_pa) = kernel v x_pa x_v * p(x_pa)`.
+  `p(x_v, x_pa) = kernel v x_pa x_v * p(x_pa)`; hence
+  `Digraph.MarkovKernels.kernel_eq_of_probOf_pos`, the kernels of a factorization are unique at
+  parent configurations of positive probability.
+* `Digraph.MarkovKernels.sum_factor_update_eq_one`: each factor sums to one over the values of
+  its vertex.
+* `Digraph.Factorizes.mono`: factorization is preserved by adding edges.
+* `Digraph.Factorizes.marginal_induce`: the marginal on an ancestral set factorizes according to
+  the induced graph `Digraph.induce G A`.
 
 Sources: Lauritzen (1996), Graphical Models, chapter 3; Pearl (1988); Pearl (2009), Causality,
 section 1.2.
@@ -179,7 +187,9 @@ theorem factor_update_of_not_adj [DecidableEq V] {s v : V} (hsv : s ≠ v) (hadj
     · exact hadj h
   simp [Function.update_of_ne this]
 
-/-- Summing the factor of a vertex without a self-loop over its own values gives one. -/
+/-- Summing the factor of a vertex without a self-loop over its own values: the sum of the kernel
+over the values of the vertex at the parent configuration of `x`, which is one
+(`Digraph.MarkovKernels.sum_factor_update_eq_one`). -/
 theorem sum_factor_update [DecidableEq V] {s : V} (hs : ¬ G.Adj s s) (x : ∀ v, α v) :
     ∑ a : α s, k.factor s (Function.update x s a) = ∑ a : α s, k.kernel s
       ((G.parentsFinset s).restrict x) a := by
@@ -190,6 +200,12 @@ theorem sum_factor_update [DecidableEq V] {s : V} (hs : ¬ G.Adj s s) (x : ∀ v
   funext u
   have : u.1 ≠ s := fun h => hs (by have := mem_parentsFinset.1 u.2; rwa [h] at this)
   simp [Finset.restrict, Function.update_of_ne this]
+
+/-- **Normalization of a factor.** Summing the factor of a vertex without a self-loop over its own
+values gives one. -/
+theorem sum_factor_update_eq_one [DecidableEq V] {s : V} (hs : ¬ G.Adj s s) (x : ∀ v, α v) :
+    ∑ a : α s, k.factor s (Function.update x s a) = 1 :=
+  (k.sum_factor_update hs x).trans (k.sum_eq_one _ _)
 
 /-- **Summing out a sink.** If `s ∈ S` has no child in `S` (in particular no self-loop), then
 summing the product of the factors over `S` over the values of `x s` gives the product over
@@ -343,6 +359,28 @@ theorem margAt_insert_parents [DecidableEq V] [∀ v, DecidableEq (α v)] (hG : 
       · exact mem_insert_self _ _
       · exact mem_insert_of_mem (mem_parentsFinset.2 hu))) h x
 
+/-- **Uniqueness of the kernels on the support.** If `p` is the product of the kernels `k` and
+also of the kernels `k'` of an acyclic graph, then the two kernels of `v` agree at every parent
+configuration `z` of positive probability. -/
+theorem kernel_eq_of_probOf_pos [DecidableEq V] [∀ v, DecidableEq (α v)] (hG : G.IsAcyclic)
+    {p : FiniteDist (∀ v, α v)} (k' : G.MarkovKernels α) (hk : ∀ x, p x = ∏ v, k.factor v x)
+    (hk' : ∀ x, p x = ∏ v, k'.factor v x) (v : V) (z : ∀ u : G.parentsFinset v, α u) (a : α v)
+    (hz : 0 < p.probOf (fun y => (G.parentsFinset v).restrict y = z)) :
+    k.kernel v z a = k'.kernel v z a := by
+  obtain ⟨x₀⟩ := p.nonempty
+  have hvpa : v ∉ G.parentsFinset v := fun h => hG.irrefl v (mem_parentsFinset.1 h)
+  set x := FiniteDist.override (G.parentsFinset v) z (Function.update x₀ v a)
+  have hxz : (G.parentsFinset v).restrict x = z := FiniteDist.restrict_override _ _ _
+  have hxv : x v = a := by
+    simp only [x]
+    rw [FiniteDist.override_of_notMem _ _ hvpa, Function.update_self]
+  have hpos : 0 < p.margAt (G.parentsFinset v) x := by
+    rwa [← FiniteDist.probOf_restrict_eq_margAt₁ (p := p) (Z := G.parentsFinset v) x, hxz]
+  have h1 := k.margAt_insert_parents hG hk v x
+  have h2 := k'.margAt_insert_parents hG hk' v x
+  rw [hxz, hxv] at h1 h2
+  exact mul_right_cancel₀ hpos.ne' (h1.symm.trans h2)
+
 end MarkovKernels
 
 /-- A distribution `p` on configurations factorizes according to `G` when there are Markov
@@ -356,5 +394,41 @@ theorem MarkovKernels.factorizes_jointDist [DecidableEq V] [∀ v, DecidableEq (
     {G : Digraph V} [DecidableRel G.Adj] (k : G.MarkovKernels α) (hG : G.IsAcyclic) :
     G.Factorizes (k.jointDist hG) :=
   ⟨k, fun _ => rfl⟩
+
+/-- **More edges preserve factorization.** If `G ≤ H` and `p` factorizes according to `G`, then
+`p` factorizes according to `H`: each kernel of `H` ignores the parents that are not parents in
+`G`. -/
+theorem Factorizes.mono [DecidableEq V] {G H : Digraph V} [DecidableRel G.Adj]
+    [DecidableRel H.Adj] (hGH : G ≤ H) {p : FiniteDist (∀ v, α v)} (hp : G.Factorizes p) :
+    H.Factorizes p := by
+  obtain ⟨k, hk⟩ := hp
+  have hsub : ∀ v, G.parentsFinset v ⊆ H.parentsFinset v := fun v u hu =>
+    mem_parentsFinset.2 (hGH (mem_parentsFinset.1 hu))
+  refine ⟨⟨fun v z a => k.kernel v (Finset.restrict₂ (hsub v) z) a, fun v z a => k.nonneg _ _ _,
+    fun v z => k.sum_eq_one _ _⟩, fun x => ?_⟩
+  rw [hk x]
+  rfl
+
+/-- **The marginal on an ancestral set factorizes along the induced graph.** If `p` factorizes
+according to an acyclic graph `G` and `A` is closed under taking parents, then the marginal of
+`p` on `A` factorizes according to the induced graph `G.induce A`, with the kernels of the
+vertices of `A`. -/
+theorem Factorizes.marginal_induce [DecidableEq V] [∀ v, DecidableEq (α v)] {G : Digraph V}
+    [DecidableRel G.Adj] (hG : G.IsAcyclic) {p : FiniteDist (∀ v, α v)} (hp : G.Factorizes p)
+    {A : Finset V} (hA : ∀ v ∈ A, ∀ u, G.Adj u v → u ∈ A) :
+    (G.induce (A : Set V)).Factorizes (p.marginal A) := by
+  obtain ⟨k, hk⟩ := hp
+  obtain ⟨x₀⟩ := k.nonempty_config hG
+  have hpa : ∀ (v : (A : Set V)) (u : G.parentsFinset v.1),
+      (⟨u.1, hA v.1 v.2 u.1 (mem_parentsFinset.1 u.2)⟩ : (A : Set V)) ∈
+        (G.induce (A : Set V)).parentsFinset v := fun v u =>
+    mem_parentsFinset.2 (show G.Adj u.1 v.1 from mem_parentsFinset.1 u.2)
+  refine ⟨⟨fun v z a => k.kernel v.1 (fun u => z ⟨_, hpa v u⟩) a, fun v z a => k.nonneg _ _ _,
+    fun v z => k.sum_eq_one _ _⟩, fun y => ?_⟩
+  set x : ∀ v, α v := fun v => if h : v ∈ A then y ⟨v, h⟩ else x₀ v
+  have hy : A.restrict x = y := funext fun v => by simp [x, v.2]
+  rw [← hy, FiniteDist.marginal_restrict, k.margAt_of_ancestral hG hk hA,
+    MarkovKernels.prodOn, ← Finset.prod_coe_sort A]
+  rfl
 
 end Digraph

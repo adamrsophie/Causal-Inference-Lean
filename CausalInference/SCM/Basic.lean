@@ -18,8 +18,6 @@ parents of v) (u v)`. The noises are independent, with law `noise v` each.
 
 ## Main definitions
 
-* `CausalInference.FiniteDist.pi p`: the product of a family of finite distributions, the joint
-  law of independent coordinates.
 * `CausalInference.SCM G α ε`: the structural equations, the noise laws, and the acyclicity of
   `G`.
 * `SCM.IsSolution M u x`: the configuration `x` satisfies every structural equation at the noise
@@ -32,10 +30,6 @@ parents of v) (u v)`. The noises are independent, with law `noise v` each.
 
 * `SCM.isSolution_iff`: `x` solves the equations at `u` if and only if `x = M.solve u`; hence
   `SCM.existsUnique_isSolution`, existence and uniqueness of the solution.
-* `FiniteDist.prob_piFinset`: the product law of a rectangle is the product of the
-  probabilities of its sides; `FiniteDist.map_pi_eval`: the coordinates of a product law have
-  the given laws.
-* `FiniteDist.probOf_map`: probabilities under a pushforward.
 
 The models are the Markovian causal models of Pearl (2009), *Causality*, 2nd edition,
 section 1.4.2 and Definition 7.1.1, restricted to finite recursive (acyclic) systems.
@@ -46,83 +40,6 @@ section 1.4.2 and Definition 7.1.1, restricted to finite recursive (acyclic) sys
 namespace CausalInference
 
 open Finset
-
-namespace FiniteDist
-
-/-! ### Pushforward probabilities and product distributions -/
-
-section Map
-
-variable {Ω Ω' : Type*} [Fintype Ω] [Fintype Ω'] [DecidableEq Ω']
-
-/-- The probability of an event under a pushforward is the probability of its preimage. -/
-theorem probOf_map (p : FiniteDist Ω) (f : Ω → Ω') (P : Ω' → Prop) [DecidablePred P] :
-    (p.map f).probOf P = p.probOf (fun ω => P (f ω)) := by
-  unfold probOf prob
-  simp only [map_apply]
-  rw [← sum_fiberwise_of_maps_to (s := univ.filter fun ω => P (f ω))
-    (t := univ.filter P) (g := f) (fun ω hω => by simpa using hω)]
-  refine sum_congr rfl fun b hb => sum_congr ?_ fun _ _ => rfl
-  ext ω
-  simp only [mem_filter, mem_univ, true_and] at hb ⊢
-  exact ⟨fun h => ⟨h ▸ hb, h⟩, fun h => h.2⟩
-
-end Map
-
-section Pi
-
-variable {ι : Type*} [Fintype ι] [DecidableEq ι] {κ : ι → Type*} [∀ i, Fintype (κ i)]
-
-/-- The product of a family of finite distributions: the joint law of independent coordinates,
-with mass `∏ i, p i (ω i)`. -/
-def pi (p : ∀ i, FiniteDist (κ i)) : FiniteDist (∀ i, κ i) where
-  mass ω := ∏ i, p i (ω i)
-  nonneg ω := prod_nonneg fun i _ => (p i).nonneg _
-  sum_eq_one := by
-    rw [← Fintype.prod_sum]
-    exact prod_eq_one fun i _ => (p i).sum_eq_one
-
-@[simp] theorem pi_apply (p : ∀ i, FiniteDist (κ i)) (ω : ∀ i, κ i) :
-    pi p ω = ∏ i, p i (ω i) := rfl
-
-/-- The product law of a rectangle `∏ i, t i` is the product of the probabilities of its
-sides. -/
-theorem prob_piFinset (p : ∀ i, FiniteDist (κ i)) (t : ∀ i, Finset (κ i)) :
-    (pi p).prob (Fintype.piFinset t) = ∏ i, (p i).prob (t i) := by
-  simp only [prob, pi_apply]
-  exact (prod_univ_sum t fun i e => p i e).symm
-
-/-- The coordinate `i` of a product law has law `p i`. -/
-theorem map_pi_eval [∀ i, DecidableEq (κ i)] (p : ∀ i, FiniteDist (κ i))
-    (i : ι) : (pi p).map (fun ω => ω i) = p i := by
-  ext a
-  rw [map_apply_eq_prob]
-  have h : (univ.filter fun ω : ∀ i, κ i => ω i = a) =
-      Fintype.piFinset (Function.update (fun _ => univ) i {a}) := by
-    ext ω
-    simp only [mem_filter, mem_univ, true_and, Fintype.mem_piFinset]
-    constructor
-    · rintro rfl j
-      by_cases hj : j = i
-      · subst hj; simp
-      · simp [Function.update_of_ne hj]
-    · intro h
-      simpa using h i
-  rw [h, prob_piFinset, Fintype.prod_eq_single i]
-  · simp [prob]
-  · intro j hj
-    simp [Function.update_of_ne hj]
-
-/-- The probability that the coordinate `i` of a product law satisfies `P` is the probability
-of `P` under `p i`. -/
-theorem probOf_pi_eval (p : ∀ i, FiniteDist (κ i)) (i : ι) (P : κ i → Prop)
-    [DecidablePred P] : (pi p).probOf (fun ω => P (ω i)) = (p i).probOf P := by
-  classical
-  rw [← probOf_map, map_pi_eval]
-
-end Pi
-
-end FiniteDist
 
 /-! ### Structural causal models -/
 
