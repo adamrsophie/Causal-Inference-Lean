@@ -154,3 +154,4 @@ public import CausalInference.Measures.NumberNeededToTreat
 public import CausalInference.BiasAnalysis.EcologicalBias
 public import CausalInference.Survival.HazardRatio
 public import CausalInference.Bias.HazardMixture
+public import CausalInference.BiasAnalysis.DiagnosticAccuracy
