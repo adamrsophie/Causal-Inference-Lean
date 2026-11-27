@@ -19,26 +19,37 @@ Finite results on measurement bias for a treatment `A` and an outcome `Y` measur
 
 The true variables have a joint table `p a y`. The measurement process is a kernel
 `K a y a' y' = P(A* = a', Y* = y' | A = a, Y = y)`, and the observed table is
-`observedTable p K a' y' = ∑ a, ∑ y, p a y * K a y a' y'`. The errors are independent and
-nondifferential when the kernel is a product `kA a a' * kY y y'`: this is the finite form of
-`A* = f(A, U_A)` and `Y* = g(Y, U_Y)` with `U_A`, `U_Y` and `(A, Y)` mutually independent. A
+`observedTable p K a' y' = ∑ a, ∑ y, p a y * K a y a' y'`. The kernel is nondifferential
+(`IsNondifferential`) when the law of `A*` given `(A, Y)` does not depend on `Y` and the law of
+`Y*` given `(A, Y)` does not depend on `A`, and it has independent errors
+(`IsIndependentError`) when `A*` and `Y*` are independent given `(A, Y)`. A product kernel
+`kA a a' * kY y y'` with rows summing to one has both properties: it is the finite form of
+`A* = f(A, U_A)` and `Y* = g(Y, U_Y)` with `U_A`, `U_Y` and `(A, Y)` mutually independent.
+The independence it supplies is that of the measurement mechanisms given the true values. It
+is not independence of the error differences `A* - A` and `Y* - Y` of What If Technical Point
+9.1: with `A = Y` a fair coin and both classified with sensitivity and specificity `3/4` by a
+product kernel, both differences equal `1` with probability `1/32`, while the product of the
+marginal probabilities is `1/64` (`errorDifference_example`). A
 binary variable is classified with sensitivity `se = P(B* = 1 | B = 1)` and specificity
 `sp = P(B* = 0 | B = 0)` (`binaryKernel`). Conditional risks are ratios of table entries
 (`risk`), with the needed positivity hypotheses.
 
 ## Main results
 
-* `observed_indep_of_indep`: the null is preserved under independent nondifferential error. If
-  `A ⫫ Y` then `A* ⫫ Y*` (What If, Fine Point 9.1).
+* `observed_indep_of_indep`, `observed_indep_of_nondifferential`: the null is preserved under
+  independent nondifferential error. If `A ⫫ Y` then `A* ⫫ Y*` (What If, Fine Point 9.1).
 * `differentialExample_not_indep`: differential error of the treatment (recall bias) creates an
-  association under the null.
+  association under the null. The kernel has independent errors but is differential.
 * `dependentExample_not_indep`: dependent but nondifferential errors create an association under
-  the null.
+  the null. The kernel is nondifferential but its errors are dependent.
 * `outcome_risk_eq`, `outcome_riskDiff_eq`: under outcome misclassification that is
   nondifferential with respect to treatment, `P(Y* = 1 | A = a) = (1 - sp) + (se + sp - 1) P(Y = 1
   | A = a)`, so the observed risk difference is the true one times `se + sp - 1`.
   `outcome_riskDiff_toward_null` gives, for `se + sp > 1` and `se, sp ≤ 1`, the same sign and no
-  larger magnitude; `outcome_riskDiff_reversed` gives the reversal when `se + sp < 1`.
+  larger magnitude; `outcome_riskDiff_reversed` gives the reversal when `se + sp < 1`, and
+  `reversalExample` is a concrete instance (true risk difference `1/2`, observed `-1/4`).
+  `outcome_riskRatio_toward_null` and `outcome_riskRatio_toward_null_of_le` give the risk ratio
+  companion: the observed risk ratio lies between `1` and the true one.
 * `trendExample_reversal`: a three-level treatment with independent nondifferential error whose
   conditional mean `E[A* | A]` is not monotone in `A`: the true risks increase in `A` and the
   covariance of treatment and outcome is positive, while the observed covariance of `A*` and `Y`
@@ -47,7 +58,9 @@ binary variable is classified with sensitivity `se = P(B* = 1 | B = 1)` and spec
   `sp` and `se + sp ≠ 1`, the true prevalence is recovered from the observed one, by the scalar
   formula and by inverting the misclassification matrix, whose determinant is `se + sp - 1`.
   `prevalence_not_identified` shows that for `se + sp = 1` the observed prevalence does not
-  depend on the true one.
+  depend on the true one. `prevalence_admissible_iff` and `prevalence_existsUnique_iff`: a
+  supplied observed prevalence `q` has a correction in `[0, 1]` (then unique) if and only if `q`
+  lies between `1 - sp` and `se`, in either order.
 
 ## References
 
@@ -100,6 +113,50 @@ theorem observed_indep_of_indep [Fintype α] [Fintype β] [Fintype α'] [Fintype
   rw [hq]
   exact tableIndep_mul _ _
 
+/-- Nondifferential measurement error (What If, Technical Point 9.1, for a joint kernel
+`K a y a' y' = P(A* = a', Y* = y' | A = a, Y = y)`): the law `P(A* = a' | A = a, Y = y)` of the
+measured treatment does not depend on the true outcome `y`, and the law
+`P(Y* = y' | A = a, Y = y)` of the measured outcome does not depend on the true treatment `a`. -/
+def IsNondifferential [Fintype α'] [Fintype β'] (K : α → β → α' → β' → ℝ) : Prop :=
+  (∀ a y₁ y₂ a', ∑ y', K a y₁ a' y' = ∑ y', K a y₂ a' y') ∧
+    ∀ a₁ a₂ y y', ∑ a', K a₁ y a' y' = ∑ a', K a₂ y a' y'
+
+/-- Independent measurement errors for a joint kernel: given the true values `(a, y)`, the
+measured `A*` and `Y*` are independent, `P(A* = a', Y* = y' | a, y)` being the product of the
+two marginal classification probabilities. This is independence of the measurement mechanisms
+given the truth, not independence of the differences `A* - A` and `Y* - Y` (see the module
+docstring). -/
+def IsIndependentError [Fintype α'] [Fintype β'] (K : α → β → α' → β' → ℝ) : Prop :=
+  ∀ a y a' y', K a y a' y' = (∑ y'', K a y a' y'') * ∑ a'', K a y a'' y'
+
+/-- A product kernel whose factors have rows summing to one is nondifferential and has
+independent errors. -/
+theorem productKernel_nondifferential_independent [Fintype α'] [Fintype β']
+    (kA : α → α' → ℝ) (kY : β → β' → ℝ) (hA : ∀ a, ∑ a', kA a a' = 1)
+    (hY : ∀ y, ∑ y', kY y y' = 1) :
+    IsNondifferential (fun a y a' y' ↦ kA a a' * kY y y') ∧
+      IsIndependentError (fun a y a' y' ↦ kA a a' * kY y y') := by
+  refine ⟨⟨fun a y₁ y₂ a' ↦ ?_, fun a₁ a₂ y y' ↦ ?_⟩, fun a y a' y' ↦ ?_⟩ <;>
+    simp only [← Finset.mul_sum, ← Finset.sum_mul, hA, hY, mul_one, one_mul]
+
+/-- Independent nondifferential error preserves the null, stated with the predicates
+`IsNondifferential` and `IsIndependentError` (What If, Fine Point 9.1). If the true table is
+independent with nonzero total mass and the kernel is nondifferential with independent errors,
+the observed table is independent. Together the two predicates force the product form used in
+`observed_indep_of_indep`. -/
+theorem observed_indep_of_nondifferential [Fintype α] [Fintype β] [Fintype α'] [Fintype β']
+    (p : α → β → ℝ) (hp : TableIndep p) (hT : ∑ a, ∑ y, p a y ≠ 0)
+    (K : α → β → α' → β' → ℝ) (hnd : IsNondifferential K) (hie : IsIndependentError K) :
+    TableIndep (observedTable p K) := by
+  obtain ⟨a₀, -, ha₀⟩ := Finset.exists_ne_zero_of_sum_ne_zero hT
+  obtain ⟨y₀, -, -⟩ := Finset.exists_ne_zero_of_sum_ne_zero ha₀
+  have hK : K = fun a y a' y' ↦ (∑ y'', K a y₀ a' y'') * ∑ a'', K a₀ y a'' y' := by
+    funext a y a' y'
+    rw [hie a y a' y', hnd.1 a y y₀ a', hnd.2 a a₀ y y']
+  rw [hK]
+  exact observed_indep_of_indep p hp hT (fun a a' ↦ ∑ y'', K a y₀ a' y'')
+    (fun y y' ↦ ∑ a'', K a₀ y a'' y')
+
 /-- The kernel of a variable measured without error: `P(B* = b' | B = b) = [b = b']`. -/
 def exactKernel [DecidableEq α] (b b' : α) : ℝ := if b = b' then 1 else 0
 
@@ -120,6 +177,19 @@ def binaryKernel (se sp : ℝ) (b b' : Bool) : ℝ :=
 /-- Each row of the binary classification kernel sums to one. -/
 theorem binaryKernel_sum (se sp : ℝ) (b : Bool) : ∑ b', binaryKernel se sp b b' = 1 := by
   cases b <;> simp [binaryKernel]
+
+/-- Which independence a product kernel supplies. Let `A = Y` be a fair coin and classify each
+with sensitivity and specificity `3/4` by the product kernel `binaryKernel * binaryKernel`. Both
+error differences `A* - A` and `Y* - Y` equal `1` exactly when `A = Y = 0` and both are recorded
+as `1`, with probability `1/2 * (1/4 * 1/4) = 1/32`. Each difference alone equals `1` with
+probability `1/2 * 1/4 = 1/8`, and the product of these is `1/64`. So the differences are
+dependent although the kernel has independent errors in the sense of `IsIndependentError`. -/
+theorem errorDifference_example :
+    1 / 2 * (binaryKernel (3 / 4) (3 / 4) false true * binaryKernel (3 / 4) (3 / 4) false true) =
+        (1 / 32 : ℝ) ∧
+      (1 / 2 * binaryKernel (3 / 4) (3 / 4) false true) *
+          (1 / 2 * binaryKernel (3 / 4) (3 / 4) false true) = (1 / 64 : ℝ) := by
+  constructor <;> norm_num [binaryKernel]
 
 /-- The risk difference `P(Y = 1 | A = 1) - P(Y = 1 | A = 0)` of a table of `(A, Y)`. -/
 noncomputable def riskDiff (q : Bool → Bool → ℝ) : ℝ := risk q true - risk q false
@@ -179,6 +249,59 @@ theorem outcome_riskDiff_reversed (p : Bool → Bool → ℝ) (se sp : ℝ) (h :
     riskDiff (outcomeMisclassified p se sp) < 0 := by
   rw [outcome_riskDiff_eq p se sp h1 h0]
   exact mul_neg_of_neg_of_pos (by linarith) hrd
+
+/-- A concrete reversal when classification is worse than chance. Equally prevalent arms with
+true risks `3/4` (treated) and `1/4` (untreated), and nondifferential outcome misclassification
+with `se = sp = 1/4`: the true risk difference is `1/2`, the observed risks are `3/8` and `5/8`,
+and the observed risk difference is `-1/4`. -/
+noncomputable def reversalTable (a y : Bool) : ℝ := 1 / 2 * bern (if a then 3 / 4 else 1 / 4) y
+
+/-- The numbers of `reversalTable` under outcome misclassification with `se = sp = 1/4`. -/
+theorem reversalExample :
+    riskDiff reversalTable = 1 / 2 ∧
+      risk (outcomeMisclassified reversalTable (1 / 4) (1 / 4)) true = 3 / 8 ∧
+      risk (outcomeMisclassified reversalTable (1 / 4) (1 / 4)) false = 5 / 8 ∧
+      riskDiff (outcomeMisclassified reversalTable (1 / 4) (1 / 4)) = -1 / 4 := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;>
+    norm_num [riskDiff, risk, outcomeMisclassified_apply, reversalTable, bern, binaryKernel,
+      Fintype.sum_bool]
+
+/-- The risk ratio under nondifferential outcome misclassification, toward the null without
+reversal. With `sp ≤ 1`, `se + sp > 1`, positive untreated risk and a true risk ratio at least
+one, the observed risk ratio `P(Y* = 1 | A = 1) / P(Y* = 1 | A = 0)` lies between `1` and the
+true risk ratio. -/
+theorem outcome_riskRatio_toward_null (p : Bool → Bool → ℝ) (se sp : ℝ) (hsp : sp ≤ 1)
+    (h : 1 < se + sp) (h1 : p true true + p true false ≠ 0)
+    (h0 : p false true + p false false ≠ 0) (hr0 : 0 < risk p false)
+    (hle : risk p false ≤ risk p true) :
+    1 ≤ risk (outcomeMisclassified p se sp) true / risk (outcomeMisclassified p se sp) false ∧
+      risk (outcomeMisclassified p se sp) true / risk (outcomeMisclassified p se sp) false ≤
+        risk p true / risk p false := by
+  rw [outcome_risk_eq p se sp true h1, outcome_risk_eq p se sp false h0]
+  have hb : 0 ≤ 1 - sp := by linarith
+  have hc : 0 < se + sp - 1 := by linarith
+  have hd : 0 < 1 - sp + (se + sp - 1) * risk p false := by positivity
+  refine ⟨(one_le_div hd).mpr (by nlinarith), ?_⟩
+  rw [div_le_div_iff₀ hd hr0]
+  nlinarith
+
+/-- The risk ratio companion when the true risk ratio is at most one: with `sp ≤ 1`,
+`se + sp > 1` and positive untreated risk, the observed risk ratio lies between the true risk
+ratio and `1`. -/
+theorem outcome_riskRatio_toward_null_of_le (p : Bool → Bool → ℝ) (se sp : ℝ) (hsp : sp ≤ 1)
+    (h : 1 < se + sp) (h1 : p true true + p true false ≠ 0)
+    (h0 : p false true + p false false ≠ 0) (hr0 : 0 < risk p false)
+    (hle : risk p true ≤ risk p false) :
+    risk p true / risk p false ≤
+        risk (outcomeMisclassified p se sp) true / risk (outcomeMisclassified p se sp) false ∧
+      risk (outcomeMisclassified p se sp) true / risk (outcomeMisclassified p se sp) false ≤ 1 := by
+  rw [outcome_risk_eq p se sp true h1, outcome_risk_eq p se sp false h0]
+  have hb : 0 ≤ 1 - sp := by linarith
+  have hc : 0 < se + sp - 1 := by linarith
+  have hd : 0 < 1 - sp + (se + sp - 1) * risk p false := by positivity
+  refine ⟨?_, (div_le_one hd).mpr (by nlinarith)⟩
+  rw [div_le_div_iff₀ hr0 hd]
+  nlinarith
 
 /-- The observed table of `(A*, Y)` when the outcome is measured exactly and treatment is
 misclassified with sensitivity `se` and specificity `sp` that do not depend on the outcome
@@ -243,17 +366,26 @@ theorem exposureWeight_sub (p : Bool → Bool → ℝ) (se sp : ℝ)
   ring
 
 /-- Nondifferential treatment misclassification of a binary treatment biases the risk difference
-toward the null without reversing it. If both treatment levels and both observed levels have
-positive mass, `se ≤ 1`, `sp ≤ 1` and `se + sp > 1`, then the observed risk difference
-`P(Y = 1 | A* = 1) - P(Y = 1 | A* = 0)` equals `c` times the true one for some `0 < c ≤ 1`. -/
+toward the null without reversing it. If both treatment levels have positive mass, `se ≤ 1`,
+`sp ≤ 1` and `se + sp > 1`, then the observed risk difference
+`P(Y = 1 | A* = 1) - P(Y = 1 | A* = 0)` equals `c` times the true one for some `0 < c ≤ 1`.
+Both observed levels then have positive mass, which the proof derives. -/
 theorem exposure_riskDiff_toward_null (p : Bool → Bool → ℝ) (se sp : ℝ)
     (hp : ∀ a y, 0 ≤ p a y) (hse : se ≤ 1) (hsp : sp ≤ 1)
     (h : 1 < se + sp) (h1 : 0 < p true true + p true false)
-    (h0 : 0 < p false true + p false false)
-    (hobs1 : 0 < ∑ a, (p a true + p a false) * binaryKernel se sp a true)
-    (hobs0 : 0 < ∑ a, (p a true + p a false) * binaryKernel se sp a false) :
+    (h0 : 0 < p false true + p false false) :
     ∃ c, 0 < c ∧ c ≤ 1 ∧
       riskDiff (exposureMisclassified p se sp) = c * riskDiff p := by
+  have hse0 : 0 < se := by linarith
+  have hsp0 : 0 < sp := by linarith
+  have hobs1 : 0 < ∑ a, (p a true + p a false) * binaryKernel se sp a true := by
+    simp only [Fintype.sum_bool, binaryKernel, ↓reduceIte, Bool.false_eq_true]
+    have : 0 ≤ 1 - sp := by linarith
+    positivity
+  have hobs0 : 0 < ∑ a, (p a true + p a false) * binaryKernel se sp a false := by
+    simp only [Fintype.sum_bool, binaryKernel, ↓reduceIte, Bool.false_eq_true]
+    have : 0 ≤ 1 - se := by linarith
+    positivity
   refine ⟨exposureWeight p se sp true - exposureWeight p se sp false, ?_, ?_, ?_⟩
   · rw [exposureWeight_sub p se sp hobs1.ne' hobs0.ne']
     have : 0 < se + sp - 1 := by linarith
@@ -340,6 +472,32 @@ theorem dependentKernel_nondifferential :
   refine ⟨fun a y₁ y₂ a' ↦ ?_, fun a₁ a₂ y y' ↦ ?_⟩
   · cases a <;> cases y₁ <;> cases y₂ <;> cases a' <;> norm_num [dependentKernel, exactKernel]
   · cases a₁ <;> cases a₂ <;> cases y <;> cases y' <;> norm_num [dependentKernel, exactKernel]
+
+/-- The differential kernel has independent errors (the outcome is measured exactly). -/
+theorem differentialKernel_isIndependentError : IsIndependentError differentialKernel := by
+  intro a y a' y'
+  cases a <;> cases y <;> cases a' <;> cases y' <;>
+    simp [differentialKernel, exactKernel]
+
+/-- The differential kernel is not nondifferential: `P(A* = 1 | A = 0, Y = 1) = 1` while
+`P(A* = 1 | A = 0, Y = 0) = 0`. So the differential example violates exactly the
+nondifferentiality assumption. -/
+theorem differentialKernel_not_isNondifferential : ¬ IsNondifferential differentialKernel := by
+  intro h
+  have := h.1 false true false true
+  simp [differentialKernel, exactKernel] at this
+
+/-- The dependent kernel is nondifferential (`dependentKernel_nondifferential`). -/
+theorem dependentKernel_isNondifferential : IsNondifferential dependentKernel :=
+  dependentKernel_nondifferential
+
+/-- The errors of the dependent kernel are not independent: `P(A* = 1, Y* = 1 | A = 0, Y = 0)`
+is `1/2`, while the product of the marginal probabilities is `1/4`. So the dependent example
+violates exactly the independence assumption. -/
+theorem dependentKernel_not_isIndependentError : ¬ IsIndependentError dependentKernel := by
+  intro h
+  have := h false false true true
+  norm_num [dependentKernel, exactKernel] at this
 
 /-- Dependent errors create an association under the null: with `A ⫫ Y`, the observed `A*` and
 `Y*` are dependent (`P(A* = 1, Y* = 1) = 5/8` while `P(A* = 1) P(Y* = 1) = 9/16`). -/
@@ -452,6 +610,50 @@ true prevalence is not identified and the condition `se + sp ≠ 1` cannot be dr
 theorem prevalence_not_identified (se sp π π' : ℝ) (h : se + sp = 1) :
     observedPrevalence se sp π = observedPrevalence se sp π' := by
   simp only [observedPrevalence_eq, h, sub_self, zero_mul]
+
+/-- Admissibility of the prevalence correction. With `se + sp ≠ 1`, the corrected value
+`(q - (1 - sp)) / (se + sp - 1)` of a supplied observed prevalence `q` lies in `[0, 1]` if and
+only if `q` lies between `1 - sp` and `se`, in either order (`1 - sp ≤ q ≤ se` when
+`se + sp > 1`, `se ≤ q ≤ 1 - sp` when `se + sp < 1`). Outside that interval the observed
+prevalence is incompatible with the stated `se` and `sp`. -/
+theorem prevalence_admissible_iff (se sp q : ℝ) (h : se + sp ≠ 1) :
+    (0 ≤ (q - (1 - sp)) / (se + sp - 1) ∧ (q - (1 - sp)) / (se + sp - 1) ≤ 1) ↔
+      (1 - sp ≤ q ∧ q ≤ se) ∨ (se ≤ q ∧ q ≤ 1 - sp) := by
+  rcases lt_or_gt_of_ne (sub_ne_zero.mpr h) with hc | hc
+  · rw [div_nonneg_iff, div_le_one_of_neg hc]
+    constructor
+    · rintro ⟨h0 | h0, h1⟩
+      · linarith [h0.2]
+      · right; constructor <;> linarith [h0.1]
+    · rintro (⟨h0, h1⟩ | ⟨h0, h1⟩)
+      · exfalso; linarith
+      · exact ⟨Or.inr ⟨by linarith, hc.le⟩, by linarith⟩
+  · rw [div_nonneg_iff, div_le_one hc]
+    constructor
+    · rintro ⟨h0 | h0, h1⟩
+      · left; constructor <;> linarith [h0.1]
+      · linarith [h0.2]
+    · rintro (⟨h0, h1⟩ | ⟨h0, h1⟩)
+      · exact ⟨Or.inl ⟨by linarith, hc.le⟩, by linarith⟩
+      · exfalso; linarith
+
+/-- Admissibility as existence and uniqueness. With `se + sp ≠ 1`, a supplied observed
+prevalence `q` arises from exactly one true prevalence `π ∈ [0, 1]` if and only if `q` lies
+between `1 - sp` and `se`, in either order. -/
+theorem prevalence_existsUnique_iff (se sp q : ℝ) (h : se + sp ≠ 1) :
+    (∃! π : ℝ, (0 ≤ π ∧ π ≤ 1) ∧ observedPrevalence se sp π = q) ↔
+      (1 - sp ≤ q ∧ q ≤ se) ∨ (se ≤ q ∧ q ≤ 1 - sp) := by
+  have hc : se + sp - 1 ≠ 0 := sub_ne_zero.mpr h
+  rw [← prevalence_admissible_iff se sp q h]
+  constructor
+  · rintro ⟨π, ⟨hπ, hq⟩, -⟩
+    rw [← hq, ← prevalence_correction se sp π h]
+    exact hπ
+  · intro hadm
+    refine ⟨(q - (1 - sp)) / (se + sp - 1), ⟨hadm, ?_⟩, fun π ⟨_, hq⟩ ↦ ?_⟩
+    · rw [observedPrevalence_eq, mul_div_cancel₀ _ hc]
+      ring
+    · rw [← hq, ← prevalence_correction se sp π h]
 
 /-- The misclassification matrix: rows are the true value (index `0` negative, `1` positive),
 columns the observed value, entries `P(B* = j | B = i)`. -/

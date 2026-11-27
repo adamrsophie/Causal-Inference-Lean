@@ -5,12 +5,14 @@ Authors: Adam R Sophie
 -/
 module
 
+public import Mathlib.Algebra.BigOperators.Field
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Tactic.FieldSimp
 public import Mathlib.Tactic.LinearCombination
 public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Positivity
 public import Mathlib.Tactic.Ring
 
 /-!
@@ -51,12 +53,22 @@ product of its row and column totals. Dividing by the square of the stratum mass
   dependence holds exactly when both causes affect survival.
 * `andMechanism_survivors_not_indep`: a non-multiplicative survival model (death if and only if
   both `A = 1` and `E = 1`) in which `A` and `E` are dependent among the survivors.
+* `tableIndep_bool_iff_ratio`, `tableIndep_iff_normalized`: the odds ratio reading of the
+  cross-product criterion (under a positive cross product) and the probability reading of
+  `TableIndep` (under positive total mass). `stratum_condIndep_of_multiplicative` and
+  `deaths_condIndep_iff` restate the two stratum results for the normalized cells, assuming a
+  positive selected mass.
+* `multiplicative_iff_ratio_const`: the multiplicative survival model holds if and only if the
+  survival ratio `s a e / s a₀ e` does not depend on `e` (Technical Point 8.2).
+* `orMechanism_deaths_negative`, `andMechanism_deaths_positive`: the direction of the bias among
+  the deaths (Fine Point 8.2): negative association under an "or" mechanism, positive under an
+  "and" mechanism with a positive baseline death probability.
 
 ## References
 
 * M. A. Hernán and J. M. Robins, *Causal Inference: What If*, Chapman and Hall/CRC (2020),
-  section 8.1, section 8.6 (selection without bias) and Technical Point 8.2 (multiplicative
-  survival model).
+  section 8.1, section 8.6 (selection without bias), Technical Point 8.2 (multiplicative
+  survival model) and Fine Point 8.2 (the strength and direction of selection bias).
 -/
 
 @[expose] public section
@@ -82,7 +94,9 @@ theorem tableIndep_mul {α β : Type*} [Fintype α] [Fintype β] (f : α → ℝ
   ring
 
 /-- For a two-by-two table, independence is equivalent to equality of the cross products:
-`q 1 1 * q 0 0 = q 1 0 * q 0 1`, that is, an odds ratio of one. -/
+`q 1 1 * q 0 0 = q 1 0 * q 0 1`. This needs no positivity. It reads as an odds ratio of one
+only when the cross product `q 1 0 * q 0 1` is positive (`tableIndep_bool_iff_ratio`): a point
+mass at `(0, 0)` is independent while its odds ratio is `0 / 0`. -/
 theorem tableIndep_bool_iff (q : Bool → Bool → ℝ) :
     TableIndep q ↔ q true true * q false false = q true false * q false true := by
   constructor
@@ -93,6 +107,34 @@ theorem tableIndep_bool_iff (q : Bool → Bool → ℝ) :
   · intro h a b
     cases a <;> cases b <;> simp only [Fintype.sum_bool] <;>
       first | linear_combination h | linear_combination (-1 : ℝ) * h
+
+/-- The odds ratio reading of `tableIndep_bool_iff`: when the cross product `q 1 0 * q 0 1` is
+positive, a two-by-two table is independent if and only if its odds ratio
+`q 1 1 q 0 0 / (q 1 0 q 0 1)` equals one. -/
+theorem tableIndep_bool_iff_ratio (q : Bool → Bool → ℝ)
+    (hpos : 0 < q true false * q false true) :
+    TableIndep q ↔ q true true * q false false / (q true false * q false true) = 1 := by
+  rw [tableIndep_bool_iff, div_eq_one_iff_eq hpos.ne']
+
+/-- The probability reading of `TableIndep`. For a table with positive total mass `T`, the
+table is independent if and only if the normalized cells `q a b / T` (the conditional law given
+the stratum the table describes) factorize into the product of their margins. -/
+theorem tableIndep_iff_normalized {α β : Type*} [Fintype α] [Fintype β] (q : α → β → ℝ)
+    (hT : 0 < ∑ a, ∑ b, q a b) :
+    TableIndep q ↔ ∀ a b, q a b / (∑ a', ∑ b', q a' b') =
+      (∑ b', q a b' / (∑ a', ∑ b', q a' b')) * ∑ a', q a' b / (∑ a', ∑ b', q a' b') := by
+  unfold TableIndep
+  set T := ∑ a, ∑ b, q a b with hTdef
+  have hT' : T ≠ 0 := hT.ne'
+  refine forall_congr' fun a ↦ forall_congr' fun b ↦ ?_
+  rw [← Finset.sum_div, ← Finset.sum_div, div_mul_div_comm,
+    div_eq_div_iff hT' (mul_ne_zero hT' hT')]
+  constructor
+  · intro h
+    linear_combination T * h
+  · intro h
+    have h2 : T * (q a b * T - (∑ b', q a b') * ∑ a', q a' b) = 0 := by linear_combination h
+    linear_combination (mul_eq_zero.mp h2).resolve_left hT'
 
 section Stratum
 
@@ -167,7 +209,128 @@ theorem deaths_indep_iff (pA pE g h : Bool → ℝ) (hA : ∀ a, 0 < pA a) (hE :
   · intro H
     linear_combination (-(pA true * pA false * pE true * pE false)) * H
 
+/-- The probability form of `stratum_indep_of_multiplicative`. Under a multiplicative survival
+model and with positive selected mass `T = P(S = 1)`, the conditional law of `(A, E)` given
+`S = 1`, the normalized cells `P(A = a, E = e, S = 1) / T`, is the product of its margins:
+`P(A = a, E = e | S = 1) = P(A = a | S = 1) P(E = e | S = 1)`. -/
+theorem stratum_condIndep_of_multiplicative [Fintype α] [Fintype β] (pA : α → ℝ) (pE : β → ℝ)
+    (s : α → β → ℝ) (g : β → ℝ) (h : α → ℝ) (hs : ∀ a e, s a e = g e * h a)
+    (hT : 0 < ∑ a, ∑ e, stratum pA pE s a e) (a : α) (e : β) :
+    stratum pA pE s a e / (∑ a', ∑ e', stratum pA pE s a' e') =
+      (∑ e', stratum pA pE s a e' / (∑ a', ∑ e', stratum pA pE s a' e')) *
+        ∑ a', stratum pA pE s a' e / (∑ a', ∑ e', stratum pA pE s a' e') :=
+  (tableIndep_iff_normalized _ hT).mp (stratum_indep_of_multiplicative pA pE s g h hs) a e
+
+/-- The probability form of `deaths_indep_iff`. With binary `A` and `E`, positive margins, a
+multiplicative survival model and positive death mass `P(Y = 1)`, the conditional law of
+`(A, E)` given `Y = 1` factorizes into its margins if and only if
+`(g 1 - g 0) (h 1 - h 0) = 0`. -/
+theorem deaths_condIndep_iff (pA pE g h : Bool → ℝ) (hA : ∀ a, 0 < pA a) (hE : ∀ e, 0 < pE e)
+    (hT : 0 < ∑ a, ∑ e, stratum pA pE (fun a e ↦ 1 - g e * h a) a e) :
+    (∀ a e, stratum pA pE (fun a e ↦ 1 - g e * h a) a e /
+        (∑ a', ∑ e', stratum pA pE (fun a e ↦ 1 - g e * h a) a' e') =
+      (∑ e', stratum pA pE (fun a e ↦ 1 - g e * h a) a e' /
+          (∑ a', ∑ e', stratum pA pE (fun a e ↦ 1 - g e * h a) a' e')) *
+        ∑ a', stratum pA pE (fun a e ↦ 1 - g e * h a) a' e /
+          (∑ a', ∑ e', stratum pA pE (fun a e ↦ 1 - g e * h a) a' e')) ↔
+      (g true - g false) * (h true - h false) = 0 := by
+  rw [← tableIndep_iff_normalized _ hT, deaths_indep_iff pA pE g h hA hE]
+
+/-- The multiplicative survival model as a constant survival ratio (What If, Technical Point
+8.2). Fix a reference level `a₀` with `s a₀ e ≠ 0` for every `e`. Then `s a e = g(e) h(a)` for
+some `g` and `h` if and only if the survival ratio `s a e / s a₀ e` does not depend on `e`,
+that is, there is no multiplicative interaction of `A` and `E` on survival. -/
+theorem multiplicative_iff_ratio_const (s : α → β → ℝ) (a₀ : α) (hs : ∀ e, s a₀ e ≠ 0) :
+    (∃ g : β → ℝ, ∃ h : α → ℝ, ∀ a e, s a e = g e * h a) ↔
+      ∀ a e e', s a e / s a₀ e = s a e' / s a₀ e' := by
+  constructor
+  · rintro ⟨g, h, hgh⟩ a e e'
+    have he : g e * h a₀ ≠ 0 := hgh a₀ e ▸ hs e
+    have he' : g e' * h a₀ ≠ 0 := hgh a₀ e' ▸ hs e'
+    rw [hgh a e, hgh a₀ e, hgh a e', hgh a₀ e', div_eq_div_iff he he']
+    ring
+  · intro H
+    rcases isEmpty_or_nonempty β with hβ | hβ
+    · exact ⟨fun _ ↦ 0, fun _ ↦ 0, fun _ e ↦ hβ.elim e⟩
+    obtain ⟨e₀⟩ := hβ
+    refine ⟨fun e ↦ s a₀ e, fun a ↦ s a e₀ / s a₀ e₀, fun a e ↦ ?_⟩
+    change s a e = s a₀ e * (s a e₀ / s a₀ e₀)
+    rw [← H a e e₀, mul_div_cancel₀ _ (hs e)]
+
 end Stratum
+
+section Direction
+
+/-! ### The direction of the bias (What If, Fine Point 8.2)
+
+The death probability `d a e = P(Y = 1 | A = a, E = e)` has a baseline `m`, and a mechanism
+adds an excess `k` on some cells. Under an "or" mechanism the excess applies when `A = 1` or
+`E = 1`; under an "and" mechanism only when both hold. Fine Point 8.2 has a background factor
+`U` with prevalence `u`, unassociated with `A` and `E`, that enables the mechanism. If death
+outside the mechanism happens at rate `b` among those without `U`, then `d a e` is
+`u [mechanism] + (1 - u) b`, which is the form below with `m = (1 - u) b` and `k = u`. The
+baseline is a re-derivation: without it (`m = 0`) the "and" mechanism puts every death in the
+cell `A = E = 1`, and the death stratum then shows no association at all (both cross products
+are zero). -/
+
+/-- For binary `A` and `E` with independent margins, the cross product difference of a stratum
+is the cross product difference of the selection probabilities times the margins. -/
+theorem stratum_cross_sub (pA pE : Bool → ℝ) (d : Bool → Bool → ℝ) :
+    stratum pA pE d true true * stratum pA pE d false false -
+        stratum pA pE d true false * stratum pA pE d false true =
+      pA true * pA false * pE true * pE false *
+        (d true true * d false false - d true false * d false true) := by
+  simp only [stratum]
+  ring
+
+/-- Death probability under an "or" mechanism with baseline `m` and excess `k`. -/
+def orDeath (m k : ℝ) (a e : Bool) : ℝ := if a || e then m + k else m
+
+/-- Death probability under an "and" mechanism with baseline `m` and excess `k`. -/
+def andDeath (m k : ℝ) (a e : Bool) : ℝ := if a && e then m + k else m
+
+/-- Under an "or" mechanism (What If, Fine Point 8.2), marginally independent causes with
+positive margins are negatively associated among the deaths: the cross product
+`q 1 1 q 0 0` of the death stratum is smaller than `q 1 0 q 0 1`, so the odds ratio is below
+one. It needs `m ≥ 0` and a positive excess `k`. -/
+theorem orMechanism_deaths_negative (pA pE : Bool → ℝ) (hA : ∀ a, 0 < pA a)
+    (hE : ∀ e, 0 < pE e) (m k : ℝ) (hm : 0 ≤ m) (hk : 0 < k) :
+    stratum pA pE (orDeath m k) true true * stratum pA pE (orDeath m k) false false <
+      stratum pA pE (orDeath m k) true false * stratum pA pE (orDeath m k) false true := by
+  have h := stratum_cross_sub pA pE (orDeath m k)
+  simp only [orDeath, Bool.or_self, Bool.or_true, Bool.or_false, ↓reduceIte,
+    Bool.false_eq_true] at h
+  have hP : 0 < pA true * pA false * pE true * pE false := by
+    have := hA true; have := hA false; have := hE true; have := hE false
+    positivity
+  have : (m + k) * m - (m + k) * (m + k) < 0 := by nlinarith
+  nlinarith
+
+/-- Under an "and" mechanism (What If, Fine Point 8.2), marginally independent causes with
+positive margins are positively associated among the deaths: the cross product `q 1 1 q 0 0`
+of the death stratum exceeds `q 1 0 q 0 1`, so the odds ratio is above one. It needs a positive
+baseline `m` and a positive excess `k`. -/
+theorem andMechanism_deaths_positive (pA pE : Bool → ℝ) (hA : ∀ a, 0 < pA a)
+    (hE : ∀ e, 0 < pE e) (m k : ℝ) (hm : 0 < m) (hk : 0 < k) :
+    stratum pA pE (andDeath m k) true false * stratum pA pE (andDeath m k) false true <
+      stratum pA pE (andDeath m k) true true * stratum pA pE (andDeath m k) false false := by
+  have h := stratum_cross_sub pA pE (andDeath m k)
+  simp only [andDeath, Bool.and_self, Bool.and_true, Bool.and_false, ↓reduceIte,
+    Bool.false_eq_true] at h
+  have hP : 0 < pA true * pA false * pE true * pE false := by
+    have := hA true; have := hA false; have := hE true; have := hE false
+    positivity
+  have : 0 < (m + k) * m - m * m := by nlinarith
+  nlinarith
+
+/-- Without a baseline the "and" mechanism leaves no association among the deaths: every death
+has `A = E = 1`, and the death stratum is independent (both cross products are zero). -/
+theorem andMechanism_deaths_indep_of_zero (pA pE : Bool → ℝ) (k : ℝ) :
+    TableIndep (stratum pA pE (andDeath 0 k)) := by
+  rw [tableIndep_bool_iff]
+  simp [stratum, andDeath]
+
+end Direction
 
 section CauseSpecific
 
