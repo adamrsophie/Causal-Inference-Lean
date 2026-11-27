@@ -7,6 +7,9 @@ causal inference.
 
 The project is at an early stage. Modules are added only when they contain checked declarations.
 
+Project site with a dependency map, highlights, and a full reference:
+<https://adamrsophie.github.io/Causal-Inference-Lean/>
+
 ## Contents
 
 | Directory | Content |
