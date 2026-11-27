@@ -57,15 +57,32 @@ open Finset
 variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] {𝒜 𝓛 : Type*} [DecidableEq 𝒜] [DecidableEq 𝓛]
 
 /-- The probability of the observed first treatment given the first covariate,
-`P(A0 = A0(ω) | L0 = L0(ω))`. -/
+`P(A0 = A0(ω) | L0 = L0(ω))`. It is defined at every sample point as the totalized ratio
+`condProb` (read as `0` when the conditioning event has zero mass, as can happen at a point of
+zero mass); at a point of positive mass it is positive (`prop0_pos`). -/
 noncomputable def prop0 (m : Ω → ℝ) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) (ω : Ω) : ℝ :=
   condProb m (ev L0 (L0 ω)) (ev A0 (A0 ω))
 
 /-- The probability of the observed second treatment given the past,
-`P(A1 = A1(ω) | L0 = L0(ω), A0 = A0(ω), L1 = L1(ω))`. -/
+`P(A1 = A1(ω) | L0 = L0(ω), A0 = A0(ω), L1 = L1(ω))`. It is the totalized ratio `condProb`, read
+as `0` when the conditioning event has zero mass; at a point of positive mass it is positive
+(`prop1_pos`). -/
 noncomputable def prop1 (m : Ω → ℝ) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) (L1 : Ω → 𝓛) (A1 : Ω → 𝒜)
     (ω : Ω) : ℝ :=
   condProb m (ev L0 (L0 ω) ∩ ev A0 (A0 ω) ∩ ev L1 (L1 ω)) (ev A1 (A1 ω))
+
+/-- At a point of positive mass, under a nonnegative mass function, the first treatment
+probability is positive: the point lies in the conditioning event and in its intersection with
+the observed treatment. -/
+theorem prop0_pos {m : Ω → ℝ} (hm : ∀ ω, 0 ≤ m ω) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) {ω : Ω}
+    (hω : 0 < m ω) : 0 < prop0 m L0 A0 ω :=
+  div_pos (wmass_pos_of_mem hm (by simp) hω) (wmass_pos_of_mem hm (by simp) hω)
+
+/-- At a point of positive mass, under a nonnegative mass function, the second treatment
+probability is positive. -/
+theorem prop1_pos {m : Ω → ℝ} (hm : ∀ ω, 0 ≤ m ω) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) (L1 : Ω → 𝓛)
+    (A1 : Ω → 𝒜) {ω : Ω} (hω : 0 < m ω) : 0 < prop1 m L0 A0 L1 A1 ω :=
+  div_pos (wmass_pos_of_mem hm (by simp) hω) (wmass_pos_of_mem hm (by simp) hω)
 
 /-- The inverse probability of treatment weighted mean for the static regime `(a0, a1)`:
 `E[1{A0 = a0, A1 = a1} · Y / (P(A0 | L0) · P(A1 | L0, A0, L1))]`. -/

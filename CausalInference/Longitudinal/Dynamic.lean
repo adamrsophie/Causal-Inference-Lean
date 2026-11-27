@@ -38,10 +38,17 @@ Pearl 2009, section 4.4, "conditional plans").
 * `Longitudinal.expect_eq_gFormulaDyn`: **the dynamic g-formula**. If an individual who follows
   `g` has observed outcome equal to the potential outcome `Y^g` (the consistency condition for
   dynamic regimes of Technical Point 19.2), and sequential exchangeability for `Y^g` and
-  sequential positivity for `g` hold, then `E[Y^g] = gFormulaDyn p A L g Y`. The potential
-  outcome `Y^g` is a given random variable: it is not constructed here from the static potential
-  outcomes and potential covariates of a `Model` (that construction exists at two time points,
-  `dynamicOutcome2`).
+  sequential positivity for `g` hold, then `E[Y^g] = gFormulaDyn p A L g Y`. Here the potential
+  outcome `Y^g` is a given random variable.
+* `Longitudinal.Model.cfPath`, `Longitudinal.Model.YpoDyn`: in a `Model`, the counterfactual
+  treatment path `ā^g(ω)`, built from the potential covariates `Lpo` and the regime, and the
+  potential outcome `Y^g = Y(ā^g)`. Under `Model.Nonanticipating` the path is the unique solution
+  of `ā = g.path (L^ā(ω))` (`Model.cfPath_spec`, `Model.cfPath_eq_of_fixed`).
+  `Longitudinal.Model.Y_eq_YpoDyn_of_follows`: consistency along `g` is derived from
+  `Model.Consistent` and `Model.Nonanticipating`. `Longitudinal.Model.expect_YpoDyn_eq_gFormulaDyn`:
+  the dynamic g-formula in a model. `Longitudinal.Model.YpoDyn_ofStatic` and
+  `Longitudinal.Model.ofTwoTime_YpoDyn`: the construction gives `Y(ā)` for a static regime and
+  `dynamicOutcome2` at two time points.
 * `Longitudinal.gFormulaDyn_ofStatic`, `Longitudinal.iceGFormulaDyn_ofStatic`,
   `Longitudinal.Model.seqExchangeableDyn_ofStatic_iff`,
   `Longitudinal.Model.seqPositiveDyn_ofStatic_iff`: static regimes are the constant case.
@@ -54,6 +61,12 @@ Pearl 2009, section 4.4, "conditional plans").
   time points in which the dynamic regime "treat at time `1` if and only if the covariate is
   `true`" has `E[Y^g] = 1` while every static regime has `E[Y(a0, a1)] = 1/2`; the g-formulas
   reproduce both values; `Longitudinal.DynamicExample.g_optimal`: no dynamic regime does better.
+  The hypotheses of the identification theorem hold for the nonstatic regime `g`
+  (`DynamicExample.consistent_g`, `DynamicExample.seqExchangeableDyn_g`,
+  `DynamicExample.seqPositiveDyn_g`), the value of the g-formula is derived from it, and
+  `DynamicExample.model_expect_YpoDyn` restates the example on its `Model`.
+* `Longitudinal.PositivityFailureExample.not_seqPositive_and_gFormulaDyn_ne`: without sequential
+  positivity the totalized dynamic g-formula can differ from `E[Y^g]`.
 
 ## References
 
@@ -139,6 +152,21 @@ theorem path_spec : ∀ {K : ℕ} (g : DynamicRegime K 𝒜 𝓛) (l : Fin K →
         · simp only [Fin.cons_succ]
           calc _ = g.path l (Fin.castLE t.isLt.le s).succ := rfl
             _ = _ := congrArg (g.path l) (Fin.ext (by simp))
+
+/-- **The prescribed treatment at time `t` depends only on the covariates up to time `t`:** two
+covariate paths that agree at every time `s ≤ t` give the same prescribed treatment at `t`. -/
+theorem path_congr : ∀ {K : ℕ} (g : DynamicRegime K 𝒜 𝓛) {l l' : Fin K → 𝓛} (t : Fin K),
+    (∀ s, s ≤ t → l s = l' s) → g.path l t = g.path l' t
+  | 0, _, _, _, t, _ => t.elim0
+  | K + 1, g, l, l', t, h => by
+    have h0 : l 0 = l' 0 := h 0 (Fin.zero_le _)
+    refine Fin.cases (motive := fun t => (∀ s, s ≤ t → l s = l' s) → g.path l t = g.path l' t)
+      (fun _ => ?_) (fun t ht => ?_) t h
+    · rw [path_zero, path_zero, h0]
+    · change (g.tailRegime (l 0)).path (Fin.tail l) t =
+        (g.tailRegime (l' 0)).path (Fin.tail l') t
+      rw [h0]
+      exact path_congr _ t fun s hs => ht s.succ (Fin.succ_le_succ_iff.2 hs)
 
 /-- The static regime `a`, seen as a dynamic regime, prescribes `a` along every covariate path. -/
 @[simp] theorem path_ofStatic : ∀ {K : ℕ} (a : Fin K → 𝒜) (l : Fin K → 𝓛),
@@ -473,6 +501,149 @@ theorem seqPositiveDyn_two_iff (m : Ω → ℝ) (A : Fin 2 → Ω → 𝒜) (L :
 
 end TwoTime
 
+section PotentialOutcome
+
+/-! ### The potential outcome under a dynamic regime in a model -/
+
+namespace Model
+
+variable {Ω : Type*} [Fintype Ω] {𝒜 𝓛 : Type*} {K : ℕ} (M : Model Ω K 𝒜 𝓛)
+
+/-- One step of the construction of the counterfactual treatment path of `ω` under the dynamic
+regime `g`: from a candidate treatment path `a`, the path that `g` prescribes along the
+potential covariates `L^a(ω)` under `a`. -/
+def cfStep (g : DynamicRegime K 𝒜 𝓛) (ω : Ω) (a : Fin K → 𝒜) : Fin K → 𝒜 :=
+  g.path fun t => M.Lpo a t ω
+
+/-- The counterfactual treatment path `ā^g(ω)` of `ω` under the dynamic regime `g`: the `K`-fold
+iterate of `cfStep` from the constant path at the default treatment. Under
+`Model.Nonanticipating` it is the unique path `a` with `a = g.path (L^a(ω))`, that is
+`a_t = g_t(L̄^a_t(ω), ā_{t-1})` at every time (`cfPath_spec`, `cfPath_eq_of_fixed`), so it does
+not depend on the starting path. -/
+def cfPath [Inhabited 𝒜] (g : DynamicRegime K 𝒜 𝓛) (ω : Ω) : Fin K → 𝒜 :=
+  (M.cfStep g ω)^[K] fun _ => default
+
+/-- The potential outcome `Y^g` under the dynamic regime `g`: the static potential outcome under
+the counterfactual treatment path `ā^g(ω)` (Hernán and Robins, Technical Point 19.2). -/
+def YpoDyn [Inhabited 𝒜] (g : DynamicRegime K 𝒜 𝓛) (ω : Ω) : ℝ :=
+  M.Ypo (M.cfPath g ω) ω
+
+variable {M}
+
+/-- Under nonanticipation, two candidate paths that agree before time `n` give steps that agree
+up to time `n`. -/
+theorem cfStep_agree (hna : M.Nonanticipating) (g : DynamicRegime K 𝒜 𝓛) (ω : Ω)
+    {a a' : Fin K → 𝒜} {n : ℕ} (h : ∀ s : Fin K, (s : ℕ) < n → a s = a' s) (t : Fin K)
+    (ht : (t : ℕ) < n + 1) : M.cfStep g ω a t = M.cfStep g ω a' t := by
+  refine g.path_congr t fun s hs => ?_
+  rw [hna a a' s fun r hr => h r ?_]
+  have := Fin.lt_def.1 hr
+  have := Fin.le_def.1 hs
+  omega
+
+/-- Under nonanticipation, the `n`-th and the `(n + 1)`-th iterates of `cfStep` agree before
+time `n`. -/
+theorem cfStep_iterate_agree (hna : M.Nonanticipating) (g : DynamicRegime K 𝒜 𝓛) (ω : Ω)
+    (x : Fin K → 𝒜) :
+    ∀ n (t : Fin K), (t : ℕ) < n → (M.cfStep g ω)^[n] x t = (M.cfStep g ω)^[n + 1] x t
+  | 0, _, ht => absurd ht (Nat.not_lt_zero _)
+  | n + 1, t, ht => by
+    rw [Function.iterate_succ_apply', Function.iterate_succ_apply']
+    exact cfStep_agree hna g ω (cfStep_iterate_agree hna g ω x n) t ht
+
+/-- **The counterfactual path is a fixed point**: under nonanticipation,
+`ā^g(ω) = g.path (L^{ā^g(ω)}(ω))`. -/
+theorem cfPath_spec [Inhabited 𝒜] (hna : M.Nonanticipating) (g : DynamicRegime K 𝒜 𝓛)
+    (ω : Ω) : M.cfStep g ω (M.cfPath g ω) = M.cfPath g ω := by
+  funext t
+  rw [cfPath, ← Function.iterate_succ_apply' (M.cfStep g ω)]
+  exact (cfStep_iterate_agree hna g ω _ K t t.isLt).symm
+
+/-- **Uniqueness of the counterfactual path**: under nonanticipation, two fixed points of
+`cfStep` are equal. -/
+theorem eq_of_cfStep_fixed (hna : M.Nonanticipating) (g : DynamicRegime K 𝒜 𝓛) (ω : Ω)
+    {a b : Fin K → 𝒜} (ha : M.cfStep g ω a = a) (hb : M.cfStep g ω b = b) : a = b := by
+  suffices ∀ n (t : Fin K), (t : ℕ) < n → a t = b t from funext fun t => this K t t.isLt
+  intro n
+  induction n with
+  | zero => exact fun t ht => absurd ht (Nat.not_lt_zero _)
+  | succ n ih =>
+    intro t ht
+    rw [← ha, ← hb]
+    exact cfStep_agree hna g ω ih t ht
+
+/-- Under nonanticipation, every fixed point of `cfStep` is the counterfactual path. -/
+theorem cfPath_eq_of_fixed [Inhabited 𝒜] (hna : M.Nonanticipating) (g : DynamicRegime K 𝒜 𝓛)
+    (ω : Ω) {b : Fin K → 𝒜} (hb : M.cfStep g ω b = b) : M.cfPath g ω = b :=
+  eq_of_cfStep_fixed hna g ω (cfPath_spec hna g ω) hb
+
+/-- **Consistency of the counterfactual path on followers**: under nonanticipation and covariate
+consistency, an individual who follows `g` has counterfactual treatment path equal to the
+observed one. -/
+theorem cfPath_eq_of_follows [Inhabited 𝒜] (hna : M.Nonanticipating)
+    (hcov : M.CovariateConsistent) (g : DynamicRegime K 𝒜 𝓛) {ω : Ω}
+    (h : g.Follows M.A M.L ω) : M.cfPath g ω = fun t => M.A t ω := by
+  refine cfPath_eq_of_fixed hna g ω (funext fun t => ?_)
+  have hL : (fun s => M.Lpo (fun t => M.A t ω) s ω) = fun s => M.L s ω :=
+    funext fun s => (hcov _ ω s fun _ _ => rfl).symm
+  rw [cfStep, hL]
+  exact ((g.follows_iff M.A M.L ω).1 h t).symm
+
+/-- **Consistency for a dynamic regime** (Hernán and Robins, Technical Point 19.2), derived from
+the model: under nonanticipation and consistency (`Model.Consistent`), an individual who follows
+`g` has observed outcome equal to the potential outcome `Y^g`. -/
+theorem Y_eq_YpoDyn_of_follows [Inhabited 𝒜] (hna : M.Nonanticipating) (hcons : M.Consistent)
+    (g : DynamicRegime K 𝒜 𝓛) {ω : Ω} (h : g.Follows M.A M.L ω) : M.Y ω = M.YpoDyn g ω := by
+  rw [YpoDyn, cfPath_eq_of_follows hna hcons.2 g h]
+  exact hcons.1 _ ω fun _ => rfl
+
+/-- For a static regime seen as a dynamic regime, the potential outcome `Y^g` is the static
+potential outcome. -/
+theorem YpoDyn_ofStatic [Inhabited 𝒜] (a : Fin K → 𝒜) :
+    M.YpoDyn (DynamicRegime.ofStatic a) = M.Ypo a := by
+  funext ω
+  have : M.cfPath (DynamicRegime.ofStatic a) ω = a := by
+    cases K with
+    | zero => exact funext fun t => t.elim0
+    | succ K =>
+      rw [cfPath, Function.iterate_succ_apply']
+      exact DynamicRegime.path_ofStatic a _
+  rw [YpoDyn, this]
+
+/-- **The dynamic g-formula in a model** (Hernán and Robins, Technical Point 21.1). In a
+longitudinal model, assume nonanticipation, consistency, sequential exchangeability for the
+potential outcome `Y^g` along `g` (mean independence form) and sequential positivity for `g`.
+Then `E[Y^g] = gFormulaDyn p A L g Y`. Consistency along `g` is derived
+(`Y_eq_YpoDyn_of_follows`), not assumed. -/
+theorem expect_YpoDyn_eq_gFormulaDyn [Inhabited 𝒜] [DecidableEq Ω] [DecidableEq 𝒜]
+    [Fintype 𝓛] [DecidableEq 𝓛] (hna : M.Nonanticipating) (hcons : M.Consistent)
+    (g : DynamicRegime K 𝒜 𝓛) (hex : SeqExchangeableDyn M.p M.A M.L g (M.YpoDyn g))
+    (hpos : SeqPositiveDyn M.p M.A M.L g) :
+    M.p.expect (M.YpoDyn g) = gFormulaDyn M.p M.A M.L g M.Y :=
+  (expect_eq_gFormulaDyn M.p M.A M.L M.Y g _
+    (fun _ h => Y_eq_YpoDyn_of_follows hna hcons g h) hex hpos).1
+
+/-- **At two time points the potential outcome under a dynamic regime is `dynamicOutcome2`.** On
+the model built from two time point data, `Y^g` is the potential outcome `dynamicOutcome2` of
+`TwoTime.lean`. -/
+theorem ofTwoTime_YpoDyn [Inhabited 𝒜] (p : FiniteDist Ω) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜)
+    (L1 : Ω → 𝓛) (A1 : Ω → 𝒜) (Y : Ω → ℝ) (Ypo : 𝒜 → 𝒜 → Ω → ℝ) (L1po : 𝒜 → Ω → 𝓛)
+    (g : DynamicRegime 2 𝒜 𝓛) :
+    (ofTwoTime p L0 A0 L1 A1 Y Ypo L1po).YpoDyn g = dynamicOutcome2 L0 L1po Ypo g := by
+  funext ω
+  set b : Fin 2 → 𝒜 :=
+    ![g.first (L0 ω), g.second (L0 ω) (L1po (g.first (L0 ω)) ω) (g.first (L0 ω))] with hb
+  have hfix : (ofTwoTime p L0 A0 L1 A1 Y Ypo L1po).cfStep g ω b = b := by
+    rw [cfStep, DynamicRegime.path_two, hb]
+    rfl
+  rw [YpoDyn, cfPath_eq_of_fixed (ofTwoTime_nonanticipating p L0 A0 L1 A1 Y Ypo L1po) g ω hfix,
+    hb]
+  rfl
+
+end Model
+
+end PotentialOutcome
+
 namespace DynamicExample
 
 /-! ### A dynamic regime that beats every static regime -/
@@ -546,12 +717,62 @@ theorem gFormula_static (a : Fin 2 → Bool) : gFormula p A L a Y = 1 / 2 := by
     univ_inter, filter_filter, sum_filter, Fintype.sum_prod_type, Fintype.sum_bool]
   cases a 0 <;> cases a 1 <;> norm_num [p, A, L, A0, A1, L0, L1, Y]
 
-/-- The dynamic g-formula for `g` equals `1`. -/
+/-- The potential outcome under `g` is `1` for every individual: the second treatment prescribed
+by `g` is the covariate at time `1`. -/
+theorem dynamicOutcome_eq_one : dynamicOutcome2 L0 L1po Ypo g = fun _ => 1 := by
+  funext ω
+  simp [dynamicOutcome2, Ypo, L1po, g_second]
+
+/-- Consistency along `g`: an individual who follows `g` has observed outcome `Y = Y^g`. -/
+theorem consistent_g (ω : Ω) (h : g.Follows A L ω) : Y ω = dynamicOutcome2 L0 L1po Ypo g ω := by
+  rw [DynamicRegime.follows_two_iff] at h
+  exact dynamicOutcome2_consistent g (fun ω a0 a1 h0 h1 => outcome_consistent ω a0 a1 h0 h1)
+    (fun _ _ _ => rfl) ω h.1 h.2
+
+/-- Sequential exchangeability for `Y^g` along `g` holds: `Y^g` is constant. -/
+theorem seqExchangeableDyn_g : SeqExchangeableDyn p A L g (dynamicOutcome2 L0 L1po Ypo g) := by
+  rw [dynamicOutcome_eq_one]
+  exact fun _ _ => meanIndepOn_const _ _ _ 1
+
+/-- Sequential positivity for `g` holds: both treatments are randomized with probability `1/2`. -/
+theorem seqPositiveDyn_g : SeqPositiveDyn p A L g := by
+  rw [seqPositiveDyn_two_iff]
+  refine ⟨fun l0 h => ?_, fun l0 l1 h => ?_⟩
+  · revert h
+    cases l0 <;> norm_num [A, L, wmass, ev, sum_filter, Fintype.sum_prod_type, p, A0, L0,
+      g_first]
+    exact ⟨(false, false, false), by simp⟩
+  · revert h
+    cases l0 <;> cases l1 <;> norm_num [A, L, wmass, ev, sum_filter, Fintype.sum_prod_type, p,
+      A0, A1, L0, L1, g_first, g_second]
+    · exact fun _ => ⟨(false, false, false), by simp⟩
+    · exact fun _ => ⟨(false, true, true), by simp⟩
+
+/-- The dynamic g-formula for `g` equals `1`, obtained from the identification theorem
+`expect_eq_gFormulaDyn` (whose three hypotheses hold here) and `E[Y^g] = 1`. -/
 theorem gFormulaDyn_g : gFormulaDyn p A L g Y = 1 := by
-  rw [gFormulaDyn_two_eq_gFormula2]
-  simp only [gFormula2, condMean, condProb, wsum, wmass, ev, filter_inter, inter_filter,
-    univ_inter, filter_filter, sum_filter, Fintype.sum_prod_type, Fintype.sum_bool]
-  norm_num [p, A, L, A0, A1, L0, L1, Y, g_first, g_second]
+  rw [← (expect_eq_gFormulaDyn p A L Y g _ consistent_g seqExchangeableDyn_g seqPositiveDyn_g).1,
+    expect_dynamic]
+
+/-- The trial as a longitudinal model with two time points. -/
+noncomputable def model : Model Ω 2 Bool Bool := Model.ofTwoTime p L0 A0 L1 A1 Y Ypo L1po
+
+/-- **The dynamic g-formula on the model.** In the model of the trial, nonanticipation and
+consistency hold, the model-level potential outcome `Y^g` is `dynamicOutcome2`, and
+`E[Y^g] = gFormulaDyn p A L g Y = 1` by `Model.expect_YpoDyn_eq_gFormulaDyn`. -/
+theorem model_expect_YpoDyn :
+    model.YpoDyn g = dynamicOutcome2 L0 L1po Ypo g ∧
+      model.p.expect (model.YpoDyn g) = gFormulaDyn model.p model.A model.L g model.Y ∧
+      model.p.expect (model.YpoDyn g) = 1 := by
+  have hY : model.YpoDyn g = dynamicOutcome2 L0 L1po Ypo g := Model.ofTwoTime_YpoDyn ..
+  have hcons : model.Consistent :=
+    ⟨(Model.ofTwoTime_outcomeConsistent_iff p L0 A0 L1 A1 Y Ypo L1po).2
+      fun ω a0 a1 h0 h1 => outcome_consistent ω a0 a1 h0 h1,
+      (Model.ofTwoTime_covariateConsistent_iff p L0 A0 L1 A1 Y Ypo L1po).2 fun _ _ _ => rfl⟩
+  have hna : model.Nonanticipating := Model.ofTwoTime_nonanticipating p L0 A0 L1 A1 Y Ypo L1po
+  have hid := Model.expect_YpoDyn_eq_gFormulaDyn hna hcons g
+    (by rw [hY]; exact seqExchangeableDyn_g) seqPositiveDyn_g
+  exact ⟨hY, hid, by rw [hY]; exact expect_dynamic⟩
 
 /-- **A dynamic regime beats every static regime.** In this sequentially randomized trial, the
 dynamic regime `g` ("treat at time `1` if and only if the covariate is `true`") has
@@ -574,6 +795,52 @@ theorem g_optimal (g' : DynamicRegime 2 Bool Bool) :
   split_ifs <;> norm_num
 
 end DynamicExample
+
+namespace PositivityFailureExample
+
+/-! ### Without positivity the dynamic g-formula fails -/
+
+/-- The uniform distribution on the two values of a fair binary covariate. -/
+noncomputable def p : FiniteDist Bool where
+  mass _ := 1 / 2
+  nonneg _ := by norm_num
+  sum_eq_one := by norm_num
+
+/-- The covariate at the single time point: the sample point itself. -/
+def L : Fin 1 → Bool → Bool := fun _ ω => ω
+
+/-- The treatment: nobody is treated. -/
+def A : Fin 1 → Bool → Bool := fun _ _ => false
+
+/-- The regime "treat if and only if the covariate is `true`". -/
+def g : DynamicRegime 1 Bool Bool := fun t l _ => l (Fin.last t)
+
+/-- The observed outcome, equal to `1`. -/
+def Y : Bool → ℝ := fun _ => 1
+
+/-- The potential outcome under `g`, equal to `1`. -/
+def Yg : Bool → ℝ := fun _ => 1
+
+/-- **Positivity cannot be dropped from the dynamic g-formula.** With one time point, a fair
+binary covariate `L`, no treated individual and the regime `g(L) = L`, consistency along `g` and
+sequential exchangeability for `Y^g = 1` hold but sequential positivity fails (at `L = true` the
+regime prescribes a treatment nobody receives); the totalized g-formula is `1/2` while
+`E[Y^g] = 1`. -/
+theorem not_seqPositive_and_gFormulaDyn_ne :
+    (∀ ω, g.Follows A L ω → Y ω = Yg ω) ∧ SeqExchangeableDyn p A L g Yg ∧
+      ¬ SeqPositiveDyn p A L g ∧ p.expect Yg = 1 ∧ gFormulaDyn p A L g Y = 1 / 2 := by
+  refine ⟨fun _ _ => rfl, fun _ _ => meanIndepOn_const _ _ _ 1, fun h => ?_, p.expect_const 1, ?_⟩
+  · have := h (fun _ => true) 0
+    revert this
+    norm_num [histL, hist, wmass, ev, sum_filter, p, A, L, g, DynamicRegime.path_zero,
+      DynamicRegime.headRule]
+    decide
+  · rw [gFormulaDyn_eq_iceGFormulaDyn]
+    simp only [iceGFormulaDyn, condProb, condMean, wmass, wsum, restrict, ev, filter_inter,
+      inter_filter, univ_inter, filter_filter, sum_filter, Fintype.sum_bool]
+    norm_num [p, A, L, g, Y, DynamicRegime.headRule]
+
+end PositivityFailureExample
 
 end Longitudinal
 

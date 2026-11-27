@@ -6,6 +6,7 @@ Authors: Adam R Sophie
 module
 
 public import CausalInference.Basic.FiniteDistribution
+public import CausalInference.SCM.Counterfactuals
 
 /-!
 # Longitudinal causal inference: finite setting, histories and regimes
@@ -34,6 +35,12 @@ under the missing normalization.
   of the event `t`, in the division free form `E[1_{s ∩ t} f] P(s) = E[1_s f] P(s ∩ t)`. For a
   nonnegative `m`: when `P(s ∩ t) > 0` this says exactly `E[f | s ∩ t] = E[f | s]`
   (`Longitudinal.meanIndepOn_iff_condMean_eq`); when `P(s ∩ t) = 0` it holds trivially.
+* `Longitudinal.condProb_eq_prob_cond`, `Longitudinal.condMean_eq_expect_cond`: for a finite
+  probability distribution and an event of positive probability, `condProb` and `condMean` are
+  the probability and the mean under the conditional distribution `FiniteDist.cond`.
+* `Longitudinal.condMean_eq_sum_condProb_mul`, `Longitudinal.condMean_eq_sum_condProb_mul_of_pos`:
+  the law of total expectation, the second summing only over the cells of positive mass, so
+  that every displayed conditional mean is a genuine conditional mean.
 
 ## Longitudinal models
 
@@ -153,6 +160,21 @@ theorem wsum_congr {s : Finset Ω} {f g : Ω → ℝ} (h : ∀ ω ∈ s, f ω = 
     wsum m s f = wsum m s g :=
   sum_congr rfl fun ω hω => by rw [h ω hω]
 
+/-- Weighted sums agree when the two functions agree at every point of the event that carries
+nonzero mass. -/
+theorem wsum_congr_of_ne_zero {s : Finset Ω} {f g : Ω → ℝ} (h : ∀ ω ∈ s, m ω ≠ 0 → f ω = g ω) :
+    wsum m s f = wsum m s g :=
+  sum_congr rfl fun ω hω => by
+    by_cases h0 : m ω = 0
+    · rw [h0, zero_mul, zero_mul]
+    · rw [h ω hω h0]
+
+/-- Mean independence depends on the variable only at the points of nonzero mass. -/
+theorem meanIndepOn_congr_of_ne_zero [DecidableEq Ω] {s t : Finset Ω} {f g : Ω → ℝ}
+    (h : ∀ ω, m ω ≠ 0 → f ω = g ω) : MeanIndepOn m s t f ↔ MeanIndepOn m s t g := by
+  rw [MeanIndepOn, MeanIndepOn, wsum_congr_of_ne_zero fun ω _ => h ω,
+    wsum_congr_of_ne_zero (s := s) fun ω _ => h ω]
+
 /-- The weighted sum of a constant. -/
 theorem wsum_const (s : Finset Ω) (c : ℝ) : wsum m s (fun _ => c) = wmass m s * c := by
   simp [wsum, wmass, sum_mul]
@@ -195,6 +217,60 @@ theorem condMean_eq_sum_condProb_mul [Fintype Ω] [DecidableEq Ω] (hm : ∀ ω,
     simp
   · rw [condProb, condMean]
     field_simp
+
+/-- **The law of total expectation over the cells of positive mass.** For a nonnegative mass
+function, a finite-valued variable `X` and an event `s` of positive mass,
+`E[f | s] = Σ_{x : P(s, X = x) > 0} P(X = x | s) E[f | s, X = x]`. Every conditional mean in the
+sum is conditioning on an event of positive mass. -/
+theorem condMean_eq_sum_condProb_mul_of_pos [Fintype Ω] [DecidableEq Ω] (hm : ∀ ω, 0 ≤ m ω)
+    {α : Type*} [Fintype α] [DecidableEq α] {s : Finset Ω} (hs : 0 < wmass m s) (X : Ω → α)
+    (f : Ω → ℝ) :
+    condMean m s f = ∑ x ∈ univ.filter (fun x => 0 < wmass m (s ∩ ev X x)),
+      condProb m s (ev X x) * condMean m (s ∩ ev X x) f := by
+  rw [condMean_eq_sum_condProb_mul hm hs X f, sum_filter_of_ne]
+  intro x _ hx
+  by_contra h
+  have h0 : wmass m (s ∩ ev X x) = 0 := le_antisymm (not_lt.1 h) (wmass_nonneg hm _)
+  exact hx (by rw [condProb_eq_zero_of_wmass_inter_eq_zero hs h0, zero_mul])
+
+/-- The mass of `s` times the conditional probability `P(u | s)` is the mass of `s ∩ u`, for a
+nonnegative mass function. When `s` has zero mass both sides vanish: the left side by its factor
+`P(s) = 0`, the right side by monotonicity. -/
+theorem wmass_mul_condProb [DecidableEq Ω] (hm : ∀ ω, 0 ≤ m ω) (s u : Finset Ω) :
+    wmass m s * condProb m s u = wmass m (s ∩ u) := by
+  rcases (wmass_nonneg hm s).eq_or_lt with h | h
+  · rw [← h, zero_mul]
+    exact le_antisymm (wmass_nonneg hm _) ((wmass_mono hm inter_subset_left).trans_eq h.symm)
+  · rw [condProb]; field_simp
+
+/-- An event containing a point of positive mass has positive mass, under a nonnegative mass
+function. -/
+theorem wmass_pos_of_mem (hm : ∀ ω, 0 ≤ m ω) {s : Finset Ω} {ω : Ω} (hω : ω ∈ s)
+    (h : 0 < m ω) : 0 < wmass m s :=
+  h.trans_le (single_le_sum (fun ω _ => hm ω) hω)
+
+/-- For a finite probability distribution `p` and an event `s` of positive probability, the
+conditional probability `condProb p s t` is the probability of `t` under the conditional
+distribution `p.cond (· ∈ s)`. -/
+theorem condProb_eq_prob_cond [Fintype Ω] [DecidableEq Ω] (p : FiniteDist Ω) (s t : Finset Ω)
+    (h : 0 < p.probOf (· ∈ s)) :
+    condProb p s t = (p.cond (· ∈ s) h).prob t := by
+  have hs : p.probOf (· ∈ s) = wmass p s := by
+    simp [FiniteDist.probOf, FiniteDist.prob, wmass]
+  simp only [FiniteDist.prob, FiniteDist.cond]
+  rw [sum_ite_mem, ← sum_div, hs, condProb, wmass, inter_comm]
+
+/-- For a finite probability distribution `p` and an event `s` of positive probability, the
+conditional mean `condMean p s f` is the mean of `f` under the conditional distribution
+`p.cond (· ∈ s)`. -/
+theorem condMean_eq_expect_cond [Fintype Ω] [DecidableEq Ω] (p : FiniteDist Ω) (s : Finset Ω)
+    (f : Ω → ℝ) (h : 0 < p.probOf (· ∈ s)) :
+    condMean p s f = (p.cond (· ∈ s) h).expect f := by
+  have hs : p.probOf (· ∈ s) = wmass p s := by
+    simp [FiniteDist.probOf, FiniteDist.prob, wmass]
+  simp only [FiniteDist.expect, FiniteDist.cond, ite_mul, zero_mul]
+  rw [← sum_filter, filter_mem_eq_inter, univ_inter, hs, condMean, wsum, sum_div]
+  exact sum_congr rfl fun ω _ => by ring
 
 /-- The cross multiplied mean independence is equality of conditional means when the smaller
 event has positive mass. -/

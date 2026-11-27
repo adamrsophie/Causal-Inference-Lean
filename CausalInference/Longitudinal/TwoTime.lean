@@ -24,7 +24,8 @@ taking the values prescribed by a dynamic regime gives the dynamic g-formula
 
 * `Longitudinal.gFormula2 m L0 A0 L1 A1 d0 d1 Y`: the two time point g-formula functional
   `Σ_{l0, l1} E[Y | L0 = l0, A0 = d0 l0, L1 = l1, A1 = d1 l0 l1]
-    · P(L1 = l1 | L0 = l0, A0 = d0 l0) · P(L0 = l0)`.
+    · P(L1 = l1 | L0 = l0, A0 = d0 l0) · wmass m (ev L0 l0)`, with the raw mass of the baseline
+  cell as weight (the probability `P(L0 = l0)` when `m` is normalized).
 * `Longitudinal.SeqExchangeable2`: sequential exchangeability at two time points, mean
   independence form, for a target variable `Z` (a potential outcome).
 * `Longitudinal.SeqPositive2`: sequential positivity at two time points.
@@ -70,7 +71,12 @@ variable {Ω : Type*} [Fintype Ω] [DecidableEq Ω] {𝒜 𝓛 : Type*} [Decidab
 /-- The two time point g-formula functional under the mass function `m`, with treatment value
 `d0 l0` at time `0` and `d1 l0 l1` at time `1`:
 `Σ_{l0, l1} E[Y | L0 = l0, A0 = d0 l0, L1 = l1, A1 = d1 l0 l1]
-  · P(L1 = l1 | L0 = l0, A0 = d0 l0) · P(L0 = l0)`. -/
+  · P(L1 = l1 | L0 = l0, A0 = d0 l0) · wmass m (ev L0 l0)`.
+The baseline weight is the raw mass of the cell `L0 = l0`, not a conditional probability, so the
+functional is unnormalized: it scales with the total mass of `m` (one atom of mass `2` with
+`Y = 1` gives the value `2`). It is the probability-weighted mean of the textbook g-formula,
+with the weight `P(L0 = l0)`, when `m` is a probability mass function. The conditional means
+and conditional probabilities are ratios read as `0` when their denominator vanishes. -/
 noncomputable def gFormula2 (m : Ω → ℝ) (L0 : Ω → 𝓛) (A0 : Ω → 𝒜) (L1 : Ω → 𝓛) (A1 : Ω → 𝒜)
     (d0 : 𝓛 → 𝒜) (d1 : 𝓛 → 𝓛 → 𝒜) (Y : Ω → ℝ) : ℝ :=
   ∑ l0, ∑ l1,
