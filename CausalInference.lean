@@ -146,3 +146,4 @@ public import CausalInference.Surrogacy.Criteria
 public import CausalInference.Surrogacy.Counterexamples
 public import CausalInference.Survival.MultiState
 public import CausalInference.Survival.PostProgression
+public import CausalInference.Survival.IPCW
