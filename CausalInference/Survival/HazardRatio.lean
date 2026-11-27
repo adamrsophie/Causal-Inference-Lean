@@ -9,6 +9,8 @@ public import CausalInference.Survival.Comparison
 public import CausalInference.Bias.HazardRatio
 public import CausalInference.Measures.Collapsibility
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.MeasureTheory.Function.Floor
+public import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
 
 /-!
 # Proportional hazards, non-collapsibility of the hazard ratio, and duration of effect
@@ -27,32 +29,54 @@ mixtures of exponential laws are in `CausalInference.Bias.HazardMixture`.
   power relation between the survival curves is proportionality of the interval cumulative
   hazards `-log (1 - h)`, not a constant ratio of the hazards `h`.
   `one_sub_eq_rpow_iff_cloglog` restates it on the complementary log-log scale where
-  `0 < h < 1`. `PropHazardsExample.constant_hazardRatio_no_power`: a hazard ratio equal to
-  `1/2` at every time with positive reference hazard, and no exponent `c` at all with
-  `S₁ = S₀ ^ c`. `PropHazardsExample.logLogistic_hazardRatio_varies`: two log-logistic laws
-  with acceleration factor `2`, sampled on the grid, have hazard ratio `4/3` at time `1` and
-  `6/5` at time `2` and no exponent `c`: an accelerated failure time family without
-  proportional hazards.
+  `0 < h < 1`. `PropHazardsExample.constant_hazardRatio_no_power`: two laws on `{1, 2, 3}`
+  with hazard ratio `1/2` at times `1` and `2` (every time `m ≤ 2` with positive reference
+  hazard), and no exponent `c` with `S₁ m = S₀ m ^ c` for `m ≤ 2`; at time `3` both hazards are
+  `1`, since the laws put all remaining mass there.
+  `PropHazardsExample.logLogistic_fullGrid`: the log-logistic laws `S₀(k) = 1 / (1 + k)` and
+  `S₁(k) = 1 / (1 + 2 k)` on the full grid `k : ℕ` (`llTime_survival`) have hazard ratio
+  `2 (k + 1) / (1 + 2 k)` at every `k ≥ 1`, which is `4/3` at time `1`, `6/5` at time `2` and
+  tends to `1`, and have no exponent `c`: an accelerated failure time family without
+  proportional hazards. `llTime_hazardRatio`, `tendsto_llTime_hazardRatio` and
+  `llTime_hazardRatio_ne` give the closed form `φ (k + 1) / (1 + φ k)`, its limit `1` and its
+  nonconstancy for every acceleration factor `φ > 0`, `φ ≠ 1`.
+  `PropHazardsExample.logLogistic_hazardRatio_varies` is the version with three-point laws
+  that agree with these through time `2`.
 * Duration of treatment effect. `survival_mul_eq_of_hazard_eq`: if the hazards agree after
   `t₀`, then `S₁ k * S₀ t₀ = S₀ k * S₁ t₀` for `k ≥ t₀` (the survival ratio is frozen at its
   value at `t₀`; ratio form `survival_div_eq_of_hazard_eq`). `sum_survival_sub_of_hazard_eq`:
-  the area between the curves over `t₀, …, K` is `(S₁ t₀ / S₀ t₀ - 1) ∑ S₀`.
+  the area between the curves over `t₀, …, K` is `(S₁ t₀ / S₀ t₀ - 1) ∑ S₀`;
+  `hasSum_survival_sub_of_hazard_eq` is the unbounded horizon version under summable reference
+  survival (the lifetime mean gain accrued from `t₀` on).
   `survival_mul_le_of_hazard_le` and `survival_le_of_maintained`: a maintained effect (hazard
-  at most the reference after `t₀`) gives at least the survival of a stopped one.
+  at most the reference after `t₀`) gives at least the survival of a stopped one;
+  `tsum_survival_lt_of_maintained`: strictly larger lifetime survival when the maintained
+  hazard is strictly lower in some period reached with positive probability.
   `PropHazardsExample.duration_not_identified`: two treated laws that agree up to `t₀ = 1` and
   differ afterwards, so follow-up to `t₀` does not determine the duration of the effect.
 * Non-collapsibility. With a common stratum hazard ratio `ψ` at both periods and a frailty
-  independent of treatment (`phRisk`): `hazard1_phRisk` (the marginal period `1` hazard ratio
-  is `ψ`), `stratumHazard2_phRisk` (the stratum period `2` hazard ratios are `ψ`),
-  `hazard2_phRisk_eq_iff` (the marginal period `2` hazard ratio equals `ψ` if and only if
-  `ψ = 1`, or the frailty leaves the period `1` risk unchanged, or it leaves the period `2`
-  risk unchanged), and `hazard2_phRisk_isCollapsible_iff` (the same condition characterizes
-  `EffectMeasure.IsCollapsible` for the period `2` hazard ratio).
+  independent of treatment (`phRisk`): `hazard1_phRisk` (`h₁(1) = ψ h₀(1)`),
+  `stratumHazard2_phRisk` (`h₁(2 | u) = ψ h₀(2 | u)` in each stratum), and
+  `hazard2_phRisk_eq_iff` (`h₁(2) = ψ h₀(2)` if and only if `ψ = 1`, or the frailty leaves the
+  period `1` risk unchanged, or it leaves the period `2` risk unchanged). These are
+  multiplicative identities, true also at a zero reference hazard; the hazard ratio forms with
+  positive reference hazards are `hazard1_phRisk_ratio`, `stratumHazard2_phRisk_ratio` and
+  `hazard2_phRisk_ratio_eq_iff`. `hazard2_phRisk_isCollapsible_iff`: the same condition
+  characterizes `EffectMeasure.IsCollapsible` for the period `2` hazard ratio.
+  `frailtyHazard2_eq_iff`: with a finite frailty, the period `2` identity holds if and only if
+  `ψ = 1` or the two period risks have zero covariance under the frailty law
+  (`frailtyCov_bool` recovers the binary exceptions, `PropHazardsExample.zeroCov_example`
+  shows they do not extend to three levels).
   `PropHazardsExample.noncollapsible_example`: stratum hazard ratio `1/2` at both periods,
   marginal hazard ratio `1/2` at period `1` and `329/578` at period `2`.
+  `PropHazardsExample.groupedPH_noncollapsible`: on the survival-power scale, a common
+  conditional power `2` in each frailty stratum, with marginal period `1` survivals `5/16` and
+  `1/2`, and `5/16 ≠ (1/2) ^ 2`.
 * Scale-dependent effect modification. `cumHazard` (`H = -log S`), `cumHazard_succ_sub`
   (its increment is `-log (1 - h)`), and `cloglogRatio_eq_iff`: in a model additive in two
-  binary covariates on the log cumulative hazard scale with time-varying coefficients, the
+  binary covariates on the log cumulative hazard scale with time-varying coefficients (stated
+  as a multiplicative model for the cumulative hazard; `log_multiplicative_cumHazard` gives the
+  log-linear reading under positive multipliers), the
   grouped-time hazard ratio for one covariate over an interval does not depend on the other
   if and only if one of the two coefficients is constant over that interval
   (`incrementRatio_eq_iff` is the algebra). `PropHazardsExample.scaleDependence_example`: four
@@ -63,8 +87,9 @@ The notion of hazard ratio differs between the sections. The power relation sect
 that in discrete time proportional hazards in the sense of `S₁ = S₀ ^ c` is not a constant
 ratio of the hazards `h`. The non-collapsibility section uses the ratio of the discrete
 hazards themselves (`hazardRatio`, `hazard1`, `hazard2`): a common stratum ratio `ψ` of the
-period risks. Its period `1` collapsibility holds because the period `1` hazard is a risk; the
-corresponding statement for a common power `c` on the survival scale is not treated.
+period risks. Its period `1` collapsibility holds because the period `1` hazard is a risk; for
+a common power `c` on the survival scale even period `1` is not collapsible
+(`PropHazardsExample.groupedPH_noncollapsible`).
 
 ## Sources
 
@@ -74,14 +99,16 @@ corresponding statement for a common power `c` on the survival scale is not trea
   treatment effect assumption should be justified) and Section 4.1.3 (without a stated
   duration of effect the trial hazard ratio is implicitly assumed to last for the whole model
   horizon).
-* NICE DSU Technical Support Document 19, H. Woods, E. Sideris, S. Palmer, N. Latimer,
+* NICE DSU Technical Support Document 19, B. Woods, E. Sideris, S. Palmer, N. Latimer,
   M. Soares (2017), on partitioned survival analysis, Section 3.2.5 (equal hazards between
   arms from a time point on).
 * NICE DSU Technical Support Document 21, M. J. Rutherford, P. C. Lambert, M. J. Sweeting,
   B. Pennington, M. J. Crowther, K. R. Abrams, N. R. Latimer, *Flexible methods for survival
   analysis* (2020), Section 3.2.3 (with multiple time-dependent effects the hazard ratio for one
-  covariate depends on another without an interaction) and Section 5.2.1, Equation 17 (data
-  simulated under proportional hazards conditional on a frailty `Z`).
+  covariate depends on another without an interaction) and Section 5.2.1 (data simulated with
+  disease-specific survival `S_d(t) = S_d0(t) ^ exp(Z β)` conditional on a frailty `Z`, the
+  display immediately above Equation 17; Equation 17 itself gives the baseline Weibull
+  mixture `S_d0`).
 * M. A. Hernán and J. M. Robins, *Causal Inference: What If* (2020), Fine Point 4.3
   (collapsibility) and Technical Point 8.1 (the selection bias built into hazard ratios).
 -/
@@ -412,6 +439,82 @@ theorem survival_le_of_maintained {Ω Ω' : Type*} [MeasurableSpace Ω] [Measura
   rw [← heq] at l
   exact le_of_mul_le_mul_right (by linarith) ht
 
+/-- **The lifetime survival gain after an effect that stops at `t₀`.** If the hazards of the two
+arms agree at every time `m > t₀` at which both arms have positive at-risk probability,
+`S₀ t₀ > 0`, and the reference survival is summable, then the gains `S₁ k - S₀ k`, `k ≥ t₀`, are
+summable with sum `(S₁ t₀ / S₀ t₀ - 1) * ∑_{k ≥ t₀} S₀ k`. Since `∑_k P(T > k)` is the mean of
+`T`, this is the gain in mean survival time accrued from `t₀` on over an unbounded horizon;
+`sum_survival_sub_of_hazard_eq` is the restricted version. -/
+theorem hasSum_survival_sub_of_hazard_eq (hT₀ : Measurable T₀) (hT₁ : Measurable T₁) {t₀ : ℕ}
+    (ht : 0 < survival μ₀ T₀ t₀)
+    (h : ∀ m, t₀ < m → 0 < atRisk μ₀ T₀ m → 0 < atRisk μ₁ T₁ m →
+      hazard μ₁ T₁ m = hazard μ₀ T₀ m)
+    (hsum : Summable (survival μ₀ T₀)) :
+    HasSum (fun k => survival μ₁ T₁ (t₀ + k) - survival μ₀ T₀ (t₀ + k))
+      ((survival μ₁ T₁ t₀ / survival μ₀ T₀ t₀ - 1) * ∑' k, survival μ₀ T₀ (t₀ + k)) := by
+  have hs : Summable (fun k => survival μ₀ T₀ (t₀ + k)) :=
+    ((summable_nat_add_iff t₀).2 hsum).congr fun k => by rw [add_comm]
+  convert hs.hasSum.mul_left (survival μ₁ T₁ t₀ / survival μ₀ T₀ t₀ - 1) using 1
+  funext k
+  have e := survival_mul_eq_of_hazard_eq hT₀ hT₁ (Nat.le_add_right t₀ k)
+    fun m h1 _ => h m h1
+  field_simp
+  linarith
+
+/-- **A maintained effect gives a strictly larger lifetime survival than a stopped one.** Under
+the hypotheses of `survival_le_of_maintained` at every horizon, with summable reference survival
+and summable survival of the maintained scenario, if in some period `m₁ > t₀` that the
+maintained scenario reaches with positive probability its hazard is strictly below the
+reference hazard, then `∑_{k ≥ t₀} S k < ∑_{k ≥ t₀} S' k` for the stopped law `S` and the
+maintained law `S'`. -/
+theorem tsum_survival_lt_of_maintained {Ω Ω' : Type*} [MeasurableSpace Ω] [MeasurableSpace Ω']
+    {ν : Measure Ω} {ν' : Measure Ω'} [IsProbabilityMeasure ν] [IsProbabilityMeasure ν']
+    {T : Ω → ℕ} {T' : Ω' → ℕ} (hT₀ : Measurable T₀) (hT : Measurable T) (hT' : Measurable T')
+    {t₀ : ℕ} (ht : 0 < survival μ₀ T₀ t₀) (heq : survival ν T t₀ = survival ν' T' t₀)
+    (hstop : ∀ m, t₀ < m → 0 < atRisk μ₀ T₀ m → 0 < atRisk ν T m →
+      hazard ν T m = hazard μ₀ T₀ m)
+    (hmaint : ∀ m, t₀ < m → 0 < atRisk μ₀ T₀ m → 0 < atRisk ν' T' m →
+      hazard ν' T' m ≤ hazard μ₀ T₀ m)
+    {m₁ : ℕ} (hm₁ : t₀ < m₁) (hr₁ : 0 < atRisk ν' T' m₁)
+    (hlt : hazard ν' T' m₁ < hazard μ₀ T₀ m₁)
+    (hsum : Summable (survival μ₀ T₀)) (hsum' : Summable (survival ν' T')) :
+    ∑' k, survival ν T (t₀ + k) < ∑' k, survival ν' T' (t₀ + k) := by
+  have hle : ∀ k, t₀ ≤ k → survival ν T k ≤ survival ν' T' k := fun k hk =>
+    survival_le_of_maintained hT₀ hT hT' hk ht heq (fun m h1 _ => hstop m h1)
+      (fun m h1 _ => hmaint m h1)
+  -- summability of the stopped scenario from the frozen ratio
+  have hd := hasSum_survival_sub_of_hazard_eq hT₀ hT ht hstop hsum
+  have hs₀ : Summable (fun k => survival μ₀ T₀ (t₀ + k)) :=
+    ((summable_nat_add_iff t₀).2 hsum).congr fun k => by rw [add_comm]
+  have hsS : Summable (fun k => survival ν T (t₀ + k)) :=
+    (hd.summable.add hs₀).congr fun k => by ring
+  have hsS' : Summable (fun k => survival ν' T' (t₀ + k)) :=
+    ((summable_nat_add_iff t₀).2 hsum').congr fun k => by rw [add_comm]
+  -- the strict inequality in period `m₁`
+  obtain ⟨k, rfl⟩ : ∃ k, m₁ = k + 1 := ⟨m₁ - 1, by omega⟩
+  have hS'k : 0 < survival ν' T' k := by rwa [atRisk_succ] at hr₁
+  have h0pos : 0 < atRisk μ₀ T₀ (k + 1) := by
+    rcases (atRisk_nonneg (μ := μ₀) (T := T₀) (k + 1)).eq_or_lt with h | h
+    · have : hazard μ₀ T₀ (k + 1) = 0 := by rw [hazard, ← h, div_zero]
+      linarith [hazard_nonneg (μ := ν') (T := T') (k + 1)]
+    · exact h
+  have hstrict : survival ν T (k + 1) < survival ν' T' (k + 1) := by
+    have hq₀ := one_sub_hazard_nonneg (μ := μ₀) (T := T₀) (k + 1)
+    have hstep : survival ν T (k + 1) ≤ survival ν' T' k * (1 - hazard μ₀ T₀ (k + 1)) := by
+      rw [survival_succ hT]
+      rcases (survival_nonneg (μ := ν) (T := T) k).eq_or_lt with h | h
+      · rw [← h, zero_mul]; positivity
+      · rw [hstop (k + 1) hm₁ h0pos (by rw [atRisk_succ]; exact h)]
+        exact mul_le_mul_of_nonneg_right (hle k (by omega)) hq₀
+    rw [survival_succ hT']
+    calc survival ν T (k + 1) ≤ survival ν' T' k * (1 - hazard μ₀ T₀ (k + 1)) := hstep
+      _ < survival ν' T' k * (1 - hazard ν' T' (k + 1)) :=
+          mul_lt_mul_of_pos_left (by linarith) hS'k
+  refine Summable.tsum_lt_tsum (i := k + 1 - t₀) (fun j => hle _ (Nat.le_add_right t₀ j)) ?_
+    hsS hsS'
+  rw [show t₀ + (k + 1 - t₀) = k + 1 by omega]
+  exact hstrict
+
 end PropHazards
 
 namespace PropHazards
@@ -429,7 +532,9 @@ def phRisk (ψ : ℝ) (c : Bool → ℝ) (a u : Bool) : ℝ := if a then ψ * c 
 variable (pA pU : Bool → ℝ) (ψ : ℝ) (b₁ b₂ : Bool → ℝ)
 
 /-- At period `1` the hazard ratio is collapsible: with a common stratum hazard ratio `ψ` and a
-frailty independent of treatment, the marginal period `1` hazards satisfy `h₁ = ψ * h₀`. -/
+frailty independent of treatment, the marginal period `1` hazards satisfy the multiplicative
+identity `h₁ = ψ * h₀`. It also holds when the reference hazard is zero, where no hazard ratio
+is defined; the ratio form with a positive reference hazard is `hazard1_phRisk_ratio`. -/
 theorem hazard1_phRisk (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u) :
     hazard1 pA pU (phRisk ψ b₁) true = ψ * hazard1 pA pU (phRisk ψ b₁) false := by
   have := hA true; have := hA false; have := hU true; have := hU false
@@ -437,7 +542,9 @@ theorem hazard1_phRisk (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u) :
     Bool.false_eq_true, ite_false]
   field_simp
 
-/-- Within each frailty stratum the period `2` hazard ratio is `ψ`. -/
+/-- Within each frailty stratum the period `2` hazards satisfy the multiplicative identity
+`h₁(2 | u) = ψ * h₀(2 | u)`. The ratio form, which needs a positive reference stratum hazard,
+is `stratumHazard2_phRisk_ratio`. -/
 theorem stratumHazard2_phRisk (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u)
     (hs : ∀ a u, 0 < 1 - phRisk ψ b₁ a u) (u : Bool) :
     stratumHazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) true u =
@@ -446,6 +553,27 @@ theorem stratumHazard2_phRisk (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u)
     have := hA a; have := hU u; have := hs a u; positivity
   rw [stratumHazard2_eq _ _ _ _ _ _ (h true), stratumHazard2_eq _ _ _ _ _ _ (h false)]
   simp [phRisk]
+
+/-- **The period `1` hazard ratio**, ratio form of `hazard1_phRisk`: when the reference
+period `1` hazard is positive, `h₁(1) / h₀(1) = ψ`. -/
+theorem hazard1_phRisk_ratio (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u)
+    (h0 : 0 < hazard1 pA pU (phRisk ψ b₁) false) :
+    hazard1 pA pU (phRisk ψ b₁) true / hazard1 pA pU (phRisk ψ b₁) false = ψ := by
+  rw [hazard1_phRisk pA pU ψ b₁ hA hU, mul_div_assoc, div_self h0.ne', mul_one]
+
+/-- **The stratum period `2` hazard ratio**, ratio form of `stratumHazard2_phRisk`: in a
+stratum `u` with positive untreated period `2` risk `b₂ u` (the reference stratum hazard), the
+stratum hazard ratio is `ψ`. -/
+theorem stratumHazard2_phRisk_ratio (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u)
+    (hs : ∀ a u, 0 < 1 - phRisk ψ b₁ a u) (u : Bool) (hb : 0 < b₂ u) :
+    stratumHazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) true u /
+      stratumHazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) false u = ψ := by
+  have h : pA false * pU u * (1 - phRisk ψ b₁ false u) ≠ 0 := by
+    have := hA false; have := hU u; have := hs false u; positivity
+  have e : stratumHazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) false u = b₂ u := by
+    rw [stratumHazard2_eq _ _ _ _ _ _ h]; simp [phRisk]
+  rw [stratumHazard2_phRisk pA pU ψ b₁ b₂ hA hU hs u, mul_div_assoc, e, div_self hb.ne',
+    mul_one]
 
 /-- The difference `h₁(2) - ψ h₀(2)` of the marginal period `2` hazards factors as
 `ψ (c₂ 1 - c₂ 0) (w 1 1 - w 0 1)`, with `w a 1` the share of the stratum `U = 1` among the
@@ -477,17 +605,23 @@ theorem frailtyWeight_phRisk_sub (h1 : surv1Mass pA pU (phRisk ψ b₁) true ≠
   simp only [surv1Mass, Fintype.sum_bool, phRisk, ite_true, Bool.false_eq_true, ite_false]
   ring
 
-/-- **Non-collapsibility of the hazard ratio** (NICE DSU TSD 21, Section 5.2.1, Equation 17,
-generates conditional proportional hazards given a frailty while the fitted models are
-marginal). In the two-period model of `CausalInference.Bias.HazardRatio` with a frailty `U`
-independent of treatment, positive arm and frailty probabilities, positive period `1` survival
-in every cell, and a common stratum hazard ratio `ψ > 0` at both periods (untreated stratum
-risks `c₁ u`, `c₂ u`; treated `ψ * c₁ u`, `ψ * c₂ u`), the marginal period `1` hazard ratio is
-`ψ` (`hazard1_phRisk`), and the marginal period `2` hazards satisfy `h₁(2) = ψ * h₀(2)` if and
-only if `ψ = 1` (no effect), or the frailty does not change the period `1` risk
-(`c₁ 1 = c₁ 0`), or it does not change the period `2` risk (`c₂ 1 = c₂ 0`). In every other
-case the marginal hazard ratio differs from the common stratum hazard ratio at period `2` and
-is not constant in time. -/
+/-- **Non-collapsibility of the hazard ratio, multiplicative form** (NICE DSU TSD 21, Section 5.2.1,
+simulates data with survival conditional on a frailty `Z` equal to a power of a baseline survival,
+the display immediately above Equation 17, while the fitted models are marginal; the conditional
+model here is the ratio of period risks, not the survival power, for which see
+`PropHazardsExample.groupedPH_noncollapsible`). In the two-period model of
+`CausalInference.Bias.HazardRatio` with a frailty `U` independent of treatment, positive arm and
+frailty probabilities, positive period `1` survival in every cell, and a common stratum hazard ratio
+`ψ > 0` at both periods (untreated stratum risks `c₁ u`, `c₂ u`; treated `ψ * c₁ u`, `ψ * c₂ u`),
+the marginal period `1` hazard ratio is `ψ` when the reference hazard is positive
+(`hazard1_phRisk_ratio`), and the marginal period `2` hazards satisfy the multiplicative identity
+`h₁(2) = ψ * h₀(2)` if and only if `ψ = 1` (no effect), or the frailty does not change the period
+`1` risk (`c₁ 1 = c₁ 0`), or it does not change the period `2` risk (`c₂ 1 = c₂ 0`). With a positive
+reference hazard at period `2` this is a statement about the hazard ratio
+(`hazard2_phRisk_ratio_eq_iff`): in every other case the marginal hazard ratio differs from the
+common stratum hazard ratio at period `2`. These exceptions are special to a binary frailty; for a
+finite frailty the condition is a zero covariance of the two period risks (`frailtyHazard2_eq_iff`).
+-/
 theorem hazard2_phRisk_eq_iff (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u) (hψ : 0 < ψ)
     (hs : ∀ a u, 0 < 1 - phRisk ψ b₁ a u) :
     hazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) true =
@@ -510,6 +644,17 @@ theorem hazard2_phRisk_eq_iff (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u) (hψ
     · exact Or.inr (Or.inl h.symm)
     · exact Or.inr (Or.inr h)
     · exact Or.inl h
+
+/-- **Non-collapsibility of the period `2` hazard ratio**, ratio form of
+`hazard2_phRisk_eq_iff`: with a positive reference hazard at period `2`,
+`h₁(2) / h₀(2) = ψ` if and only if `ψ = 1`, `c₁ 1 = c₁ 0`, or `c₂ 1 = c₂ 0`. -/
+theorem hazard2_phRisk_ratio_eq_iff (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 < pU u) (hψ : 0 < ψ)
+    (hs : ∀ a u, 0 < 1 - phRisk ψ b₁ a u)
+    (h0 : 0 < hazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) false) :
+    hazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) true /
+        hazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) false = ψ ↔
+      ψ = 1 ∨ b₁ true = b₁ false ∨ b₂ true = b₂ false := by
+  rw [div_eq_iff h0.ne', hazard2_phRisk_eq_iff pA pU ψ b₁ b₂ hA hU hψ hs]
 
 /-- **The period `2` hazard ratio is collapsible exactly in the degenerate cases**, in the
 sense of `EffectMeasure.IsCollapsible` (Hernán and Robins, Fine Point 4.3) applied to the
@@ -555,6 +700,96 @@ theorem hazard2_phRisk_isCollapsible_iff (hA : ∀ a, 0 < pA a) (hU : ∀ u, 0 <
 
 end PropHazards
 
+namespace PropHazards
+
+/-! ### Finite frailty: the covariance criterion -/
+
+section FiniteFrailty
+
+open Bias.HazardRatio
+
+variable {ι : Type*} [Fintype ι]
+
+/-- The covariance `Cov_π(x, y) = ∑ π x y - (∑ π x) (∑ π y)` of two functions of the frailty
+under the weights `π`; it is a covariance when `π` is a distribution. -/
+def frailtyCov (π x y : ι → ℝ) : ℝ :=
+  ∑ u, π u * x u * y u - (∑ u, π u * x u) * ∑ u, π u * y u
+
+/-- The marginal period `2` hazard of an arm whose stratum risks are `κ * b₁ u` at period `1`
+and `κ * b₂ u` at period `2`, with frailty law `π` independent of treatment:
+`∑ π u (1 - κ b₁ u) κ b₂ u / ∑ π u (1 - κ b₁ u)`, the period `2` deaths among the period `1`
+survivors. The untreated arm is `κ = 1`, the treated arm `κ = ψ`. -/
+noncomputable def frailtyHazard2 (π b₁ b₂ : ι → ℝ) (κ : ℝ) : ℝ :=
+  (∑ u, π u * (1 - κ * b₁ u) * (κ * b₂ u)) / ∑ u, π u * (1 - κ * b₁ u)
+
+/-- **Non-collapsibility of the hazard ratio with a finite frailty.** For a frailty law `π`
+(summing to one) on a finite set, a common stratum hazard ratio `ψ ≠ 0` at both periods, and
+positive survivor mass after period `1` in both arms (nonzero denominators), the marginal
+period `2` hazards satisfy `h₁(2) = ψ * h₀(2)` if and only if `ψ = 1` or the two period risks
+are uncorrelated under `π`: `Cov_π(b₁, b₂) = 0`. The identity behind it is
+`h₁(2) - ψ h₀(2) ∝ ψ (1 - ψ) Cov_π(b₁, b₂)`. -/
+theorem frailtyHazard2_eq_iff (π b₁ b₂ : ι → ℝ) {ψ : ℝ} (hπ : ∑ u, π u = 1) (hψ : ψ ≠ 0)
+    (h1 : ∑ u, π u * (1 - ψ * b₁ u) ≠ 0) (h0 : ∑ u, π u * (1 - 1 * b₁ u) ≠ 0) :
+    frailtyHazard2 π b₁ b₂ ψ = ψ * frailtyHazard2 π b₁ b₂ 1 ↔
+      ψ = 1 ∨ frailtyCov π b₁ b₂ = 0 := by
+  have hs : ∀ κ : ℝ, ∑ u, π u * (1 - κ * b₁ u) = 1 - κ * ∑ u, π u * b₁ u := fun κ => by
+    have : ∀ u, π u * (1 - κ * b₁ u) = π u - κ * (π u * b₁ u) := fun u => by ring
+    simp only [this, Finset.sum_sub_distrib, ← Finset.mul_sum, hπ]
+  have hn : ∀ κ : ℝ, ∑ u, π u * (1 - κ * b₁ u) * (κ * b₂ u) =
+      κ * ∑ u, π u * b₂ u - κ ^ 2 * ∑ u, π u * b₁ u * b₂ u := fun κ => by
+    have : ∀ u, π u * (1 - κ * b₁ u) * (κ * b₂ u) =
+        κ * (π u * b₂ u) - κ ^ 2 * (π u * b₁ u * b₂ u) := fun u => by ring
+    simp only [this, Finset.sum_sub_distrib, ← Finset.mul_sum]
+  rw [hs] at h1 h0
+  unfold frailtyHazard2 frailtyCov
+  rw [hs, hs, hn, hn, mul_div_assoc', div_eq_div_iff h1 h0]
+  set E1 := ∑ u, π u * b₁ u
+  set E2 := ∑ u, π u * b₂ u
+  set E12 := ∑ u, π u * b₁ u * b₂ u
+  constructor
+  · intro h
+    have : ψ * ((1 - ψ) * (E12 - E1 * E2)) = 0 := by linear_combination h
+    rcases mul_eq_zero.1 this with h' | h'
+    · exact absurd h' hψ
+    rcases mul_eq_zero.1 h' with h' | h'
+    · exact Or.inl (by linarith)
+    · exact Or.inr h'
+  · rintro (rfl | h)
+    · ring
+    · linear_combination (ψ * (1 - ψ)) * h
+
+/-- The binary frailty model of `CausalInference.Bias.HazardRatio` is the case `ι = Bool` of
+`frailtyHazard2`: with `pA a ≠ 0`, the period `2` hazard of arm `a` under `phRisk ψ` is
+`frailtyHazard2 pU b₁ b₂ κ` with `κ = ψ` for the treated and `κ = 1` for the untreated. -/
+theorem hazard2_phRisk_eq_frailtyHazard2 (pA pU : Bool → ℝ) (ψ : ℝ) (b₁ b₂ : Bool → ℝ)
+    (a : Bool) (ha : pA a ≠ 0) :
+    hazard2 pA pU (phRisk ψ b₁) (phRisk ψ b₂) a =
+      frailtyHazard2 pU b₁ b₂ (if a then ψ else 1) := by
+  have e1 : ∀ r : Bool → ℝ, ∀ u, phRisk ψ r a u = (if a then ψ else 1) * r u := fun r u => by
+    cases a <;> simp [phRisk]
+  simp only [hazard2, dead2Mass, surv1Mass, frailtyHazard2, e1]
+  have : ∀ f : Bool → ℝ, ∑ u, pA a * pU u * f u = pA a * ∑ u, pU u * f u := fun f => by
+    rw [Finset.mul_sum]; exact Finset.sum_congr rfl fun u _ => by ring
+  have h2 : ∑ u, pA a * pU u * (1 - (if a then ψ else 1) * b₁ u) *
+      ((if a then ψ else 1) * b₂ u) =
+      pA a * ∑ u, pU u * (1 - (if a then ψ else 1) * b₁ u) * ((if a then ψ else 1) * b₂ u) := by
+    rw [Finset.mul_sum]; exact Finset.sum_congr rfl fun u _ => by ring
+  rw [h2, this, mul_div_mul_left _ _ ha]
+
+/-- With a binary frailty and weights summing to one, the covariance of two risks is
+`π 1 π 0 (x 1 - x 0) (y 1 - y 0)`: it vanishes exactly when `π` is degenerate or one of the
+risks does not depend on the frailty. With `frailtyHazard2_eq_iff` this gives back the
+exceptional cases of `hazard2_phRisk_eq_iff`. -/
+theorem frailtyCov_bool (π x y : Bool → ℝ) (hπ : π true + π false = 1) :
+    frailtyCov π x y = π true * π false * (x true - x false) * (y true - y false) := by
+  have : π false = 1 - π true := by linarith
+  simp only [frailtyCov, Fintype.sum_bool, this]
+  ring
+
+end FiniteFrailty
+
+end PropHazards
+
 namespace PropHazardsExample
 
 open Bias.HazardRatio PropHazards
@@ -580,6 +815,51 @@ theorem noncollapsible_example :
   · norm_num [hazard1, dead1Mass, armMass, exHalf, phRisk, ncRisk, Fintype.sum_bool]
   · norm_num [hazard2, dead2Mass, surv1Mass, exHalf, phRisk, ncRisk, Fintype.sum_bool]
   · cases u <;> norm_num [stratumHazard2, exHalf, phRisk, ncRisk]
+
+/-- Uniform law on three frailty levels. -/
+noncomputable def triWeight (_ : Fin 3) : ℝ := 1 / 3
+
+/-- Untreated period `1` risks on three frailty levels: `1/10, 1/5, 3/10`. -/
+noncomputable def triRisk₁ : Fin 3 → ℝ := ![1 / 10, 1 / 5, 3 / 10]
+
+/-- Untreated period `2` risks on three frailty levels: `1/5, 2/5, 1/5`. -/
+noncomputable def triRisk₂ : Fin 3 → ℝ := ![1 / 5, 2 / 5, 1 / 5]
+
+/-- **The binary exceptions do not extend to three frailty levels.** Both period risks depend
+on the frailty, yet their covariance under the uniform law is zero, so with the common stratum
+hazard ratio `1/2` the marginal period `2` hazards still satisfy `h₁(2) = (1/2) h₀(2)`
+(`frailtyHazard2_eq_iff`), and the reference hazard is positive. -/
+theorem zeroCov_example :
+    triRisk₁ 0 ≠ triRisk₁ 1 ∧ triRisk₂ 0 ≠ triRisk₂ 1 ∧ frailtyCov triWeight triRisk₁ triRisk₂ = 0 ∧
+      0 < frailtyHazard2 triWeight triRisk₁ triRisk₂ 1 ∧
+      frailtyHazard2 triWeight triRisk₁ triRisk₂ (1 / 2) =
+        1 / 2 * frailtyHazard2 triWeight triRisk₁ triRisk₂ 1 := by
+  refine ⟨by norm_num [triRisk₁], by norm_num [triRisk₂], ?_, ?_, ?_⟩ <;>
+    norm_num [frailtyCov, frailtyHazard2, triWeight, triRisk₁, triRisk₂, Fin.sum_univ_three]
+
+/-- Period `1` risks of the survival-power example. Untreated: `3/4` with `U = 0` and `1/4`
+with `U = 1` (period `1` survival `1/4` and `3/4`). Treated: `15/16` and `7/16` (survival
+`1/16` and `9/16`, the squares). -/
+noncomputable def gpRisk (a u : Bool) : ℝ :=
+  if a then (if u then 7 / 16 else 15 / 16) else (if u then 1 / 4 else 3 / 4)
+
+/-- **Grouped proportional hazards on the survival-power scale are not collapsible** (the
+conditional model of NICE DSU TSD 21, Section 5.2.1, display above Equation 17: survival given
+the frailty is a power of a baseline survival). In the two-period model with a fair treatment
+and a fair frailty independent of treatment, the period `1` survival of the treated is the
+square of that of the untreated in each frailty stratum, `1 - r₁(1, u) = (1 - r₁(0, u)) ^ 2`.
+The marginal period `1` survival `P(Y1 = 0 | A = a)` is `5/16` in the treated and `1/2` in the
+untreated, and `5/16 ≠ (1/2) ^ 2 = 1/4`: the marginal survival curves do not satisfy the power
+relation with the common conditional power `2`. -/
+theorem groupedPH_noncollapsible :
+    (∀ u, 1 - gpRisk true u = (1 - gpRisk false u) ^ (2 : ℝ)) ∧
+      surv1Mass exHalf exHalf gpRisk true / armMass exHalf exHalf true = 5 / 16 ∧
+      surv1Mass exHalf exHalf gpRisk false / armMass exHalf exHalf false = 1 / 2 ∧
+      surv1Mass exHalf exHalf gpRisk true / armMass exHalf exHalf true ≠
+        (surv1Mass exHalf exHalf gpRisk false / armMass exHalf exHalf false) ^ (2 : ℝ) := by
+  refine ⟨fun u => ?_, ?_, ?_, ?_⟩
+  · cases u <;> norm_num [gpRisk, Real.rpow_two]
+  all_goals norm_num [surv1Mass, armMass, exHalf, gpRisk, Fintype.sum_bool, Real.rpow_two]
 
 end PropHazardsExample
 
@@ -608,6 +888,15 @@ theorem cumHazard_succ_sub (hT : Measurable T) (k : ℕ) (hS : 0 < survival μ T
 
 end CumHazard
 
+/-- **The log-linear reading of the multiplicative cumulative hazard model**: when `G`, `B`, `C`
+are positive, `H(x, z) = G B^x C^z` (with `x, z` binary) satisfies
+`log H(x, z) = log G + x log B + z log C`. -/
+theorem log_multiplicative_cumHazard {G B C : ℝ} (hG : 0 < G) (hB : 0 < B) (hC : 0 < C)
+    (x z : Bool) :
+    Real.log (G * (if x then B else 1) * (if z then C else 1)) =
+      Real.log G + (if x then Real.log B else 0) + (if z then Real.log C else 0) := by
+  cases x <;> cases z <;> simp [Real.log_mul, hG.ne', hB.ne', hC.ne']
+
 /-- The algebra behind `cloglogRatio_eq_iff`: for `G, g ≠ 0` and nonzero denominators,
 `(G B - g b) / (G - g) = (G B C - g b c) / (G C - g c)` if and only if `B = b` or `C = c`. -/
 theorem incrementRatio_eq_iff {G g B b C c : ℝ} (hG : G ≠ 0) (hg : g ≠ 0) (h0 : G - g ≠ 0)
@@ -634,8 +923,11 @@ at times `k` and `k + 1`:
 hazard ratio for `x` over interval `k + 1` on the grouped-time (complementary log-log) scale,
 `-log (1 - h(k + 1 | 1, z)) / -log (1 - h(k + 1 | 0, z))`, is the same for `z = 1` and `z = 0`
 if and only if the effect of `x` does not change over the interval (`B₁ = B₀`) or the effect of
-`z` does not (`C₁ = C₀`). The positivity hypotheses make every logarithm and every ratio a
-genuine one. -/
+`z` does not (`C₁ = C₀`). The statement is for the multiplicative cumulative hazard model: the
+hypotheses allow `B_j = 0` or `C_j = 0`, where `log H` is not defined. The log-linear reading
+`log H = log G + x log B + z log C` holds when every multiplier is positive
+(`log_multiplicative_cumHazard`). The positivity hypotheses make `H = -log S`, the grouped-time
+hazards `-log (1 - h)` and the two ratios genuine. -/
 theorem cloglogRatio_eq_iff {Ω : Type*} [MeasurableSpace Ω] (μ : Bool → Bool → Measure Ω)
     [∀ x z, IsProbabilityMeasure (μ x z)] (T : Bool → Bool → Ω → ℕ)
     (hT : ∀ x z, Measurable (T x z)) (k : ℕ) {G₀ G₁ B₀ B₁ C₀ C₁ : ℝ} (hG₀ : 0 < G₀)
@@ -685,7 +977,8 @@ time `2`. -/
 noncomputable def durStop : Measure ℕ := threePoint (1 / 4) (3 / 8) (3 / 8)
 
 /-- Treated arm whose effect is maintained: hazards `1/4` at times `1` and `2`, a hazard ratio
-`1/2` throughout. -/
+`1/2` at times `1` and `2`. At time `3` the laws `durRef`, `durStop`, `durMaint` put all their
+remaining mass, so every hazard there is `1`; the example is about times up to `2`. -/
 noncomputable def durMaint : Measure ℕ := threePoint (1 / 4) (3 / 16) (9 / 16)
 
 /-- The masses of `durRef`. -/
@@ -806,6 +1099,158 @@ theorem scaleDependence_example :
   · have hb := sdTail_bounds false z
     simp only [hazard, atRisk, sdArm_real, id, Set.indicator_apply, Set.mem_ofPred_eq]
     cases z <;> norm_num [sdTail]
+
+end PropHazardsExample
+
+namespace PropHazardsExample
+
+open Filter Topology
+
+/-- The sample space of the full-grid log-logistic example: the uniform law on `(0, 1]`. -/
+noncomputable def llSpace : Measure ℝ := volume.restrict (Set.Ioc 0 1)
+
+instance : IsProbabilityMeasure llSpace := ⟨by simp [llSpace]⟩
+
+/-- The event time of the full-grid log-logistic example with acceleration factor `φ`:
+`T u = ⌊(1/u - 1)/φ⌋₊ + 1`. For `φ > 0` its survival is `S(k) = 1 / (1 + φ k)` at every
+`k : ℕ` (`llTime_survival`): the log-logistic survival of shape `1` and scale `1/φ` on the full
+grid. -/
+noncomputable def llTime (φ u : ℝ) : ℕ := ⌊(1 / u - 1) / φ⌋₊ + 1
+
+theorem measurable_llTime (φ : ℝ) : Measurable (llTime φ) :=
+  (Measurable.of_discrete (f := fun n : ℕ => n + 1)).comp
+    (Nat.measurable_floor.comp (((measurable_const.div measurable_id).sub_const 1).div_const φ))
+
+/-- For `u ∈ (0, 1]`: `k < T u` if and only if `u ≤ 1 / (1 + φ k)`. -/
+theorem lt_llTime_iff {φ u : ℝ} (hφ : 0 < φ) (hu0 : 0 < u) (hu1 : u ≤ 1) (k : ℕ) :
+    k < llTime φ u ↔ u ≤ 1 / (1 + φ * k) := by
+  have hx : 0 ≤ (1 / u - 1) / φ :=
+    div_nonneg (sub_nonneg.2 (by rw [le_div_iff₀ hu0]; linarith)) hφ.le
+  have hd : 0 < 1 + φ * k := by positivity
+  rw [llTime, Nat.lt_succ_iff, Nat.le_floor_iff hx, le_div_iff₀ hφ, le_div_iff₀ hd,
+    le_sub_iff_add_le, le_div_iff₀ hu0]
+  constructor <;> intro h <;> nlinarith
+
+/-- **The full-grid log-logistic survival**: `S(k) = 1 / (1 + φ k)` for every `k : ℕ`. -/
+theorem llTime_survival {φ : ℝ} (hφ : 0 < φ) (k : ℕ) :
+    survival llSpace (llTime φ) k = 1 / (1 + φ * k) := by
+  have hd : 0 < 1 + φ * k := by positivity
+  have hc : 1 / (1 + φ * k) ≤ 1 := (div_le_one hd).2 (by nlinarith [k.cast_nonneg (α := ℝ)])
+  have hset : {u | k < llTime φ u} ∩ Set.Ioc 0 1 = Set.Ioc 0 (1 / (1 + φ * k)) := by
+    ext u
+    simp only [Set.mem_inter_iff, Set.mem_ofPred_eq, Set.mem_Ioc]
+    constructor
+    · rintro ⟨h, hu0, hu1⟩; exact ⟨hu0, (lt_llTime_iff hφ hu0 hu1 k).1 h⟩
+    · rintro ⟨hu0, hu⟩; exact ⟨(lt_llTime_iff hφ hu0 (hu.trans hc) k).2 hu, hu0, hu.trans hc⟩
+  rw [survival, llSpace, measureReal_def, Measure.restrict_apply' measurableSet_Ioc, hset,
+    Real.volume_Ioc, sub_zero, ENNReal.toReal_ofReal (by positivity)]
+
+/-- The hazard of the full-grid log-logistic law at time `k + 1`: `φ / (1 + φ (k + 1))`. -/
+theorem llTime_hazard {φ : ℝ} (hφ : 0 < φ) (k : ℕ) :
+    hazard llSpace (llTime φ) (k + 1) = φ / (1 + φ * (k + 1)) := by
+  rw [hazard, measureReal_eq_atRisk_sub (measurable_llTime φ), atRisk_succ, atRisk_succ,
+    llTime_survival hφ, llTime_survival hφ]
+  push_cast
+  have : 0 < 1 + φ * k := by positivity
+  have : 0 < 1 + φ * (k + 1) := by positivity
+  field_simp
+  ring
+
+/-- **The period hazard ratio of two log-logistic laws in closed form.** The law with
+acceleration factor `φ > 0` against the reference law (`φ = 1`): at every time `k ≥ 1` the hazard
+ratio is `φ (k + 1) / (1 + φ k)`. At `k = 0` both hazards are zero. -/
+theorem llTime_hazardRatio {φ : ℝ} (hφ : 0 < φ) (k : ℕ) (hk : 1 ≤ k) :
+    hazardRatio llSpace (llTime φ) llSpace (llTime 1) k = φ * (k + 1) / (1 + φ * k) := by
+  obtain ⟨j, rfl⟩ := Nat.exists_eq_add_of_le' hk
+  rw [hazardRatio, llTime_hazard hφ, llTime_hazard one_pos]
+  push_cast
+  have : 0 < 1 + φ * (j + 1) := by positivity
+  have : (0 : ℝ) < 1 + 1 * (j + 1) := by positivity
+  field_simp
+  ring
+
+/-- **The log-logistic hazard ratio tends to one**: for every `φ > 0`, the period hazard ratio
+`h_φ(k) / h_1(k)` tends to `1` as `k → ∞`. -/
+theorem tendsto_llTime_hazardRatio {φ : ℝ} (hφ : 0 < φ) :
+    Tendsto (hazardRatio llSpace (llTime φ) llSpace (llTime 1)) atTop (𝓝 1) := by
+  have h1 : Tendsto (fun k : ℕ => 1 + (φ - 1) / (1 + φ * k)) atTop (𝓝 (1 + 0)) :=
+    tendsto_const_nhds.add (tendsto_const_nhds.div_atTop
+      (tendsto_atTop_add_const_left _ 1 (tendsto_natCast_atTop_atTop.const_mul_atTop hφ)))
+  rw [add_zero] at h1
+  refine h1.congr' ?_
+  filter_upwards [eventually_ge_atTop 1] with k hk
+  rw [llTime_hazardRatio hφ k hk]
+  have : 0 < 1 + φ * k := by positivity
+  field_simp
+  ring
+
+/-- **The log-logistic hazard ratio is not constant**: for `φ > 0`, `φ ≠ 1`, the hazard ratios
+at times `1` and `2`, `2 φ / (1 + φ)` and `3 φ / (1 + 2 φ)`, differ. -/
+theorem llTime_hazardRatio_ne {φ : ℝ} (hφ : 0 < φ) (h1 : φ ≠ 1) :
+    hazardRatio llSpace (llTime φ) llSpace (llTime 1) 1 ≠
+      hazardRatio llSpace (llTime φ) llSpace (llTime 1) 2 := by
+  rw [llTime_hazardRatio hφ 1 le_rfl, llTime_hazardRatio hφ 2 (by norm_num)]
+  push_cast
+  intro h
+  rw [div_eq_div_iff (by positivity) (by positivity)] at h
+  have : φ * (φ - 1) = 0 := by linear_combination h
+  rcases mul_eq_zero.1 this with h' | h'
+  · exact hφ.ne' h'
+  · exact h1 (by linarith)
+
+/-- No exponent `c` gives `(1/2) ^ c = 1/3` and `(1/3) ^ c = 1/5`: the first forces `c > 3/2`,
+hence `(1/3) ^ c < 1/5`. -/
+theorem no_rpow_half_third {c : ℝ} (h1 : (1 / 2 : ℝ) ^ c = 1 / 3)
+    (h2 : (1 / 3 : ℝ) ^ c = 1 / 5) : False := by
+  rw [Real.div_rpow (by norm_num) (by norm_num), Real.one_rpow] at h1 h2
+  have h1' : (2 : ℝ) ^ c = 3 := by
+    have := Real.rpow_pos_of_pos (show (0 : ℝ) < 2 by norm_num) c
+    field_simp at h1; linarith
+  have h2' : (3 : ℝ) ^ c = 5 := by
+    have := Real.rpow_pos_of_pos (show (0 : ℝ) < 3 by norm_num) c
+    field_simp at h2; linarith
+  have hc : 3 / 2 < c := by
+    by_contra hle
+    push Not at hle
+    have hm : (2 : ℝ) ^ c ≤ 2 ^ (3 / 2 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le (by norm_num) hle
+    have hsq : ((2 : ℝ) ^ (3 / 2 : ℝ)) ^ 2 = 8 := by
+      rw [← Real.rpow_mul_natCast (by norm_num)]; norm_num
+    have : (3 : ℝ) ^ 2 ≤ ((2 : ℝ) ^ (3 / 2 : ℝ)) ^ 2 :=
+      calc (3 : ℝ) ^ 2 = ((2 : ℝ) ^ c) ^ 2 := by rw [h1']
+        _ ≤ _ := pow_le_pow_left₀ (by positivity) hm 2
+    rw [hsq] at this
+    norm_num at this
+  have hm : (3 : ℝ) ^ (3 / 2 : ℝ) < 3 ^ c := Real.rpow_lt_rpow_of_exponent_lt (by norm_num) hc
+  have hsq : ((3 : ℝ) ^ (3 / 2 : ℝ)) ^ 2 = 27 := by
+    rw [← Real.rpow_mul_natCast (by norm_num)]; norm_num
+  have : ((3 : ℝ) ^ (3 / 2 : ℝ)) ^ 2 < (5 : ℝ) ^ 2 := by
+    rw [← h2']; exact pow_lt_pow_left₀ hm (by positivity) (by norm_num)
+  rw [hsq] at this
+  norm_num at this
+
+/-- **An accelerated failure time family on the full grid has no single hazard ratio** (NICE
+DSU TSD 14, Section 2.9). The log-logistic laws `S₀(k) = 1 / (1 + k)` and `S₁(k) = 1 / (1 + 2 k)`
+at every `k : ℕ`: the hazard ratio at time `k ≥ 1` is `2 (k + 1) / (1 + 2 k)`, equal to `4/3` at
+time `1` and `6/5` at time `2`, and tends to `1`; there is no exponent `c` with
+`S₁ m = S₀ m ^ c` for `m ≤ 2`. -/
+theorem logLogistic_fullGrid :
+    (∀ k : ℕ, 1 ≤ k → hazardRatio llSpace (llTime 2) llSpace (llTime 1) k =
+      2 * (k + 1) / (1 + 2 * k)) ∧
+      hazardRatio llSpace (llTime 2) llSpace (llTime 1) 1 = 4 / 3 ∧
+      hazardRatio llSpace (llTime 2) llSpace (llTime 1) 2 = 6 / 5 ∧
+      Tendsto (hazardRatio llSpace (llTime 2) llSpace (llTime 1)) atTop (𝓝 1) ∧
+      ¬ ∃ c : ℝ, ∀ m ≤ 2, survival llSpace (llTime 2) m = survival llSpace (llTime 1) m ^ c := by
+  refine ⟨fun k hk => llTime_hazardRatio two_pos k hk, ?_, ?_,
+    tendsto_llTime_hazardRatio two_pos, ?_⟩
+  · rw [llTime_hazardRatio two_pos 1 le_rfl]; norm_num
+  · rw [llTime_hazardRatio two_pos 2 (by norm_num)]; norm_num
+  · rintro ⟨c, hc⟩
+    have h1 := hc 1 (by norm_num)
+    have h2 := hc 2 le_rfl
+    rw [llTime_survival two_pos, llTime_survival one_pos] at h1 h2
+    norm_num at h1 h2
+    exact no_rpow_half_third (c := c) h1.symm h2.symm
 
 end PropHazardsExample
 

@@ -37,12 +37,19 @@ population cumulative hazard is `H = -log S` (`mixCumHazard`, with `H' = h`).
 * Treatment multiplying every stratum hazard by `ψ` (a conditional hazard ratio `ψ`, constant
   in time, with the stratifier independent of treatment): `mixSurvival_mul`,
   `mixHazard_mul`, `mixCumHazard_mul` (`S₁(t) = S₀(ψ t)`, `h₁(t) = ψ h₀(ψ t)`).
-* `mixCumHazard_attenuation`, `mixCumHazard_ratio_mem`: for `ψ > 1`, heterogeneous strata and
-  `t > 0`, the marginal cumulative hazard ratio `H₁(t) / H₀(t)` lies strictly between `1` and
-  `ψ`.
-* `mixHazard_ratio_lt`, `mixHazard_ratio_zero`, `tendsto_mixHazard_ratio`: the marginal
-  instantaneous hazard ratio `h₁(t) / h₀(t)` is below `ψ` for `t > 0`, equals `ψ` at `t = 0`
-  and tends to `ψ` as `t → 0`.
+* `mixCumHazard_attenuation_of_nonneg`, `mixCumHazard_ratio_mem_of_nonneg`: for `ψ > 1`, rates
+  nonnegative on the strata of positive weight, two strata of positive weight with different
+  rates, and `t > 0`, the marginal cumulative hazard ratio `H₁(t) / H₀(t)` lies strictly between
+  `1` and `ψ`. A cured stratum (rate `0`) is allowed
+  (`HazardMixtureExample.cured_cumHazard_ratio_mem`). `mixCumHazard_attenuation` and
+  `mixCumHazard_ratio_mem` are the special cases with every rate positive.
+* The protective mirror: `mixCumHazard_attenuation_of_lt_one`,
+  `mixCumHazard_ratio_mem_of_lt_one` (for `0 < ψ < 1`, `ψ < H₁(t) / H₀(t) < 1`) and
+  `lt_mixHazard_ratio_of_lt_one` (`ψ < h₁(t) / h₀(t)`).
+* `mixHazard_ratio_lt_of_nonneg`, `mixHazard_ratio_lt`, `mixHazard_ratio_zero`,
+  `tendsto_mixHazard_ratio`: the marginal instantaneous hazard ratio `h₁(t) / h₀(t)` is below
+  `ψ > 1` for `t > 0`, and, with every rate positive, equals `ψ` at `t = 0` and tends to `ψ` as
+  `t → 0`.
 * `HazardMixtureExample.marginal_hazardRatio_lt_one`: the marginal instantaneous hazard ratio
   is not confined to the interval between `1` and `ψ`. Strata of equal weight with hazards
   `1/1000` and `1`, `ψ = 2`: at `t = 5` the marginal hazard ratio is below `1`, while the
@@ -319,20 +326,48 @@ theorem hasDerivAt_mixCumHazard {p : ι → ℝ} (hp : IsWeights p) (r : ι → 
   · rw [neg_div, neg_neg]
     rfl
 
-/-- **Attenuation of the cumulative hazard ratio** (NICE DSU TSD 3, Section 1.1.5, aggregation
-bias). Within every stratum `i` of a factor independent of treatment, the hazards are constant,
-`r i` without and `ψ * r i` with treatment, so the conditional hazard ratio is `ψ > 1` at
-every time. If two strata of positive weight have different baseline hazards, then at every
-`t > 0` the marginal cumulative hazards satisfy `0 < H₀(t) < H₁(t) < ψ * H₀(t)`: the marginal
-cumulative hazard ratio `H₁(t) / H₀(t)` lies strictly between `1` and `ψ`. -/
-theorem mixCumHazard_attenuation {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ i, 0 < r i)
-    {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j) {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ}
-    (ht : 0 < t) :
+/-- The density is positive when the rates are nonnegative on the support of the weights and
+one stratum of positive weight has a positive rate. -/
+theorem mixDensity_pos_of_support {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i : ι} (hi : 0 < p i) (hri : 0 < r i) (t : ℝ) :
+    0 < mixDensity p r t := by
+  refine Finset.sum_pos' (fun j _ => ?_) ⟨i, mem_univ _, by positivity⟩
+  rcases (hp.1 j).eq_or_lt with h | h
+  · rw [← h]; simp
+  · have := hr j h; positivity
+
+/-- Two distinct nonnegative rates on positive-weight strata give a positive density: one of the
+two rates is positive. -/
+theorem mixDensity_pos_of_ne {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ k, 0 < p k → 0 ≤ r k)
+    {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j) (t : ℝ) :
+    0 < mixDensity p r t := by
+  rcases (hr i hi).eq_or_lt with h | h
+  · exact mixDensity_pos_of_support hp hr hj (lt_of_le_of_ne (hr j hj) (h ▸ hij)) t
+  · exact mixDensity_pos_of_support hp hr hi h t
+
+/-- The population hazard is positive under the hypotheses of `mixDensity_pos_of_ne`. -/
+theorem mixHazard_pos_of_ne {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ k, 0 < p k → 0 ≤ r k)
+    {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j) (t : ℝ) :
+    0 < mixHazard p r t :=
+  div_pos (mixDensity_pos_of_ne hp hr hi hj hij t) (mixSurvival_pos hp r t)
+
+/-- **Attenuation of the cumulative hazard ratio, rates on the support** (NICE DSU TSD 3,
+Section 1.1.5, aggregation bias). Within every stratum `i` of a factor independent of treatment
+the hazards are constant, `r i` without and `ψ * r i` with treatment, so the conditional hazard
+ratio is `ψ > 1` at every time. Assume the rates are nonnegative on the strata of positive weight
+(a stratum of rate `0` is a cured stratum) and two strata of positive weight have different
+rates. Then at every `t > 0` the marginal cumulative hazards satisfy
+`0 < H₀(t) < H₁(t) < ψ * H₀(t)`: the marginal cumulative hazard ratio lies strictly between `1`
+and `ψ`. Rates on strata of weight zero are unrestricted. -/
+theorem mixCumHazard_attenuation_of_nonneg {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j)
+    {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ} (ht : 0 < t) :
     0 < mixCumHazard p r t ∧ mixCumHazard p r t < mixCumHazard p (fun k => ψ * r k) t ∧
       mixCumHazard p (fun k => ψ * r k) t < ψ * mixCumHazard p r t := by
   have hH := hasDerivAt_mixCumHazard hp r
   have hmono : StrictMono (mixCumHazard p r) :=
-    strictMono_of_hasDerivAt_pos hH (mixHazard_pos hp hr)
+    strictMono_of_hasDerivAt_pos hH fun s =>
+      div_pos (mixDensity_pos_of_ne hp hr hi hj hij s) (mixSurvival_pos hp r s)
   have hanti := mixHazard_strictAnti hp hi hj hij
   have h0 := mixCumHazard_zero hp r
   have hψt : t < ψ * t := by nlinarith
@@ -358,15 +393,47 @@ theorem mixCumHazard_attenuation {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀
   simp only [hg] at this
   linarith
 
+/-- **Attenuation of the cumulative hazard ratio** with positive rates in every stratum: the
+special case of `mixCumHazard_attenuation_of_nonneg`. Under the hypotheses at every `t > 0`,
+`0 < H₀(t) < H₁(t) < ψ * H₀(t)`. -/
+theorem mixCumHazard_attenuation {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ i, 0 < r i)
+    {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j) {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ}
+    (ht : 0 < t) :
+    0 < mixCumHazard p r t ∧ mixCumHazard p r t < mixCumHazard p (fun k => ψ * r k) t ∧
+      mixCumHazard p (fun k => ψ * r k) t < ψ * mixCumHazard p r t :=
+  mixCumHazard_attenuation_of_nonneg hp (fun k _ => (hr k).le) hi hj hij hψ ht
+
+/-- The cumulative hazard ratio form of `mixCumHazard_attenuation_of_nonneg`:
+`1 < H₁(t) / H₀(t) < ψ` for `t > 0`, with nonnegative rates on the support and two distinct
+supported rates. -/
+theorem mixCumHazard_ratio_mem_of_nonneg {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j)
+    {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ} (ht : 0 < t) :
+    1 < mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t ∧
+      mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t < ψ := by
+  obtain ⟨h0, h1, h2⟩ := mixCumHazard_attenuation_of_nonneg hp hr hi hj hij hψ ht
+  exact ⟨(one_lt_div h0).2 h1, (div_lt_iff₀ h0).2 h2⟩
+
 /-- The cumulative hazard ratio form of `mixCumHazard_attenuation`:
 `1 < H₁(t) / H₀(t) < ψ` for `t > 0`. -/
 theorem mixCumHazard_ratio_mem {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ i, 0 < r i)
     {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j) {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ}
     (ht : 0 < t) :
     1 < mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t ∧
-      mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t < ψ := by
-  obtain ⟨h0, h1, h2⟩ := mixCumHazard_attenuation hp hr hi hj hij hψ ht
-  exact ⟨(one_lt_div h0).2 h1, (div_lt_iff₀ h0).2 h2⟩
+      mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t < ψ :=
+  mixCumHazard_ratio_mem_of_nonneg hp (fun k _ => (hr k).le) hi hj hij hψ ht
+
+/-- **The marginal instantaneous hazard ratio is below the conditional one**, rates on the
+support: under the hypotheses of `mixCumHazard_attenuation_of_nonneg`, `h₁(t) / h₀(t) < ψ` at
+every `t > 0`. It need not stay above `1`: `HazardMixtureExample.marginal_hazardRatio_lt_one`. -/
+theorem mixHazard_ratio_lt_of_nonneg {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j)
+    {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ} (ht : 0 < t) :
+    mixHazard p (fun k => ψ * r k) t / mixHazard p r t < ψ := by
+  rw [mixHazard_mul, div_lt_iff₀ (mixHazard_pos_of_ne hp hr hi hj hij t)]
+  have : mixHazard p r (ψ * t) < mixHazard p r t :=
+    mixHazard_strictAnti hp hi hj hij (by nlinarith)
+  nlinarith
 
 /-- **The marginal instantaneous hazard ratio is below the conditional one**: under the
 hypotheses of `mixCumHazard_attenuation`, `h₁(t) / h₀(t) < ψ` at every `t > 0`. The ratio
@@ -375,11 +442,61 @@ equals `ψ` at `t = 0` (`mixHazard_ratio_zero`). It need not stay above `1`:
 theorem mixHazard_ratio_lt {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ i, 0 < r i)
     {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j) {ψ : ℝ} (hψ : 1 < ψ) {t : ℝ}
     (ht : 0 < t) :
-    mixHazard p (fun k => ψ * r k) t / mixHazard p r t < ψ := by
-  rw [mixHazard_mul, div_lt_iff₀ (mixHazard_pos hp hr t)]
-  have : mixHazard p r (ψ * t) < mixHazard p r t :=
-    mixHazard_strictAnti hp hi hj hij (by nlinarith)
-  nlinarith
+    mixHazard p (fun k => ψ * r k) t / mixHazard p r t < ψ :=
+  mixHazard_ratio_lt_of_nonneg hp (fun k _ => (hr k).le) hi hj hij hψ ht
+
+omit [Fintype ι] in
+/-- Treating `ψ * r` as the baseline and `ψ⁻¹` as the multiplier gives back `r`. -/
+theorem inv_mul_mul_rate {r : ι → ℝ} {ψ : ℝ} (hψ : ψ ≠ 0) :
+    (fun k => ψ⁻¹ * (ψ * r k)) = r := by
+  funext k; field_simp
+
+/-- **The protective mirror of the attenuation**: for a conditional hazard ratio `0 < ψ < 1`,
+nonnegative rates on the support and two distinct supported rates, at every `t > 0`,
+`0 < H₁(t)`, `ψ * H₀(t) < H₁(t)` and `H₁(t) < H₀(t)`: the marginal cumulative hazard ratio lies
+strictly between `ψ` and `1`, again attenuated toward the null. It is
+`mixCumHazard_attenuation_of_nonneg` applied to the baseline rates `ψ * r` and the multiplier
+`ψ⁻¹ > 1`. -/
+theorem mixCumHazard_attenuation_of_lt_one {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j)
+    {ψ : ℝ} (hψ0 : 0 < ψ) (hψ1 : ψ < 1) {t : ℝ} (ht : 0 < t) :
+    0 < mixCumHazard p (fun k => ψ * r k) t ∧
+      ψ * mixCumHazard p r t < mixCumHazard p (fun k => ψ * r k) t ∧
+      mixCumHazard p (fun k => ψ * r k) t < mixCumHazard p r t := by
+  have hr' : ∀ k, 0 < p k → 0 ≤ ψ * r k := fun k hk => mul_nonneg hψ0.le (hr k hk)
+  have hij' : ψ * r i ≠ ψ * r j := fun h => hij (mul_left_cancel₀ hψ0.ne' h)
+  obtain ⟨h0, h1, h2⟩ := mixCumHazard_attenuation_of_nonneg hp hr' hi hj hij'
+    (one_lt_inv₀ hψ0 |>.2 hψ1) ht
+  rw [inv_mul_mul_rate hψ0.ne'] at h1 h2
+  refine ⟨h0, ?_, h1⟩
+  have := mul_lt_mul_of_pos_left h2 hψ0
+  rwa [← mul_assoc, mul_inv_cancel₀ hψ0.ne', one_mul] at this
+
+/-- The ratio form of `mixCumHazard_attenuation_of_lt_one`: `ψ < H₁(t) / H₀(t) < 1` for
+`0 < ψ < 1` and `t > 0`. -/
+theorem mixCumHazard_ratio_mem_of_lt_one {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j)
+    {ψ : ℝ} (hψ0 : 0 < ψ) (hψ1 : ψ < 1) {t : ℝ} (ht : 0 < t) :
+    ψ < mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t ∧
+      mixCumHazard p (fun k => ψ * r k) t / mixCumHazard p r t < 1 := by
+  obtain ⟨h0, h1, h2⟩ := mixCumHazard_attenuation_of_lt_one hp hr hi hj hij hψ0 hψ1 ht
+  have hH : 0 < mixCumHazard p r t := h0.trans h2
+  exact ⟨(lt_div_iff₀ hH).2 h1, (div_lt_one hH).2 h2⟩
+
+/-- **The protective mirror for the instantaneous hazard ratio**: for `0 < ψ < 1`, nonnegative
+rates on the support and two distinct supported rates, `ψ < h₁(t) / h₀(t)` at every `t > 0`. -/
+theorem lt_mixHazard_ratio_of_lt_one {p r : ι → ℝ} (hp : IsWeights p)
+    (hr : ∀ k, 0 < p k → 0 ≤ r k) {i j : ι} (hi : 0 < p i) (hj : 0 < p j) (hij : r i ≠ r j)
+    {ψ : ℝ} (hψ0 : 0 < ψ) (hψ1 : ψ < 1) {t : ℝ} (ht : 0 < t) :
+    ψ < mixHazard p (fun k => ψ * r k) t / mixHazard p r t := by
+  have hr' : ∀ k, 0 < p k → 0 ≤ ψ * r k := fun k hk => mul_nonneg hψ0.le (hr k hk)
+  have hij' : ψ * r i ≠ ψ * r j := fun h => hij (mul_left_cancel₀ hψ0.ne' h)
+  have h := mixHazard_ratio_lt_of_nonneg hp hr' hi hj hij' (one_lt_inv₀ hψ0 |>.2 hψ1) ht
+  rw [inv_mul_mul_rate hψ0.ne'] at h
+  rw [div_lt_iff₀ (mixHazard_pos_of_ne hp hr' hi hj hij' t)] at h
+  rw [lt_div_iff₀ (mixHazard_pos_of_ne hp hr hi hj hij t)]
+  have := mul_lt_mul_of_pos_left h hψ0
+  rwa [← mul_assoc, mul_inv_cancel₀ hψ0.ne', one_mul] at this
 
 /-- At time `0` the marginal hazard ratio equals the conditional one: `h₁(0) / h₀(0) = ψ`. -/
 theorem mixHazard_ratio_zero {p r : ι → ℝ} (hp : IsWeights p) (hr : ∀ i, 0 < r i) (ψ : ℝ) :
@@ -490,6 +607,32 @@ theorem marginal_hazardRatio_lt_one :
     have h1 : 1 / 150 * (99 / 100) ≤ F5 * E10 := mul_le_mul hF5 hE10 (by norm_num) (by linarith)
     nlinarith
   linarith
+
+/-- Baseline hazards with a cured stratum: `0` in the stratum `true`, `1` in the stratum
+`false`. -/
+noncomputable def curedRate (b : Bool) : ℝ := if b then 0 else 1
+
+/-- **Attenuation with a cured stratum.** Two strata of equal weight, one cured (rate `0`) and
+one with rate `1`; treatment doubles the rate in each stratum. At every `t > 0` the marginal
+cumulative hazard ratio lies strictly between `1` and `2`, and for the protective multiplier
+`1/2` strictly between `1/2` and `1`. The positive-rate theorems do not apply here; the versions
+with nonnegative rates on the support do. -/
+theorem cured_cumHazard_ratio_mem {t : ℝ} (ht : 0 < t) :
+    (1 < mixCumHazard exWeight (fun k => 2 * curedRate k) t / mixCumHazard exWeight curedRate t ∧
+      mixCumHazard exWeight (fun k => 2 * curedRate k) t / mixCumHazard exWeight curedRate t
+        < 2) ∧
+    (1 / 2 < mixCumHazard exWeight (fun k => 1 / 2 * curedRate k) t /
+        mixCumHazard exWeight curedRate t ∧
+      mixCumHazard exWeight (fun k => 1 / 2 * curedRate k) t / mixCumHazard exWeight curedRate t
+        < 1) := by
+  have hr : ∀ k, 0 < exWeight k → 0 ≤ curedRate k := fun k _ => by
+    cases k <;> norm_num [curedRate]
+  have hw : (0 : ℝ) < exWeight true := by norm_num [exWeight]
+  have hw' : (0 : ℝ) < exWeight false := by norm_num [exWeight]
+  have hne : curedRate true ≠ curedRate false := by norm_num [curedRate]
+  exact ⟨mixCumHazard_ratio_mem_of_nonneg isWeights_exWeight hr hw hw' hne (by norm_num) ht,
+    mixCumHazard_ratio_mem_of_lt_one isWeights_exWeight hr hw hw' hne (by norm_num)
+      (by norm_num) ht⟩
 
 end HazardMixtureExample
 
