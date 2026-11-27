@@ -139,3 +139,4 @@ public import CausalInference.Designs.RegressionDiscontinuity.Interpretation
 public import CausalInference.Estimation.InstrumentalVariables
 public import CausalInference.InstrumentalVariables.Heterogeneity
 public import CausalInference.InstrumentalVariables.InvalidInstrument
+public import CausalInference.Graphical.GlobalMarkovCompletenessLemmas
