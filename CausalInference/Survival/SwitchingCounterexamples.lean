@@ -6,6 +6,9 @@ Authors: Adam R Sophie
 module
 
 public import CausalInference.Survival.IPCW
+public import Mathlib.Analysis.SpecialFunctions.Pow.Deriv
+public import Mathlib.Analysis.Calculus.Deriv.Slope
+public import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 public import CausalInference.Survival.SwitchDecision
 
 /-!
@@ -46,7 +49,14 @@ the product-limit functional of `CausalInference.Survival.Censoring` applies.
   then gives the mean survival `7/2` instead of `3` (`tse_stage_two`). The log-time equation,
   the least-squares fit of `log Y` on the switch indicator, has the unique root `2 / √3`
   (`tse_stage_one_log_root`), which differs from `6/5` and from `2`; stage two then gives
-  `(9 + 3 √3) / 4` instead of `3` (`tse_log_root_biased`).
+  `(9 + 3 √3) / 4` instead of `3` (`tse_log_root_biased`). The Weibull accelerated failure
+  time fit with known shape `k > 0` targets the ratio of power means of order `k`,
+  `weibullFactor k = 2 ((3 + 3 ^ k) / (1 + 3 · 3 ^ k)) ^ (1 / k)` (`weibullFactor_eq`). It is
+  the ratio of means `6/5` at `k = 1` (`weibullFactor_one`), `2 √(3/7)` at `k = 2` with
+  second-stage mean `(9 + √21) / 4` (`weibull_two_biased`), below the true `2` for every
+  `k > 0` (`weibullFactor_lt_two`), and tends to the log-time root `2 / √3` as `k → 0`
+  (`tendsto_weibullFactor`). So the three forms of stage one (mean balancing, least squares on
+  log time, Weibull with known shape) all miss the time ratio `2` here.
 * The delay between progression and the switch decision (TSD 16, Sections 3.2.4 and 6), same
   switch rule and outcomes: in a family indexed by the delay `d ∈ [0, 1]`, in which a patient
   has deteriorated by the decision time with probability `d / 2`, the stage-one factor is
@@ -61,10 +71,10 @@ the product-limit functional of `CausalInference.Survival.Censoring` applies.
   weighted hazard at time `2` is the true `1/2` with the full history and `1/4` with the
   truncated history, with positive stay probabilities in both (`weightedHazard_truncated`).
 
-The first-stage factors are the population roots of two estimating equations without
-censoring, the mean-balancing and the log-time least-squares equation; the parametric (for
-instance Weibull) accelerated failure time fit of the documents solves a different score
-equation and is not formalized.
+The first-stage factors are population targets without censoring: the roots of the
+mean-balancing and the log-time least-squares equations, and the Weibull maximum likelihood
+target with the shape taken as known. The Weibull fit with an estimated shape has no closed
+form and is not formalized.
 
 ## Sources
 
@@ -451,6 +461,129 @@ theorem tse_log_root_biased :
   · rw [tse_stage_two.1] at h
     have : Real.sqrt 3 = 1 := by linarith
     rw [this] at h3; norm_num at h3
+
+/-! #### Stage one as a Weibull fit with known shape
+
+TSD 16, Section 3.2.4, names a Weibull model for stage one. Take the shape `k > 0` as known,
+no censoring, and the switch as the only covariate (the baseline covariates are constant).
+The Weibull log likelihood of a group of residual times `t` with scale `λ` is
+`n log k - n k log λ + (k - 1) ∑ log t - ∑ (t / λ) ^ k`; its derivative in `λ` is
+`k (∑ t ^ k / λ ^ k - n) / λ`, which vanishes only at `λ ^ k = mean (t ^ k)`, a maximum. The
+accelerated failure time model with a binary covariate has one scale per group, so the fitted
+time ratio is `(E[Y ^ k | S = 1] / E[Y ^ k | S = 0]) ^ (1 / k)`: a ratio of power means. With an
+estimated shape the fit has no closed form and is not formalized. -/
+
+/-- The population target of the Weibull accelerated failure time fit of stage one with known
+shape `k`: the ratio of the power means of order `k` of the residual survival of switchers and
+non-switchers, `(E[Y ^ k | S = 1] / E[Y ^ k | S = 0]) ^ (1 / k)`. -/
+noncomputable def weibullFactor (k : ℝ) : ℝ :=
+  (condMean p (fun ω => S ω = true) (fun ω => Y ω ^ k) /
+    condMean p (fun ω => S ω = false) (fun ω => Y ω ^ k)) ^ k⁻¹
+
+/-- The power mean of order `k` of the switchers: `E[Y ^ k | S = 1] = 2 ^ k (3 + 3 ^ k) / 4`. -/
+theorem condMean_rpow_switchers (k : ℝ) :
+    condMean p (fun ω => S ω = true) (fun ω => Y ω ^ k) = 2 ^ k * (3 + 3 ^ k) / 4 := by
+  simp only [condMean, FiniteDist.expect, FiniteDist.probOf, FiniteDist.prob,
+    Finset.sum_filter]
+  simp only [Fintype.sum_prod_type, Fintype.sum_bool, Fin.sum_univ_four, p,
+    FiniteDist.prod_apply, FiniteDist.uniform_apply, S, switchRule, L1, Y, Y1, Y0, y0]
+  norm_num
+  rw [show (6 : ℝ) = 2 * 3 by norm_num, Real.mul_rpow (by norm_num) (by norm_num)]
+  ring
+
+/-- The power mean of order `k` of the non-switchers: `E[Y ^ k | S = 0] = (1 + 3 · 3 ^ k) / 4`. -/
+theorem condMean_rpow_stayers (k : ℝ) :
+    condMean p (fun ω => S ω = false) (fun ω => Y ω ^ k) = (1 + 3 * 3 ^ k) / 4 := by
+  simp only [condMean, FiniteDist.expect, FiniteDist.probOf, FiniteDist.prob,
+    Finset.sum_filter]
+  simp only [Fintype.sum_prod_type, Fintype.sum_bool, Fin.sum_univ_four, p,
+    FiniteDist.prod_apply, FiniteDist.uniform_apply, S, switchRule, L1, Y, Y1, Y0, y0]
+  norm_num
+  ring
+
+/-- The Weibull factor in closed form: for `k ≠ 0`,
+`weibullFactor k = 2 ((3 + 3 ^ k) / (1 + 3 · 3 ^ k)) ^ (1 / k)`. -/
+theorem weibullFactor_eq (k : ℝ) (hk : k ≠ 0) :
+    weibullFactor k = 2 * ((3 + 3 ^ k) / (1 + 3 * 3 ^ k)) ^ k⁻¹ := by
+  rw [weibullFactor, condMean_rpow_switchers, condMean_rpow_stayers,
+    div_div_div_cancel_right₀ four_ne_zero, mul_div_assoc,
+    Real.mul_rpow (by positivity) (by positivity), Real.rpow_rpow_inv (by norm_num) hk]
+
+/-- No Weibull fit with known shape recovers the true time ratio in this example: for every
+shape `k > 0` the factor is strictly below `2`. -/
+theorem weibullFactor_lt_two (k : ℝ) (hk : 0 < k) : weibullFactor k < 2 := by
+  rw [weibullFactor_eq k hk.ne']
+  have hx : (1 : ℝ) < 3 ^ k := Real.one_lt_rpow (by norm_num) hk
+  have hr : ((3 : ℝ) + 3 ^ k) / (1 + 3 * 3 ^ k) < 1 := by
+    rw [div_lt_one (by linarith)]; linarith
+  have := Real.rpow_lt_one (by positivity) hr (inv_pos.2 hk)
+  linarith
+
+/-- At shape `k = 1` (the exponential model) the Weibull factor is the ratio of means `6/5`,
+which is also the unique root of the mean-balancing equation (`tse_stage_one_root`). -/
+theorem weibullFactor_one : weibullFactor 1 = 6 / 5 := by
+  rw [weibullFactor_eq 1 one_ne_zero]; norm_num
+
+/-- At shape `k = 2` the Weibull factor is `2 √(3/7)`. -/
+theorem weibullFactor_two : weibullFactor 2 = 2 * Real.sqrt (3 / 7) := by
+  rw [weibullFactor_eq 2 two_ne_zero, Real.sqrt_eq_rpow]
+  norm_num
+
+/-- At shape `k = 2` the Weibull factor `2 √(3/7)` differs from the true time ratio `2`, and
+the second-stage mean survival from progression with it is `(9 + √21) / 4`, which differs
+from the true mean `E[T0] = 3`. -/
+theorem weibull_two_biased :
+    weibullFactor 2 ≠ 2 ∧
+      p.expect (adjustedTime (weibullFactor 2)) = (9 + Real.sqrt 21) / 4 ∧
+      (9 + Real.sqrt 21) / 4 ≠ p.expect T0 := by
+  have hs : 0 < Real.sqrt (3 / 7) := by positivity
+  have hm : Real.sqrt (3 / 7) * Real.sqrt 21 = 3 := by
+    rw [← Real.sqrt_mul (by norm_num), show (3 / 7 : ℝ) * 21 = 3 ^ 2 by norm_num,
+      Real.sqrt_sq (by norm_num)]
+  refine ⟨(weibullFactor_lt_two 2 two_pos).ne, ?_, fun h => ?_⟩
+  · rw [expect_adjustedTime, weibullFactor_two]
+    field_simp
+    linear_combination (-4 : ℝ) * hm
+  · rw [tse_stage_two.1] at h
+    have h21 : Real.sqrt 21 = 3 := by linarith
+    have := Real.sq_sqrt (show (0 : ℝ) ≤ 21 by norm_num)
+    rw [h21] at this; norm_num at this
+
+/-- The logarithm of the ratio `(3 + 3 ^ k) / (1 + 3 · 3 ^ k)` of the closed form of
+`weibullFactor_eq`. -/
+noncomputable def logPowerRatio (k : ℝ) : ℝ := Real.log (3 + 3 ^ k) - Real.log (1 + 3 * 3 ^ k)
+
+/-- `logPowerRatio` vanishes at `0` with derivative `-(log 3) / 2`. -/
+theorem hasDerivAt_logPowerRatio : HasDerivAt logPowerRatio (-(Real.log 3) / 2) 0 := by
+  have h1 : HasDerivAt (fun k : ℝ => (3 : ℝ) ^ k) (3 ^ (0 : ℝ) * Real.log 3) 0 :=
+    (Real.hasStrictDerivAt_const_rpow (by norm_num) 0).hasDerivAt
+  have ha := (h1.const_add 3).log (by norm_num)
+  have hb := ((h1.const_mul 3).const_add 1).log (by norm_num)
+  refine (ha.sub hb).congr_deriv ?_
+  norm_num
+  ring
+
+/-- As the shape tends to `0`, the Weibull factor tends to the log-time root `2 / √3` of
+`tse_stage_one_log_root`: the power means tend to the geometric means. -/
+theorem tendsto_weibullFactor :
+    Filter.Tendsto weibullFactor (nhdsWithin 0 {0}ᶜ) (nhds (2 / Real.sqrt 3)) := by
+  have hs := hasDerivAt_logPowerRatio.tendsto_slope_zero
+  simp only [zero_add, smul_eq_mul] at hs
+  have hg0 : logPowerRatio 0 = 0 := by simp [logPowerRatio]; norm_num
+  have hpos : ∀ k : ℝ, (0 : ℝ) < (3 + 3 ^ k) / (1 + 3 * 3 ^ k) := fun k => by positivity
+  have hfun : ∀ k : ℝ, k ≠ 0 →
+      2 * Real.exp (k⁻¹ * (logPowerRatio k - logPowerRatio 0)) = weibullFactor k := by
+    intro k hk
+    rw [weibullFactor_eq k hk, hg0, sub_zero, Real.rpow_def_of_pos (hpos k), logPowerRatio,
+      ← Real.log_div (by positivity) (by positivity), mul_comm (Real.log _)]
+  have hlim : 2 / Real.sqrt 3 = 2 * Real.exp (-(Real.log 3) / 2) := by
+    rw [show -(Real.log 3) / 2 = -(Real.log (Real.sqrt 3)) by
+      rw [Real.log_sqrt (by norm_num)]; ring, Real.exp_neg, Real.exp_log (by positivity),
+      div_eq_mul_inv]
+  rw [hlim]
+  refine (((Real.continuous_exp.tendsto _).comp hs).const_mul 2).congr' ?_
+  filter_upwards [self_mem_nhdsWithin] with k hk
+  exact hfun k hk
 
 /-! #### The delay between progression and the switch decision
 
