@@ -142,3 +142,5 @@ public import CausalInference.InstrumentalVariables.InvalidInstrument
 public import CausalInference.Graphical.GlobalMarkovCompletenessLemmas
 public import CausalInference.Designs.Panel.DifferenceInDifferences
 public import CausalInference.Designs.Panel.FixedEffects
+public import CausalInference.Surrogacy.Criteria
+public import CausalInference.Surrogacy.Counterexamples
