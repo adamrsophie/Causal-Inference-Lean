@@ -27,7 +27,7 @@
 </header>
 <div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
 <div class="page wrap with-toc">
-<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#po-framework">Potential outcomes</a></li><li class="l3"><a href="#potential-outcomes">Potential outcomes and consistency</a></li><li class="l3"><a href="#effects">Causal effects</a></li><li class="l3"><a href="#identification">Identification, estimation and inference</a></li><li class="l3"><a href="#identified-set">Identified set and point identification</a></li><li class="l3"><a href="#assumptions">Ignorability and positivity</a></li><li class="l2"><a href="#designs">Designs</a></li><li class="l3"><a href="#design-based">Design-based inference</a></li><li class="l3"><a href="#sharp-null">Sharp null and the randomization test</a></li><li class="l3"><a href="#instrument">Instrument, principal strata and compliers</a></li><li class="l3"><a href="#parallel-trends">Parallel trends</a></li><li class="l3"><a href="#rd">Regression discontinuity</a></li><li class="l3"><a href="#synthetic">Synthetic control</a></li><li class="l3"><a href="#interference">Interference</a></li><li class="l3"><a href="#mediation">Mediation and cross-world quantities</a></li><li class="l3"><a href="#missing">Missing data mechanisms</a></li><li class="l3"><a href="#sensitivity">Sensitivity analysis</a></li><li class="l2"><a href="#graphs">Causal graphs</a></li><li class="l3"><a href="#dag">Causal graph, parents and ancestors</a></li><li class="l3"><a href="#intervention">Intervention and graph surgery</a></li><li class="l3"><a href="#d-separation">d-separation</a></li><li class="l3"><a href="#admg">Mixed graphs and districts</a></li><li class="l3"><a href="#latent-projection">Latent projection</a></li><li class="l2"><a href="#estimation">Estimation</a></li><li class="l3"><a href="#asymptotics">Consistency, asymptotic linearity and coverage</a></li></ul></nav></details></aside>
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#po-framework">Potential outcomes</a></li><li class="l3"><a href="#potential-outcomes">Potential outcomes and consistency</a></li><li class="l3"><a href="#effects">Causal effects</a></li><li class="l3"><a href="#identification">Identification, estimation and inference</a></li><li class="l3"><a href="#identified-set">Identified set and point identification</a></li><li class="l3"><a href="#assumptions">Ignorability and positivity</a></li><li class="l2"><a href="#designs">Designs</a></li><li class="l3"><a href="#design-based">Design-based inference</a></li><li class="l3"><a href="#sharp-null">Sharp null and the randomization test</a></li><li class="l3"><a href="#instrument">Instrument, principal strata and compliers</a></li><li class="l3"><a href="#parallel-trends">Parallel trends</a></li><li class="l3"><a href="#rd">Regression discontinuity</a></li><li class="l3"><a href="#synthetic">Synthetic control</a></li><li class="l3"><a href="#interference">Interference</a></li><li class="l3"><a href="#mediation">Mediation and cross-world quantities</a></li><li class="l3"><a href="#missing">Missing data mechanisms</a></li><li class="l3"><a href="#sensitivity">Sensitivity analysis</a></li><li class="l2"><a href="#graphs">Causal graphs</a></li><li class="l3"><a href="#dag">Causal graph, parents and ancestors</a></li><li class="l3"><a href="#intervention">Intervention and graph surgery</a></li><li class="l3"><a href="#d-separation">d-separation</a></li><li class="l3"><a href="#admg">Mixed graphs and districts</a></li><li class="l3"><a href="#latent-projection">Latent projection</a></li><li class="l3"><a href="#moral-graph">Moral graph</a></li><li class="l3"><a href="#back-door">Back-door and front-door criteria</a></li><li class="l3"><a href="#do-calculus">do-calculus</a></li><li class="l3"><a href="#scm">Structural causal model</a></li><li class="l3"><a href="#counterfactual">Counterfactual</a></li><li class="l3"><a href="#linear-sem">Linear structural equation model</a></li><li class="l3"><a href="#survival">Survival, risk and hazard</a></li><li class="l3"><a href="#dynamic-regime">Dynamic treatment regime</a></li><li class="l3"><a href="#e-value">E-value</a></li><li class="l3"><a href="#reliability">Reliability ratio and attenuation</a></li><li class="l3"><a href="#rmst">Restricted mean survival time</a></li><li class="l3"><a href="#ipcw">Inverse probability of censoring weights</a></li><li class="l3"><a href="#surrogate">Surrogate endpoint</a></li><li class="l3"><a href="#z-bias">Z-bias</a></li><li class="l2"><a href="#estimation">Estimation</a></li><li class="l3"><a href="#asymptotics">Consistency, asymptotic linearity and coverage</a></li></ul></nav></details></aside>
 <main id="content" tabindex="-1">
 <h1>Background and glossary</h1>
 <p class="lead">The terms used across this site, each with a definition, a small example, and a link to where the library defines or uses it. Every numerical example on this page is recomputed with exact rational arithmetic by a script that ships with the site generator.</p>
@@ -53,6 +53,20 @@
 <a href="#d-separation">d-separation</a> ·
 <a href="#admg">mixed graphs and districts</a> ·
 <a href="#latent-projection">latent projection</a> ·
+<a href="#moral-graph">moral graph</a> ·
+<a href="#back-door">back-door and front-door criteria</a> ·
+<a href="#do-calculus">do-calculus</a> ·
+<a href="#scm">structural causal model</a> ·
+<a href="#counterfactual">counterfactual</a> ·
+<a href="#linear-sem">linear SEM</a> ·
+<a href="#survival">survival and hazard</a> ·
+<a href="#dynamic-regime">dynamic regime</a> ·
+<a href="#e-value">E-value</a> ·
+<a href="#reliability">reliability ratio</a> ·
+<a href="#rmst">restricted mean survival time</a> ·
+<a href="#ipcw">censoring weights</a> ·
+<a href="#surrogate">surrogate endpoint</a> ·
+<a href="#z-bias">Z-bias</a> ·
 <a href="#asymptotics">consistency and coverage</a>
 </p></nav>
 
@@ -162,6 +176,76 @@
 <p><b>Example.</b> Projecting U out of X ← U → Y, X → Y gives X → Y with X ↔ Y, the bow graph.</p>
 <p><b>In the library.</b> <a href="reference.html#CausalInference.ADMG.project"><code>ADMG.project</code></a>, <a href="reference.html#CausalInference.latentProjection"><code>latentProjection</code></a>, and the composition law <a href="reference.html#CausalInference.ADMG.project_project"><code>ADMG.project_project</code></a>.</p>
 
+<h3 id="moral-graph">Moral graph</h3>
+<p><b>Definition.</b> The moral graph of a directed graph joins every pair of vertices that share a child ("marrying" the parents) and then forgets the directions of all edges. d-separation can be read off it: restrict the graph to the ancestors of the sets involved, moralize, and check ordinary separation.</p>
+<p><b>Example.</b> In X → C ← Y, given C the ancestral subgraph contains C, its moral graph has an edge between X and Y, and X and Y are not separated. Given the empty set the ancestral subgraph is X and Y alone, with no edge, so they are separated.</p>
+<p><b>In the library.</b> <a href="reference.html#Digraph.dSep_iff_moralSep"><code>Digraph.dSep_iff_moralSep</code></a>.</p>
+
+<h3 id="back-door">Back-door and front-door criteria</h3>
+<p><b>Definition.</b> A set Z satisfies the back-door criterion for the effect of X on Y when no vertex of Z is a descendant of X and Z blocks every path between X and Y that starts with an arrow into X. Then P(y | do(x)) = Σ<sub>z</sub> P(y | x, z) P(z). The front-door criterion covers a mediator set Z that intercepts every directed path from X to Y, when X and Y share an unobserved common cause.</p>
+<p><b>Example.</b> In Z → X → Y with Z → Y, the set {Z} satisfies the back-door criterion; the empty set does not, because of the path X ← Z → Y.</p>
+<p><b>In the library.</b> The modules of the <a href="reference.html#criteria">Graphical criteria</a> area, and <a href="reference.html#CausalInference.SCM.effect_eq_sum_of_backDoor"><code>SCM.effect_eq_sum_of_backDoor</code></a> and <a href="reference.html#CausalInference.SCM.effect_eq_sum_of_frontDoor"><code>SCM.effect_eq_sum_of_frontDoor</code></a>.</p>
+
+<h3 id="do-calculus">do-calculus</h3>
+<p><b>Definition.</b> Three rules that transform expressions with do(·) into each other when certain d-separations hold in graphs with incoming or outgoing edges deleted: Rule 1 inserts or deletes an observation, Rule 2 exchanges an action and an observation, Rule 3 inserts or deletes an action. An effect is identified when the rules turn it into an expression without do(·).</p>
+<p><b>Example.</b> The back-door adjustment formula is one application of Rule 2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.SCM.rule1"><code>SCM.rule1</code></a>, <a href="reference.html#CausalInference.SCM.rule2"><code>SCM.rule2</code></a>, <a href="reference.html#CausalInference.SCM.rule3"><code>SCM.rule3</code></a>.</p>
+
+<h3 id="scm">Structural causal model</h3>
+<p><b>Definition.</b> A structural causal model assigns to each variable an equation that computes it from its parents in a directed acyclic graph and from its own exogenous noise. With independent noises the model is Markovian, and its distribution factorizes along the graph. The intervention do(X := x) replaces the equations of X by constants; the resulting distribution is the truncated factorization.</p>
+<p><b>Example.</b> In Z → X → Y, the intervention do(X := 1) drops the factor P(X | Z), so P(Z = z, Y = y | do(X := 1)) = P(Z = z) P(Y = y | X = 1).</p>
+<p><b>In the library.</b> The modules of the <a href="reference.html#scm">Structural causal models</a> area, with the truncated factorization <a href="reference.html#CausalInference.SCM.dist_intervene"><code>SCM.dist_intervene</code></a>.</p>
+
+<h3 id="counterfactual">Counterfactual</h3>
+<p><b>Definition.</b> The potential response Y<sub>x</sub>(u) is the value of Y in the model modified by do(X := x), at a fixed value u of the noise. The probability of a counterfactual given factual evidence is computed in three steps: abduction (condition the noise on the evidence), action (intervene), and prediction (solve the modified model).</p>
+<p><b>Example.</b> Consistency: if X(u) = x, then intervening to set X to the value it already has changes nothing, so Y<sub>x</sub>(u) = Y(u).</p>
+<p><b>In the library.</b> <a href="reference.html#mod-SCM.Counterfactuals"><code>SCM.Counterfactuals</code></a>, with consistency <a href="reference.html#CausalInference.SCM.solve_intervene_of_agree"><code>SCM.solve_intervene_of_agree</code></a>.</p>
+
+<h3 id="linear-sem">Linear structural equation model</h3>
+<p><b>Definition.</b> A linear SEM writes each variable as a linear combination of its parents plus an error: X = B X + ε. The entry of B for an edge u → v is the path coefficient, the direct effect of u on v; the total effect is the sum over directed paths of the products of their coefficients. Correlated errors stand for latent common causes.</p>
+<p><b>Example.</b> In Z → X → Y with coefficients a and b, the total effect of Z on Y is a·b, and with uncorrelated errors the regression slope of Y on X is b.</p>
+<p><b>In the library.</b> The modules of the <a href="reference.html#linear-sem">Linear structural equation models</a> area.</p>
+
+<h3 id="survival">Survival, risk and hazard</h3>
+<p><b>Definition.</b> For a discrete event time T, the survival at time k is P(T &gt; k), the risk is 1 minus the survival, and the hazard at k is the probability of the event at k among those still at risk. Survival is the product of one minus the hazards. When follow-up is censored, the Kaplan-Meier (product-limit) estimator multiplies the observed proportions surviving each time among those at risk and uncensored.</p>
+<p><b>Example.</b> With hazards 0.1 and 0.2 at the first two times, the survival after two times is 0.9 · 0.8 = 0.72.</p>
+<p><b>In the library.</b> The modules of the <a href="reference.html#survival">Survival analysis</a> area.</p>
+
+<h3 id="dynamic-regime">Dynamic treatment regime</h3>
+<p><b>Definition.</b> A static regime fixes every treatment in advance; a dynamic regime chooses each treatment as a function of the covariates observed up to that time. Its mean outcome is identified by a g-formula in which the treatment at each step is the one the regime assigns to the history.</p>
+<p><b>Example.</b> "Treat at the second visit if and only if the marker is high" is a dynamic regime.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Longitudinal.expect_eq_gFormulaDyn"><code>Longitudinal.expect_eq_gFormulaDyn</code></a>.</p>
+
+<h3 id="e-value">E-value</h3>
+<p><b>Definition.</b> For an observed risk ratio RR &gt; 0, let q be the larger of RR and 1/RR. The E-value q + √(q (q − 1)) is the smallest common risk ratio that an unmeasured confounder would need with both the exposure and the outcome to explain away RR completely. The G-value does the same for a confounder of given prevalence among the exposed.</p>
+<p><b>Example.</b> For RR = 4 the E-value is 4 + √12, about 7.46, and a protective RR = 1/4 has the same E-value.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.BiasAnalysis.ExternalAdjustment.boundingFactor_eValue"><code>ExternalAdjustment.boundingFactor_eValue</code></a>.</p>
+
+<h3 id="reliability">Reliability ratio and attenuation</h3>
+<p><b>Definition.</b> Under classical measurement error, a surrogate X + e replaces a continuous exposure X, with e uncorrelated with X and with the outcome. The reliability ratio is Var(X) / (Var(X) + Var(e)), between 0 and 1, and the regression slope on the surrogate equals the true slope times the reliability ratio.</p>
+<p><b>Example.</b> If the error variance equals the exposure variance, the reliability ratio is 1/2 and the slope is halved.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.BiasAnalysis.MeasurementError.ClassicalError.slope_eq_div_reliability"><code>ClassicalError.slope_eq_div_reliability</code></a>.</p>
+
+<h3 id="rmst">Restricted mean survival time</h3>
+<p><b>Definition.</b> For an event time T and a horizon τ, the restricted mean survival time is E[min(T, τ)], the area under the survival curve up to τ. In discrete time it is the sum of the survival probabilities at the times before τ.</p>
+<p><b>Example.</b> With survival 1, 0.9 and 0.81 at times 0, 1 and 2, the restricted mean survival time at τ = 3 is 2.71.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Survival.rmst"><code>Survival.rmst</code></a>.</p>
+
+<h3 id="ipcw">Inverse probability of censoring weights</h3>
+<p><b>Definition.</b> When individuals are censored for a reason related to their prognosis, for example at a switch of treatment, each remaining individual is weighted by the inverse of the probability of having remained uncensored given the observed history. The weighted data then stand for the population that would have been observed without censoring.</p>
+<p><b>Example.</b> An individual whose history gave a probability 1/2 of remaining unswitched counts twice.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Survival.IPCW.ipcWeight"><code>Survival.IPCW.ipcWeight</code></a>.</p>
+
+<h3 id="surrogate">Surrogate endpoint</h3>
+<p><b>Definition.</b> An outcome measured earlier or more easily than the final outcome, used in its place. At the trial level a surrogate is judged by how well the treatment effect on it predicts the effect on the final outcome. An association between surrogate and outcome does not by itself make the surrogate valid: in the surrogate paradox a treatment improves the surrogate, the surrogate improves the outcome, and the treatment still harms the outcome on average.</p>
+<p><b>Example.</b> If the effect on the final outcome is exactly λ₁ times the effect on the surrogate in every trial, a treatment with no effect on the surrogate has no effect on the final outcome.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Surrogacy.SurrogacyCriteria"><code>Surrogacy.SurrogacyCriteria</code></a>.</p>
+
+<h3 id="z-bias">Z-bias</h3>
+<p><b>Definition.</b> Adjusting for an instrument, a variable that affects the treatment and affects the outcome only through the treatment, does not remove confounding by an unmeasured variable and can amplify it. In a linear model the bias grows by the factor Var(X) / Var(X | Z).</p>
+<p><b>Example.</b> With every coefficient and error variance equal to 1 the unadjusted bias is 1/3 and the bias after adjusting for the instrument is 1/2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.ZBias.abs_bias_le"><code>ZBias.abs_bias_le</code></a>.</p>
+
 <h2 id="estimation">Estimation</h2>
 
 <h3 id="asymptotics">Consistency, asymptotic linearity and coverage</h3>
@@ -173,7 +257,7 @@
 </div>
 <footer class="site-footer"><div class="wrap">
 <p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
-<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+<p>Last updated 27 November 2026, from commit <code>e200880</code> on the main branch.</p>
 </div></footer>
 </body>
 </html>

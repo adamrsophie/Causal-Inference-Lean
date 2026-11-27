@@ -27,10 +27,10 @@
 </header>
 <div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
 <div class="page wrap with-toc">
-<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#fisher">Fisher's randomization test is valid</a></li><li class="l2"><a href="#neyman">Neyman's variance formula</a></li><li class="l2"><a href="#hudgens-halloran">Unbiased estimation under interference</a></li><li class="l2"><a href="#late">The local average treatment effect theorem</a></li><li class="l2"><a href="#did">Difference in differences</a></li><li class="l2"><a href="#manski">Manski bounds, with sharpness</a></li><li class="l2"><a href="#mediation">The mediation formula, and why it needs a cross-world assumption</a></li><li class="l2"><a href="#latent-projection">Latent projection composes</a></li><li class="l2"><a href="#d-separation">d-separation and the local Markov property</a></li><li class="l2"><a href="#g-formula">The g-formula for treatments over time</a></li><li class="l2"><a href="#simpson">The sure-thing principle and Simpson's reversal</a></li><li class="l2"><a href="#global-markov">d-separation implies conditional independence</a></li><li class="l2"><a href="#rd">Regression discontinuity</a></li><li class="l2"><a href="#synthetic-control">Synthetic control under a factor model</a></li><li class="l2"><a href="#missing-data">Missing data: weighting under MAR</a></li><li class="l2"><a href="#sensitivity">Sensitivity to hidden bias</a></li><li class="l2"><a href="#estimation">Coverage of the Wald interval</a></li><li class="l2"><a href="#identification">What point identification means</a></li></ul></nav></details></aside>
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#fisher">Fisher's randomization test is valid</a></li><li class="l2"><a href="#neyman">Neyman's variance formula</a></li><li class="l2"><a href="#hudgens-halloran">Unbiased estimation under interference</a></li><li class="l2"><a href="#late">The local average treatment effect theorem</a></li><li class="l2"><a href="#did">Difference in differences</a></li><li class="l2"><a href="#manski">Manski bounds, with sharpness</a></li><li class="l2"><a href="#mediation">The mediation formula, and why it needs a cross-world assumption</a></li><li class="l2"><a href="#latent-projection">Latent projection composes</a></li><li class="l2"><a href="#d-separation">d-separation and the local Markov property</a></li><li class="l2"><a href="#g-formula">The g-formula for treatments over time</a></li><li class="l2"><a href="#dynamic">Dynamic treatment regimes</a></li><li class="l2"><a href="#bias-analysis">Quantitative bias analysis</a></li><li class="l2"><a href="#z-bias">Adjusting for an instrument amplifies confounding bias</a></li><li class="l2"><a href="#aggregation">Aggregation bias in the odds ratio</a></li><li class="l2"><a href="#simpson">The sure-thing principle and Simpson's reversal</a></li><li class="l2"><a href="#global-markov">d-separation implies conditional independence</a></li><li class="l2"><a href="#moral-graph">d-separation by the moral graph</a></li><li class="l2"><a href="#do-calculus">The three rules of do-calculus</a></li><li class="l2"><a href="#scm">Interventions in structural causal models</a></li><li class="l2"><a href="#linear-sem">Linear structural equation models: the bow</a></li><li class="l2"><a href="#survival">Survival under censoring</a></li><li class="l2"><a href="#hazard-mixture">Frailty selection in hazard ratios</a></li><li class="l2"><a href="#surrogacy">Surrogate endpoints</a></li><li class="l2"><a href="#rd">Regression discontinuity</a></li><li class="l2"><a href="#synthetic-control">Synthetic control under a factor model</a></li><li class="l2"><a href="#missing-data">Missing data: weighting under MAR</a></li><li class="l2"><a href="#sensitivity">Sensitivity to hidden bias</a></li><li class="l2"><a href="#estimation">Coverage of the Wald interval</a></li><li class="l2"><a href="#identification">What point identification means</a></li></ul></nav></details></aside>
 <main id="content" tabindex="-1">
 <h1>Highlighted theorems</h1>
-<p class="lead">One or two results from each area, each with its Lean statement and a plain mathematical reading. Statements are copied from the source on the main branch by the site generator; the names are the Lean identifiers and link to the <a href="reference.html">Reference</a> page, where every hypothesis and every docstring can be read in full. These 31 theorems are drawn with a white ring on the <a href="map.html">map</a>.</p>
+<p class="lead">One or two results from each area, each with its Lean statement and a plain mathematical reading. Statements are copied from the source on the main branch by the site generator; the names are the Lean identifiers and link to the <a href="reference.html">Reference</a> page, where every hypothesis and every docstring can be read in full. These 73 theorems are drawn with a white ring on the <a href="map.html">map</a>.</p>
 <p class="sub">Labels: <span class="cls known">identification</span> a causal quantity equals a functional of the observed data under stated assumptions. <span class="cls general">design-based inference</span> a statement about an estimator or a test over the randomization distribution or the sampling distribution. <span class="cls tooling">structure</span> a fact about graphs or about the definitions themselves. <span class="cls restricted">counterexample</span> a concrete model showing that a hypothesis cannot be dropped or that a quantity is not identified. Every assumption is a hypothesis of the theorem; nothing is assumed globally (see <a href="methods.html">Methods</a>).</p>
 
 <h2 id="fisher">Fisher's randomization test is valid</h2>
@@ -96,6 +96,21 @@
   (z : Bool) :
   identifiedSet (models μ lo hi) IVModel.observed (<span class="k"><span class="k">fun</span></span> M' ↦ M'.ate μ z) M.observed =
     Icc (lowerBound μ lo hi M.observed) (upperBound μ lo hi M.observed)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVBounds.identifiedSet_ate">CausalInference.IVBounds.identifiedSet_ate</a> in <a href="reference.html#mod-InstrumentalVariables.Bounds">CausalInference.InstrumentalVariables.Bounds</a></p>
+<p>Without monotonicity, for binary outcomes, the bounds of Balke and Pearl are the exact identified set: for every observed table that satisfies the instrumental inequalities, with both instrument arms of positive probability, the average treatment effects of the instrumental variable models with that observed law fill the interval between the two bounds.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">ate_identifiedSet_balkePearl</span> {p : Observable} (hp : BinaryIVConstraints p) {π : <span class="t"><span class="t">ℝ</span></span>}
+  (h0 : 0 &lt; π) (h1 : π &lt; 1) (z : Bool) :
+  {c | <span class="k"><span class="k">∃</span></span> (μ : Measure RealSpace) (M : IVModel RealSpace), IsProbabilityMeasure μ ∧
+      M.Exclusion μ ∧ M.InstrumentIndependence μ ∧ M.BinaryOutcome μ ∧
+      μ.real (M.instrumentEq true) = π ∧ M.obsTable μ = p ∧ M.ate μ z = c} =
+    Icc (lower p) (upper p)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVModel.ate_identifiedSet_balkePearl">CausalInference.IVModel.ate_identifiedSet_balkePearl</a> in <a href="reference.html#mod-InstrumentalVariables.BalkePearl">CausalInference.InstrumentalVariables.BalkePearl</a></p>
+<span class="cls restricted">counterexample</span>
+<p>The effect on the treated needs both instrument arms: when everyone receives the instrument, two populations with no intrusion have the same observed law and effects on the treated 1 and 0.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">ett_not_identified_at_one</span> :
+  obsJoint (pointWeights (1, 1)) 1 = obsJoint (pointWeights (1, 3)) 1 ∧
+    probTreatedGiven (obs (pointWeights (1, 1))) false = 0 ∧
+    probTreatedGiven (obs (pointWeights (1, 3))) false = 0 ∧
+    probX1 (pointWeights (1, 1)) 1 = 1 ∧ probX1 (pointWeights (1, 3)) 1 = 1 ∧
+    ett (pointWeights (1, 1)) 1 = 1 ∧ ett (pointWeights (1, 3)) 1 = 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVResponse.ett_not_identified_at_one">CausalInference.IVResponse.ett_not_identified_at_one</a> in <a href="reference.html#mod-InstrumentalVariables.Treated">CausalInference.InstrumentalVariables.Treated</a></p>
 
 <h2 id="did">Difference in differences</h2>
 <span class="cls known">identification</span>
@@ -181,6 +196,67 @@
       gFormula2 p L0 A0 L1 A1 (<span class="k"><span class="k">fun</span></span> _ =&gt; false) (<span class="k"><span class="k">fun</span></span> _ _ =&gt; false) Y = 0 ∧
     naiveAdjusted ≠ 0 ∧ unadjusted ≠ 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Longitudinal.FeedbackExample.adjustment_fails">CausalInference.Longitudinal.FeedbackExample.adjustment_fails</a> in <a href="reference.html#mod-Longitudinal.Counterexamples">CausalInference.Longitudinal.Counterexamples</a></p>
 
+<h2 id="dynamic">Dynamic treatment regimes</h2>
+<span class="cls known">identification</span>
+<p>A dynamic regime chooses each treatment from the covariate history observed so far. Under consistency for the regime, sequential exchangeability and sequential positivity, the mean outcome under the regime equals its g-formula, at any finite horizon.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">expect_eq_gFormulaDyn</span> {K : <span class="t"><span class="t">ℕ</span></span>} (p : FiniteDist Ω) (A : Fin K → Ω → 𝒜)
+  (L : Fin K → Ω → 𝓛) (Y : Ω → <span class="t"><span class="t">ℝ</span></span>) (g : DynamicRegime K 𝒜 𝓛) (Yg : Ω → <span class="t"><span class="t">ℝ</span></span>)
+  (hcons : <span class="k"><span class="k">∀</span></span> ω, g.Follows A L ω → Y ω = Yg ω) (hex : SeqExchangeableDyn p A L g Yg)
+  (hpos : SeqPositiveDyn p A L g) :
+  p.expect Yg = gFormulaDyn p A L g Y ∧
+    gFormulaDyn p A L g Y = iceGFormulaDyn K p A L g Y</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Longitudinal.expect_eq_gFormulaDyn">CausalInference.Longitudinal.expect_eq_gFormulaDyn</a> in <a href="reference.html#mod-Longitudinal.Dynamic">CausalInference.Longitudinal.Dynamic</a></p>
+<p>In a longitudinal model the potential outcome under the regime is built from the potential covariates: the regime is applied along the counterfactual covariate path. Consistency along the regime then follows from consistency and nonanticipation, and the same g-formula holds.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">expect_YpoDyn_eq_gFormulaDyn</span> [Inhabited 𝒜] [DecidableEq Ω] [DecidableEq 𝒜]
+  [Fintype 𝓛] [DecidableEq 𝓛] (hna : M.Nonanticipating) (hcons : M.Consistent)
+  (g : DynamicRegime K 𝒜 𝓛) (hex : SeqExchangeableDyn M.p M.A M.L g (M.YpoDyn g))
+  (hpos : SeqPositiveDyn M.p M.A M.L g) :
+  M.p.expect (M.YpoDyn g) = gFormulaDyn M.p M.A M.L g M.Y</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Longitudinal.Model.expect_YpoDyn_eq_gFormulaDyn">CausalInference.Longitudinal.Model.expect_YpoDyn_eq_gFormulaDyn</a> in <a href="reference.html#mod-Longitudinal.Dynamic">CausalInference.Longitudinal.Dynamic</a></p>
+<p>In an explicit sequentially randomized trial, the regime "treat at the second time if and only if the covariate is true" has a strictly larger mean outcome than every static regime, and the g-formulas computed from the observed data show the same ordering.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">dynamic_beats_static</span> :
+  (<span class="k"><span class="k">∀</span></span> a0 a1 : Bool, p.expect (Ypo a0 a1) &lt; p.expect (dynamicOutcome2 L0 L1po Ypo g)) ∧
+    <span class="k"><span class="k">∀</span></span> a : Fin 2 → Bool, gFormula p A L a Y &lt; gFormulaDyn p A L g Y</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Longitudinal.DynamicExample.dynamic_beats_static">CausalInference.Longitudinal.DynamicExample.dynamic_beats_static</a> in <a href="reference.html#mod-Longitudinal.Dynamic">CausalInference.Longitudinal.Dynamic</a></p>
+
+<h2 id="bias-analysis">Quantitative bias analysis</h2>
+<span class="cls known">identification</span>
+<p>Selection bias on a two by two table: if the selection proportions and the cells of the source table are positive, the source odds ratio is the observed odds ratio divided by the selection odds ratio. The three corrections in use (projection of the source table, the selection odds ratio, and weighting by the inverse of the participation probability) give the same answer whenever the participant and projected cells are positive.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">oddsRatio_source_eq</span> (S src : Table) (hS : <span class="k"><span class="k">∀</span></span> d e, 0 &lt; S d e)
+  (hsrc : <span class="k"><span class="k">∀</span></span> d e, 0 &lt; src d e) :
+  0 &lt; oddsRatio src ∧ oddsRatio src = oddsRatio (selected S src) / selectionOddsRatio S</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.BiasAnalysis.SelectionAdjustment.oddsRatio_source_eq">CausalInference.BiasAnalysis.SelectionAdjustment.oddsRatio_source_eq</a> in <a href="reference.html#mod-BiasAnalysis.SelectionAdjustment">CausalInference.BiasAnalysis.SelectionAdjustment</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">projection_ipw_selectionOddsRatio</span> (a b : Table) (m p : Bool → <span class="t"><span class="t">ℝ</span></span>)
+  (ha : <span class="k"><span class="k">∀</span></span> d e, 0 &lt; a d e) (hP : <span class="k"><span class="k">∀</span></span> d e, 0 &lt; proj a b m p d e) :
+  ipw (projSel a b m p) a = proj a b m p ∧
+    oddsRatio (proj a b m p) = oddsRatio a / selectionOddsRatio (projSel a b m p)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.BiasAnalysis.SelectionAdjustment.projection_ipw_selectionOddsRatio">CausalInference.BiasAnalysis.SelectionAdjustment.projection_ipw_selectionOddsRatio</a> in <a href="reference.html#mod-BiasAnalysis.SelectionAdjustment">CausalInference.BiasAnalysis.SelectionAdjustment</a></p>
+<p>Unmeasured confounding: for an observed risk ratio of at least 1, the E-value is exactly the common strength of the two confounder associations at which the bounding factor equals the observed risk ratio, and the G-value does the same for a confounder of given prevalence among the exposed.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">boundingFactor_eValue</span> {RR : <span class="t"><span class="t">ℝ</span></span>} (hRR : 1 ≤ RR) :
+  boundingFactor (eValue RR) (eValue RR) = RR</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.BiasAnalysis.ExternalAdjustment.boundingFactor_eValue">CausalInference.BiasAnalysis.ExternalAdjustment.boundingFactor_eValue</a> in <a href="reference.html#mod-BiasAnalysis.ExternalAdjustment">CausalInference.BiasAnalysis.ExternalAdjustment</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">biasFactor_gValue</span> {RR p₁ : <span class="t"><span class="t">ℝ</span></span>} (hRR : 1 ≤ RR) (hp₁ : 0 &lt; p₁) :
+  biasFactor (gValue RR p₁) p₁ (p₁ / gValue RR p₁) = RR</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.BiasAnalysis.ExternalAdjustment.biasFactor_gValue">CausalInference.BiasAnalysis.ExternalAdjustment.biasFactor_gValue</a> in <a href="reference.html#mod-BiasAnalysis.ExternalAdjustment">CausalInference.BiasAnalysis.ExternalAdjustment</a></p>
+<p>Classical measurement error in a continuous exposure attenuates the regression slope by the reliability ratio, and dividing by it corrects the slope. With two mismeasured covariates the estimate computed from the surrogates need not lie between the crude and the adjusted value: in a model built from four fair coins the adjusted and crude slopes are 1, the slope on the surrogate is 1/2, and the coefficient in the two covariate regression is 2/5.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">slope_eq_div_reliability</span> (h : ClassicalError μ x e y) (hx : 0 &lt; Var[x; μ]) :
+  slope μ x y = slope μ (x + e) y / reliability μ x e</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.BiasAnalysis.MeasurementError.ClassicalError.slope_eq_div_reliability">CausalInference.BiasAnalysis.MeasurementError.ClassicalError.slope_eq_div_reliability</a> in <a href="reference.html#mod-BiasAnalysis.MeasurementError">CausalInference.BiasAnalysis.MeasurementError</a></p>
+<span class="cls restricted">counterexample</span>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">two_covariate_not_between</span> :
+  coef2 coins4 x4 v4 x4 = 1 ∧ slope coins4 x4 x4 = 1 ∧ slope coins4 (x4 + e4) x4 = 1 / 2 ∧
+    coef2 coins4 (x4 + e4) (v4 + e4') x4 = 2 / 5</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.BiasAnalysis.MeasurementError.Examples.two_covariate_not_between">CausalInference.BiasAnalysis.MeasurementError.Examples.two_covariate_not_between</a> in <a href="reference.html#mod-BiasAnalysis.MeasurementError">CausalInference.BiasAnalysis.MeasurementError</a></p>
+
+<h2 id="z-bias">Adjusting for an instrument amplifies confounding bias</h2>
+<span class="cls restricted">counterexample</span>
+<p>In a linear structural model with an instrument Z, an unmeasured confounder U, a treatment X and an outcome Y, and uncorrelated errors, the regression of Y on X and Z is at least as biased as the regression of Y on X alone, with the same sign, when Z satisfies the exclusion restriction. With every coefficient and error variance equal to 1 the two biases are 1/3 and 1/2. When Z also affects Y directly it is a confounder, and adjusting for it reduces the absolute bias from 2/3 to 1/2.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">abs_bias_le</span> (hz : 0 &lt; ω 0) (hv : 0 &lt; γ ^ 2 * ω 1 + ω 2) {r s : Fin 4 → <span class="t"><span class="t">ℝ</span></span>}
+  (hr : IsRegCoeff (model α γ β δ 0 ω hω).cov {2} 3 r)
+  (hs : IsRegCoeff (model α γ β δ 0 ω hω).cov {2, 0} 3 s) :
+  0 ≤ (r 2 - (model α γ β δ 0 ω hω).T 3 2) * (s 2 - (model α γ β δ 0 ω hω).T 3 2) ∧</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.ZBias.abs_bias_le">CausalInference.ZBias.abs_bias_le</a> in <a href="reference.html#mod-Sensitivity.ZBias">CausalInference.Sensitivity.ZBias</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">abs_bias_adjusted_lt</span> {r s : Fin 4 → <span class="t"><span class="t">ℝ</span></span>} (hr : IsRegCoeff M.cov {2} 3 r)
+  (hs : IsRegCoeff M.cov {2, 0} 3 s) : |s 2 - M.T 3 2| &lt; |r 2 - M.T 3 2|</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.ZBias.Counterexample.abs_bias_adjusted_lt">CausalInference.ZBias.Counterexample.abs_bias_adjusted_lt</a> in <a href="reference.html#mod-Sensitivity.ZBias">CausalInference.Sensitivity.ZBias</a></p>
+
+<h2 id="aggregation">Aggregation bias in the odds ratio</h2>
+<span class="cls tooling">structure</span>
+<p>With a common stratum odds ratio ψ &gt; 1, a stratifier independent of treatment, and a baseline risk that varies across strata of positive weight, the marginal odds ratio lies strictly between 1 and ψ. A common risk difference or risk ratio, by contrast, survives pooling unchanged.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">oddsRatio_marginal_mem_Ioo_of_one_lt</span> {π p₁ p₀ : V → <span class="t"><span class="t">ℝ</span></span>} {ψ : <span class="t"><span class="t">ℝ</span></span>} (hπ : IsWeights π)
+  (hψ : 1 &lt; ψ) (h₁ : <span class="k"><span class="k">∀</span></span> v, p₁ v &lt; 1) (h0 : <span class="k"><span class="k">∀</span></span> v, 0 &lt; p₀ v) (h1 : <span class="k"><span class="k">∀</span></span> v, p₀ v &lt; 1)
+  (hOR : <span class="k"><span class="k">∀</span></span> v, oddsRatio (p₁ v) (p₀ v) = ψ) (hvar : <span class="k"><span class="k">∃</span></span> v w, 0 &lt; π v ∧ 0 &lt; π w ∧ p₀ v ≠ p₀ w) :
+  oddsRatio (standardizedRisk π p₁) (standardizedRisk π p₀) ∈ Set.Ioo 1 ψ</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.EffectMeasure.oddsRatio_marginal_mem_Ioo_of_one_lt">CausalInference.EffectMeasure.oddsRatio_marginal_mem_Ioo_of_one_lt</a> in <a href="reference.html#mod-Measures.Aggregation">CausalInference.Measures.Aggregation</a></p>
+
 <h2 id="simpson">The sure-thing principle and Simpson's reversal</h2>
 <span class="cls tooling">structure</span>
 <p>If an action does not change the distribution of the strata, and raises the probability of an event in every stratum, then it raises the probability in the whole population. A reversal, as in the drug example of Pearl, Glymour and Jewell (recovery rates higher among men and among women, lower in the combined data: 273/350 against 289/350), is therefore possible only when the stratum distribution differs between the arms.</p>
@@ -195,6 +271,174 @@
 <p>If a finite distribution factorizes along an acyclic graph, then any two sets of variables that are d-separated by a third set are conditionally independent given it. No positivity is assumed. This is the soundness half of the theorem of Verma and Pearl and of Lauritzen, Dawid, Larsen and Leimer; with it, factorization, the local Markov property and the global Markov property are equivalent.</p>
 <pre class="lean"><code><code><span class="k">theorem</span> <span class="n">Factorizes.condIndep_of_dSep</span> (hG : G.IsAcyclic) {p : FiniteDist (<span class="k"><span class="k">∀</span></span> v, α v)}
   (h : G.Factorizes p) {X Y Z : Finset V} (hsep : G.DSep ↑X ↑Y ↑Z) : p.CondIndep X Y Z</code></code></pre><p class="src-link"><a href="reference.html#Digraph.Factorizes.condIndep_of_dSep">Digraph.Factorizes.condIndep_of_dSep</a> in <a href="reference.html#mod-Graphical.GlobalMarkov">CausalInference.Graphical.GlobalMarkov</a></p>
+<p>The converse also holds in its weak form: if x and y are d-connected given Z in an acyclic graph, some distribution with Boolean values that factorizes along the graph violates the independence. So d-separation is exactly the conditional independence shared by every distribution that factorizes along the graph.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">exists_factorizes_not_condIndep_of_dConn</span> (hG : G.IsAcyclic) {x y : V} {Z : Finset V}
+  (h : G.DConn {x} {y} ↑Z) :
+  <span class="k"><span class="k">∃</span></span> p : FiniteDist (V → Bool), G.Factorizes p ∧ ¬ p.CondIndep {x} {y} Z</code></code></pre><p class="src-link"><a href="reference.html#Digraph.exists_factorizes_not_condIndep_of_dConn">Digraph.exists_factorizes_not_condIndep_of_dConn</a> in <a href="reference.html#mod-Graphical.GlobalMarkovCompleteness">CausalInference.Graphical.GlobalMarkovCompleteness</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">dSep_iff_forall_factorizes_condIndep</span> (hG : G.IsAcyclic) {x y : V} {Z : Finset V} :
+  G.DSep {x} {y} ↑Z ↔
+    <span class="k"><span class="k">∀</span></span> p : FiniteDist (V → Bool), G.Factorizes p → p.CondIndep {x} {y} Z</code></code></pre><p class="src-link"><a href="reference.html#Digraph.dSep_iff_forall_factorizes_condIndep">Digraph.dSep_iff_forall_factorizes_condIndep</a> in <a href="reference.html#mod-Graphical.GlobalMarkovCompleteness">CausalInference.Graphical.GlobalMarkovCompleteness</a></p>
+
+<h2 id="moral-graph">d-separation by the moral graph</h2>
+<span class="cls tooling">structure</span>
+<p>X and Y are d-separated by Z exactly when Z separates X from Y in the moral graph of the subgraph on the ancestors of X ∪ Y ∪ Z: keep only those vertices, join every pair of parents of a common child, and forget the directions. Both directions are proved, for every directed graph.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">dSep_iff_moralSep</span> : G.DSep X Y Z ↔ G.MoralSep X Y Z</code></code></pre><p class="src-link"><a href="reference.html#Digraph.dSep_iff_moralSep">Digraph.dSep_iff_moralSep</a> in <a href="reference.html#mod-Graphical.Criteria.Moralization">CausalInference.Graphical.Criteria.Moralization</a></p>
+
+<h2 id="do-calculus">The three rules of do-calculus</h2>
+<span class="cls known">identification</span>
+<p>For a finite structural causal model, each rule rewrites an interventional distribution when a d-separation holds in a modified graph. Rule 1 inserts or deletes an observation, Rule 2 exchanges an action do(z) with the observation z, and Rule 3 inserts or deletes an action. The rules are stated without division, as products of marginals, so they need no positivity. Vertices outside the query sets are marginalized, so latent variables are covered.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">rule1</span> {X Y Z W : Finset V} (v : <span class="k"><span class="k">∀</span></span> u, α u)
+  (hsep : (G.deleteIncoming ↑X).DSep ↑Y ↑Z ↑(X ∪ W)) :
+  (M.intervene X v).dist.margAt (Y ∪ Z ∪ W) v * (M.intervene X v).dist.margAt W v =
+    (M.intervene X v).dist.margAt (Y ∪ W) v * (M.intervene X v).dist.margAt (Z ∪ W) v</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.rule1">CausalInference.SCM.rule1</a> in <a href="reference.html#mod-SCM.DoCalculus">CausalInference.SCM.DoCalculus</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">rule2</span> {X Y Z W : Finset V} (v : <span class="k"><span class="k">∀</span></span> u, α u) (hXZ : Disjoint X Z) (hYZ : Disjoint Y Z)
+  (hWZ : Disjoint W Z)
+  (hsep : ((G.deleteIncoming ↑X).deleteOutgoing ↑Z).DSep ↑Y ↑Z ↑(X ∪ W)) :
+  (M.intervene (X ∪ Z) v).dist.margAt (Y ∪ W) v * (M.intervene X v).dist.margAt (Z ∪ W) v =
+    (M.intervene X v).dist.margAt (Y ∪ Z ∪ W) v *
+      (M.intervene (X ∪ Z) v).dist.margAt W v</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.rule2">CausalInference.SCM.rule2</a> in <a href="reference.html#mod-SCM.DoCalculus">CausalInference.SCM.DoCalculus</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">rule3</span> {X Y Z W : Finset V} (v : <span class="k"><span class="k">∀</span></span> u, α u) (hXZ : Disjoint X Z) (hWZ : Disjoint W Z)
+  (hsep : (G.deleteIncoming ↑(X ∪ G.rule3Set X Z W)).DSep ↑Y ↑Z ↑(X ∪ W)) :
+  (M.intervene (X ∪ Z) v).dist.margAt (Y ∪ W) v * (M.intervene X v).dist.margAt W v =
+    (M.intervene X v).dist.margAt (Y ∪ W) v * (M.intervene (X ∪ Z) v).dist.margAt W v</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.rule3">CausalInference.SCM.rule3</a> in <a href="reference.html#mod-SCM.DoCalculus">CausalInference.SCM.DoCalculus</a></p>
+<p>On the front-door graph with a latent confounder, the back-door adjustment follows from Rule 2 and the front-door formula from Rules 2 and 3, following Pearl's derivation.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">backdoor_adjustment</span> {X Y Z : Finset V} (v : <span class="k"><span class="k">∀</span></span> u, α u) (hXY : Disjoint X Y)
+  (hXZ : Disjoint X Z) (hYZ : Disjoint Y Z) (hnd : <span class="k"><span class="k">∀</span></span> u ∈ Z, u ∉ G.descendantsOf ↑X)
+  (hsep : (G.deleteOutgoing ↑X).DSep ↑X ↑Y ↑Z)
+  (hpos : <span class="k"><span class="k">∀</span></span> c : <span class="k"><span class="k">∀</span></span> u, α u, (<span class="k"><span class="k">∀</span></span> u ∈ X, c u = v u) → 0 &lt; M.dist.margAt Z c →
+    0 &lt; M.dist.margAt (X ∪ Z) c) :
+  M.effect X v Y v = <span class="k"><span class="k">∑</span></span> c ∈ FiniteDist.agreeOn Zᶜ v,
+    M.dist.margAt (Y ∪ X ∪ Z) c / M.dist.margAt (X ∪ Z) c * M.dist.margAt Z c</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.backdoor_adjustment">CausalInference.SCM.backdoor_adjustment</a> in <a href="reference.html#mod-SCM.DoCalculusExamples">CausalInference.SCM.DoCalculusExamples</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">frontdoor_formula</span> (M : SCM frontdoor α ε) (v : <span class="k"><span class="k">∀</span></span> u, α u)
+  (hpos : <span class="k"><span class="k">∀</span></span> c : <span class="k"><span class="k">∀</span></span> u, α u, 0 &lt; M.dist.margAt {1, 2} c) :
+  M.effect {1} v {3} v = <span class="k"><span class="k">∑</span></span> c ∈ FiniteDist.agreeOn {2}ᶜ v,
+    M.dist.margAt ({2} ∪ {1}) c / M.dist.margAt {1} c *
+      <span class="k"><span class="k">∑</span></span> d ∈ FiniteDist.agreeOn {1}ᶜ c,
+        M.dist.margAt ({3} ∪ {2} ∪ {1}) d / M.dist.margAt ({2} ∪ {1}) d *
+          M.dist.margAt {1} d</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.FrontDoorExample.frontdoor_formula">CausalInference.SCM.FrontDoorExample.frontdoor_formula</a> in <a href="reference.html#mod-SCM.DoCalculusExamples">CausalInference.SCM.DoCalculusExamples</a></p>
+<p>The general theorems hold for any graph and any sets that satisfy the criteria. If Z satisfies the back-door criterion, P(y | do(x)) = Σ<sub>z</sub> P(y | x, z) P(z), assuming that every value of Z of positive probability occurs together with x. If Z satisfies the front-door criterion and the joint law of X and Z is strictly positive, P(y | do(x)) = Σ<sub>z</sub> P(z | x) Σ<sub>x′</sub> P(y | x′, z) P(x′).</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">effect_eq_sum_of_backDoor</span> {X Y Z : Finset V} (v : <span class="k"><span class="k">∀</span></span> u, α u)
+  (hbd : G.BackDoor ↑X ↑Y ↑Z) (hYZ : Disjoint Y Z)
+  (hpos : <span class="k"><span class="k">∀</span></span> c : <span class="k"><span class="k">∀</span></span> u, α u, (<span class="k"><span class="k">∀</span></span> u ∈ X, c u = v u) → 0 &lt; M.dist.margAt Z c →
+    0 &lt; M.dist.margAt (X ∪ Z) c) :
+  M.effect X v Y v = <span class="k"><span class="k">∑</span></span> c ∈ FiniteDist.agreeOn Zᶜ v,
+    M.dist.margAt (Y ∪ X ∪ Z) c / M.dist.margAt (X ∪ Z) c * M.dist.margAt Z c</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.effect_eq_sum_of_backDoor">CausalInference.SCM.effect_eq_sum_of_backDoor</a> in <a href="reference.html#mod-SCM.Adjustment">CausalInference.SCM.Adjustment</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">effect_eq_sum_of_frontDoor</span> {X Y Z : Finset V} (v : <span class="k"><span class="k">∀</span></span> u, α u)
+  (hfd : G.FrontDoor ↑X ↑Y ↑Z) (hpos : <span class="k"><span class="k">∀</span></span> c : <span class="k"><span class="k">∀</span></span> u, α u, 0 &lt; M.dist.margAt (X ∪ Z) c) :
+  M.effect X v Y v = <span class="k"><span class="k">∑</span></span> c ∈ FiniteDist.agreeOn Zᶜ v,
+    M.dist.margAt (Z ∪ X) c / M.dist.margAt X c *
+      <span class="k"><span class="k">∑</span></span> d ∈ FiniteDist.agreeOn Xᶜ c,
+        M.dist.margAt (Y ∪ Z ∪ X) d / M.dist.margAt (Z ∪ X) d * M.dist.margAt X d</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.effect_eq_sum_of_frontDoor">CausalInference.SCM.effect_eq_sum_of_frontDoor</a> in <a href="reference.html#mod-SCM.Adjustment">CausalInference.SCM.Adjustment</a></p>
+<p>In Pearl's smoking model, with the genotype as an unobserved root, the same front-door formula is also derived counterfactually: from the exclusion and independence restrictions of the model by composition and consistency, assuming a strictly positive joint law of tar and smoking.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">frontDoor</span> [<span class="k"><span class="k">∀</span></span> v, Fintype (α v)] (x : <span class="k"><span class="k">∀</span></span> v, α v) (y : α 3)
+  (hpos : <span class="k"><span class="k">∀</span></span> (c : α 2) (d : α 1), 0 &lt; M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 2 = c ∧ w 1 = d)) :
+  (M.intervene {1} x).dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 3 = y) =
+    <span class="k"><span class="k">∑</span></span> c : α 2, M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 2 = c ∧ w 1 = x 1) /
+        M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 1 = x 1) *
+      <span class="k"><span class="k">∑</span></span> d : α 1, M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 3 = y ∧ w 2 = c ∧ w 1 = d) /
+          M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 2 = c ∧ w 1 = d) * M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w 1 = d)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.Smoking.frontDoor">CausalInference.SCM.Smoking.frontDoor</a> in <a href="reference.html#mod-SCM.CounterfactualExamples">CausalInference.SCM.CounterfactualExamples</a></p>
+
+<h2 id="scm">Interventions in structural causal models</h2>
+<span class="cls known">identification</span>
+<p>In a finite Markovian structural causal model on an acyclic graph, the distribution after the intervention do(X := x) is the truncated factorization: the product of the kernels of the vertices outside X at configurations that agree with x on X, and 0 elsewhere. For an intervention on one vertex, the effect is identified by adjusting for its parents, under positivity of the treatment value given each parent configuration of positive probability.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">dist_intervene</span> (y : <span class="k"><span class="k">∀</span></span> v, α v) :
+  (M.intervene X x).dist y =
+    <span class="k"><span class="k">if</span></span> <span class="k"><span class="k">∀</span></span> v ∈ X, y v = x v <span class="k"><span class="k">then</span></span> <span class="k"><span class="k">∏</span></span> v ∈ Xᶜ, M.kernels.factor v y <span class="k"><span class="k">else</span></span> 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.dist_intervene">CausalInference.SCM.dist_intervene</a> in <a href="reference.html#mod-SCM.Intervention">CausalInference.SCM.Intervention</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">effect_singleton_eq_sum</span> (i : V) (x : <span class="k"><span class="k">∀</span></span> v, α v) (Y : Finset V) (y : <span class="k"><span class="k">∀</span></span> v, α v)
+  (hpos : <span class="k"><span class="k">∀</span></span> z : (<span class="k"><span class="k">∀</span></span> u : G.parentsFinset i, α u),
+    0 &lt; M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; (G.parentsFinset i).restrict w = z) →
+    0 &lt; M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w i = x i ∧ (G.parentsFinset i).restrict w = z)) :
+  M.effect {i} x Y y = <span class="k"><span class="k">∑</span></span> z : (<span class="k"><span class="k">∀</span></span> u : G.parentsFinset i, α u),
+    M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; (<span class="k"><span class="k">∀</span></span> v ∈ Y, w v = y v) ∧ w i = x i ∧
+        (G.parentsFinset i).restrict w = z) /
+      M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; w i = x i ∧ (G.parentsFinset i).restrict w = z) *
+      M.dist.probOf (<span class="k"><span class="k">fun</span></span> w =&gt; (G.parentsFinset i).restrict w = z)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.effect_singleton_eq_sum">CausalInference.SCM.effect_singleton_eq_sum</a> in <a href="reference.html#mod-SCM.Effects">CausalInference.SCM.Effects</a></p>
+<span class="cls restricted">counterexample</span>
+<p>With a latent common cause the effect is not identified: in the bow graph two models with strictly positive observed laws agree on the joint law of treatment and outcome and disagree on the effect of the treatment.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">not_identifiableFrom_effect</span> :
+  ¬ IdentifiableFrom {m : Model bow (<span class="k"><span class="k">fun</span></span> _ =&gt; Bool) | <span class="k"><span class="k">∀</span></span> w, 0 &lt; m.scm.dist.margAt {1, 2} w}
+    {1, 2} (<span class="k"><span class="k">fun</span></span> m =&gt; m.scm.effect {1} treat {2} treat)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SCM.BowExample.not_identifiableFrom_effect">CausalInference.SCM.BowExample.not_identifiableFrom_effect</a> in <a href="reference.html#mod-SCM.Effects">CausalInference.SCM.Effects</a></p>
+
+<h2 id="linear-sem">Linear structural equation models: the bow</h2>
+<span class="cls restricted">counterexample</span>
+<p>In the linear model X → Y with correlated errors (the bow), two models with positive semidefinite error covariances imply the same covariance matrix of the observed variables and have different structural coefficients for X → Y. The coefficient is not identified from second moments.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">not_identified</span> :
+  (model 1 1 1 0 psd₁).cov = (model 0 1 2 1 psd₂).cov ∧
+    (model 1 1 1 0 psd₁).B 1 0 ≠ (model 0 1 2 1 psd₂).B 1 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.LinearSEM.Bow.not_identified">CausalInference.LinearSEM.Bow.not_identified</a> in <a href="reference.html#mod-LinearSEM.Counterexamples">CausalInference.LinearSEM.Counterexamples</a></p>
+<span class="cls known">identification</span>
+<p>With uncorrelated errors, d-separation in the graph implies a vanishing partial covariance, and from this the linear back-door criterion follows: if Z contains no descendant of x and d-separates x from y once the arrows out of x are removed, the coefficient of x in the population regression of y on x and Z is the total effect of x on y.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">back_door</span> (hΩ : M.Ω.IsDiag) {x y : V} {Z : Finset V}
+  (hZ : <span class="k"><span class="k">∀</span></span> s ∈ Z, ¬ ReflTransGen M.G.Adj x s)
+  (hsep : (M.G.deleteOutgoing {x}).DSep {x} {y} ↑Z)
+  (huZ : IsUnit (subCov M.cov Z)) (hu : IsUnit (subCov M.cov (insert x Z))) :
+  regCoeff M.cov (insert x Z) y x = M.T y x</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.LinearSEM.back_door">CausalInference.LinearSEM.back_door</a> in <a href="reference.html#mod-LinearSEM.DSeparation">CausalInference.LinearSEM.DSeparation</a></p>
+
+<h2 id="survival">Survival under censoring</h2>
+<span class="cls known">identification</span>
+<p>For a discrete event time T and a censoring time C, only the follow-up time min(T, C) and the indicator T ≤ C are observed. If T and C are independent, the product-limit functional of the observed law equals the survival function of T wherever someone is still at risk and uncensored. Without independence, two models with the same observed law have different survival at time 2.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">productLimit_map_observed_eq_survival</span> [IsProbabilityMeasure μ] (hT : Measurable T)
+  (hC : Measurable C) (hind : IndepFun T C μ) (k : <span class="t"><span class="t">ℕ</span></span>)
+  (hk : 0 &lt; μ.real {ω | k ≤ T ω ∧ k ≤ C ω}) :
+  productLimit (μ.map (observed T C)) k = survival μ T k</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Survival.productLimit_map_observed_eq_survival">CausalInference.Survival.productLimit_map_observed_eq_survival</a> in <a href="reference.html#mod-Survival.Censoring">CausalInference.Survival.Censoring</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">survival_not_identified_without_independence</span> :
+  depModel.map (observed Prod.fst Prod.snd) = indepModel.map (observed Prod.fst Prod.snd) ∧
+    survival depModel Prod.fst 2 ≠ survival indepModel Prod.fst 2</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Survival.CensoringExample.survival_not_identified_without_independence">CausalInference.Survival.CensoringExample.survival_not_identified_without_independence</a> in <a href="reference.html#mod-Survival.Censoring">CausalInference.Survival.Censoring</a></p>
+<p>The restricted mean survival time up to τ, the area under the survival curve, is identified in the same way: under independent censoring, with someone at risk and uncensored at every time before τ, it is the sum of the product-limit functional of the observed law. Under the dependent censoring of the model above the same sum gives 2.71 at τ = 3, against a true value of 2.305.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">rmst_eq_sum_productLimit</span> [IsProbabilityMeasure μ] {C : Ω → <span class="t"><span class="t">ℕ</span></span>} (hT : Measurable T)
+  (hC : Measurable C) (hind : IndepFun T C μ) (τ : <span class="t"><span class="t">ℕ</span></span>)
+  (hk : <span class="k"><span class="k">∀</span></span> k &lt; τ, 0 &lt; μ.real {ω | k ≤ T ω ∧ k ≤ C ω}) :
+  rmst μ T τ = <span class="k"><span class="k">∑</span></span> k ∈ Finset.range τ, productLimit (μ.map (observed T C)) k</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Survival.rmst_eq_sum_productLimit">CausalInference.Survival.rmst_eq_sum_productLimit</a> in <a href="reference.html#mod-Survival.RMST">CausalInference.Survival.RMST</a></p>
+<p>Treatment switching: when switchers are censored at the switch and the others are weighted by the inverse of their probability of not having switched given their history, the weighted product limit is the survival without switching, under no unmeasured confounding of the switch and positivity. Censoring the switchers without weights is biased.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">weightedProductLimit_ipcWeight</span> (p : FiniteDist Ω) (k : <span class="t"><span class="t">ℕ</span></span>) (hnuc : SwitchNUC p T C V L k)
+  (hpos : SwitchPositive p T C V L k) (hk : 0 &lt; atRisk p.toMeasure T k) :
+  (<span class="k"><span class="k">∀</span></span> i ≤ k, 0 &lt; wsum p (riskSet T C i) (ipcWeight p T C V L i)) ∧
+    weightedProductLimit p T C (ipcWeight p T C V L) k = survival p.toMeasure T k</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Survival.IPCW.weightedProductLimit_ipcWeight">CausalInference.Survival.IPCW.weightedProductLimit_ipcWeight</a> in <a href="reference.html#mod-Survival.IPCW">CausalInference.Survival.IPCW</a></p>
+<span class="cls restricted">counterexample</span>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">censoring_switchers_biased</span> :
+  productLimit (p.toMeasure.map (observed T C)) 1 = 2 / 3 ∧
+    weightedProductLimit p T C (ipcWeight p T C V L) 1 = 1 / 2 ∧
+    survival p.toMeasure T 1 = 1 / 2</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Survival.IPCW.Example.censoring_switchers_biased">CausalInference.Survival.IPCW.Example.censoring_switchers_biased</a> in <a href="reference.html#mod-Survival.IPCW">CausalInference.Survival.IPCW</a></p>
+<p>Comparing arms within the observed switchers or non-switchers is not a causal contrast: under the sharp null, with randomized arms, both stratum contrasts are −1/2 while the intention-to-treat contrast is 0.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">stratum_contrast_ne</span> :
+  condMean p (<span class="k"><span class="k">fun</span></span> ω =&gt; R ω = true) Y - condMean p (<span class="k"><span class="k">fun</span></span> ω =&gt; R ω = false) Y = 0 ∧
+  condMean p (<span class="k"><span class="k">fun</span></span> ω =&gt; R ω = true ∧ S ω = false) Y -
+    condMean p (<span class="k"><span class="k">fun</span></span> ω =&gt; R ω = false ∧ S ω = false) Y = -1 / 2 ∧
+  condMean p (<span class="k"><span class="k">fun</span></span> ω =&gt; R ω = true ∧ S ω = true) Y -
+    condMean p (<span class="k"><span class="k">fun</span></span> ω =&gt; R ω = false ∧ S ω = true) Y = -1 / 2</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SwitchingCounterexamples.PrincipalStrata.stratum_contrast_ne">CausalInference.SwitchingCounterexamples.PrincipalStrata.stratum_contrast_ne</a> in <a href="reference.html#mod-Survival.SwitchingCounterexamples">CausalInference.Survival.SwitchingCounterexamples</a></p>
+<span class="cls tooling">structure</span>
+<p>In an illness-death model where treatment lowers only the probability of progression, the hazard ratio for overall survival is 1 at the start, below 1 afterwards, and converges to a limit that equals 1 only when the death probability after progression is at most the sum of the treated arm's progression probability and the death probability before progression. No constant hazard ratio describes the two arms.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">hazardRatio_drift</span> (h1 : 0 &lt; a₁) (h10 : a₁ &lt; a₀) (hab : a₀ + b &lt; 1) (hc : c ≤ 1)
+  (hb : 0 &lt; b) (hbc : b &lt; c) :
+  idHazard a₁ b c 0 / idHazard a₀ b c 0 = 1 ∧
+    (<span class="k"><span class="k">∀</span></span> t, 1 ≤ t → idHazard a₁ b c t / idHazard a₀ b c t &lt; 1) ∧
+    Tendsto (<span class="k"><span class="k">fun</span></span> t =&gt; idHazard a₁ b c t / idHazard a₀ b c t) atTop
+      (𝓝 (min c (a₁ + b) / min c (a₀ + b))) ∧
+    (min c (a₁ + b) / min c (a₀ + b) = 1 ↔ c ≤ a₁ + b)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Survival.PostProgression.hazardRatio_drift">CausalInference.Survival.PostProgression.hazardRatio_drift</a> in <a href="reference.html#mod-Survival.PostProgression">CausalInference.Survival.PostProgression</a></p>
+
+<h2 id="hazard-mixture">Frailty selection in hazard ratios</h2>
+<span class="cls tooling">structure</span>
+<p>In a finite mixture of exponential laws, treatment that multiplies every stratum hazard by ψ &gt; 1 gives a marginal cumulative hazard ratio strictly between 1 and ψ at every positive time. The instantaneous hazard ratio is not confined in this way: with two equally weighted strata it falls below 1 at time 5 while the cumulative ratio stays between 1 and 2.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">mixCumHazard_ratio_mem</span> {p r : ι → <span class="t"><span class="t">ℝ</span></span>} (hp : IsWeights p) (hr : <span class="k"><span class="k">∀</span></span> i, 0 &lt; r i)
+  {i j : ι} (hi : 0 &lt; p i) (hj : 0 &lt; p j) (hij : r i ≠ r j) {ψ : <span class="t"><span class="t">ℝ</span></span>} (hψ : 1 &lt; ψ) {t : <span class="t"><span class="t">ℝ</span></span>}
+  (ht : 0 &lt; t) :
+  1 &lt; mixCumHazard p (<span class="k"><span class="k">fun</span></span> k =&gt; ψ * r k) t / mixCumHazard p r t ∧
+    mixCumHazard p (<span class="k"><span class="k">fun</span></span> k =&gt; ψ * r k) t / mixCumHazard p r t &lt; ψ</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Bias.HazardMixture.mixCumHazard_ratio_mem">CausalInference.Bias.HazardMixture.mixCumHazard_ratio_mem</a> in <a href="reference.html#mod-Bias.HazardMixture">CausalInference.Bias.HazardMixture</a></p>
+<span class="cls restricted">counterexample</span>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">marginal_hazardRatio_lt_one</span> :
+  (<span class="k"><span class="k">∀</span></span> b, 2 * exRate b / exRate b = 2) ∧
+    mixHazard exWeight (<span class="k"><span class="k">fun</span></span> k =&gt; 2 * exRate k) 5 / mixHazard exWeight exRate 5 &lt; 1 ∧
+    1 &lt; mixCumHazard exWeight (<span class="k"><span class="k">fun</span></span> k =&gt; 2 * exRate k) 5 / mixCumHazard exWeight exRate 5 ∧
+    mixCumHazard exWeight (<span class="k"><span class="k">fun</span></span> k =&gt; 2 * exRate k) 5 / mixCumHazard exWeight exRate 5 &lt; 2</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Bias.HazardMixture.HazardMixtureExample.marginal_hazardRatio_lt_one">CausalInference.Bias.HazardMixture.HazardMixtureExample.marginal_hazardRatio_lt_one</a> in <a href="reference.html#mod-Bias.HazardMixture">CausalInference.Bias.HazardMixture</a></p>
+
+<h2 id="surrogacy">Surrogate endpoints</h2>
+<span class="cls known">identification</span>
+<p>Under the moment form of the product normal model for the trial-level effects δ₁ on a surrogate and δ₂ on the final outcome, the three criteria (zero intercept, nonzero slope, zero residual variance) give δ₂ = λ₁ δ₁ almost surely, so no effect on the surrogate means no effect on the final outcome, and conversely.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">null_preservation</span> (h : PNFMoments μ δ₁ δ₂ lam0 lam1 psiSq)
+  (hc : SurrogacyCriteria lam0 lam1 psiSq) :
+  <span class="k"><span class="k">∀</span></span>ᵐ ω ∂μ, δ₂ ω = lam1 * δ₁ ω ∧ (δ₁ ω = 0 ↔ δ₂ ω = 0)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Surrogacy.PNFMoments.null_preservation">CausalInference.Surrogacy.PNFMoments.null_preservation</a> in <a href="reference.html#mod-Surrogacy.Criteria">CausalInference.Surrogacy.Criteria</a></p>
+<span class="cls restricted">counterexample</span>
+<p>The surrogate paradox: in a randomized trial where the surrogate has a positive effect on the final outcome for every unit, the treatment has no direct effect and raises the surrogate on average, and the surrogate is positively associated with the final outcome in each arm, the average effect of the treatment on the final outcome is still negative.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">paradox_te</span> : paradox.te μ₀ = -1 / 4</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Surrogacy.Counterexample.paradox_te">CausalInference.Surrogacy.Counterexample.paradox_te</a> in <a href="reference.html#mod-Surrogacy.Counterexamples">CausalInference.Surrogacy.Counterexamples</a></p>
 
 <h2 id="rd">Regression discontinuity</h2>
 <span class="cls known">identification</span>
@@ -259,6 +503,10 @@
   (hσhat : IsConsistent σhat σ μ) (hσmeas : <span class="k"><span class="k">∀</span></span> n, AEMeasurable (σhat n) μ) :
   Tendsto (<span class="k"><span class="k">fun</span></span> n ↦ μ.real {ω | θ ∈ waldInterval (θhat n ω) (σhat n ω) z n}) atTop
     (𝓝 (1 - α))</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.tendsto_waldInterval_coverage">CausalInference.tendsto_waldInterval_coverage</a> in <a href="reference.html#mod-Estimation.ConfidenceInterval">CausalInference.Estimation.ConfidenceInterval</a></p>
+<p>The delta method: a differentiable function of an asymptotically linear estimator is asymptotically linear, with the influence function multiplied by the derivative.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">comp_hasDerivAt</span> [IsProbabilityMeasure μ] (hO : IsIIDSample O μ)
+  (h : IsAsymptoticallyLinear θhat θ φ O μ) {g : <span class="t"><span class="t">ℝ</span></span> → <span class="t"><span class="t">ℝ</span></span>} {g' : <span class="t"><span class="t">ℝ</span></span>} (hg : HasDerivAt g g' θ) :
+  IsAsymptoticallyLinear (<span class="k"><span class="k">fun</span></span> n ω ↦ g (θhat n ω)) (g θ) (<span class="k"><span class="k">fun</span></span> x ↦ g' * φ x) O μ</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IsAsymptoticallyLinear.comp_hasDerivAt">CausalInference.IsAsymptoticallyLinear.comp_hasDerivAt</a> in <a href="reference.html#mod-Estimation.DeltaMethod">CausalInference.Estimation.DeltaMethod</a></p>
 
 <h2 id="identification">What point identification means</h2>
 <span class="cls tooling">structure</span>
@@ -270,7 +518,7 @@
 </div>
 <footer class="site-footer"><div class="wrap">
 <p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
-<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+<p>Last updated 27 November 2026, from commit <code>e200880</code> on the main branch.</p>
 </div></footer>
 </body>
 </html>
