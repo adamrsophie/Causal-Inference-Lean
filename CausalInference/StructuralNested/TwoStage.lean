@@ -98,12 +98,15 @@ Two layers. Stage one is stated on a finite sample space with a finite distribut
 conditioning on the covariate strata is elementary. Stage two and recensoring are stated on a
 general measure space with real times, as `CausalInference.StructuralNested.FailureTime` and
 `CausalInference.Survival.Recensoring`. Stage one is a population identity: the mean-balancing
-estimating equation, not the parametric accelerated failure time fit of the documents, whose
-target is not formalized. The no unmeasured confounding assumption is used in its mean form
-(mean independence within strata), which is implied by the conditional independence printed in
-TSD 24, Section 4.2.3. Not formalized: the claim that the bias of the simple method grows with
-the delay between the secondary baseline and the switch; the finite-sample estimation of `ψ`
-and bootstrapping.
+estimating equation; the parametric (Weibull) accelerated failure time fit of the documents is
+`CausalInference.StructuralNested.TwoStageWeibull`, which proves that it has the same root. The
+no unmeasured confounding assumption is used in its mean form (mean independence within
+strata); the conditional independence printed in TSD 24, Section 4.2.3, implies it
+(`CausalInference.StructuralNested.TwoStageAssumptions`). The delay between the secondary
+baseline and the switch is treated by explicit families in
+`CausalInference.StructuralNested.TwoStageDelay`, and the finite-sample estimator and its
+consistency in `CausalInference.StructuralNested.TwoStageSample`. Not formalized:
+bootstrapping.
 
 ## Sources
 
@@ -249,8 +252,8 @@ mean-balancing form: the stratum-weighted contrast between switchers and non-swi
 transformed residual survival after the secondary baseline,
 `Φ(ψ) = ∑_l w_l (E[U(ψ) - S | X = 1, L = l, P] - E[U(ψ) - S | X = 0, L = l, P])`.
 The weights `w_l` are arbitrary (for instance the stratum probabilities). The documents fit a
-parametric accelerated failure time model instead; its population target under a correct
-specification is a root of an estimating equation of this kind, which is not formalized. -/
+parametric accelerated failure time model instead; with a single stratum its population fit
+is treated in `CausalInference.StructuralNested.TwoStageWeibull`. -/
 noncomputable def stageOne (p : FiniteDist Ω) (P : Finset Ω) (L : Ω → 𝓛) (w : 𝓛 → ℝ)
     (B : Ω → ℝ) (ψ : ℝ) : ℝ :=
   ∑ l, w l * (condMean p (M.cell P L true l) (M.resid B ψ) -
@@ -439,6 +442,53 @@ theorem stageOneSlope_pos {p : FiniteDist Ω} {P : Finset Ω} {L : Ω → 𝓛} 
       · rw [← h, zero_mul]
       · exact (mul_pos h (hterm l h)).le
   exact (mul_pos hl₀ (hterm l₀ hl₀)).trans_le (single_le_sum hnn (mem_univ l₀))
+
+/-- **With the switcher masses as stratum weights, stage one balances the mean of `P`.** If the
+non-switchers of `P` are untreated (`U = T`), no unmeasured confounding holds at the secondary
+baseline, and every stratum with switchers has non-switchers, then for the weights
+`w_l = P(X = 1, L = l, P)` and every `ψ`,
+`Φ(ψ) = E[1_P adjusted B ψ] - E[1_P U]`. No structural model with a common parameter is
+assumed: the switchers may have heterogeneous effects. So any root of the equation with these
+weights gives the transformed population `P` the mean of the untreated one. -/
+theorem stageOne_switcherWeights_eq {p : FiniteDist Ω} {P : Finset Ω} {L : Ω → 𝓛}
+    {B : Ω → ℝ} (hnon : ∀ ω ∈ P, M.X ω = false → M.U ω = M.T ω) (hnuc : M.BaselineNUC p P L)
+    (hpos : ∀ l, 0 < wmass p (M.cell P L true l) → 0 < wmass p (M.cell P L false l)) (ψ : ℝ) :
+    M.stageOne p P L (fun l => wmass p (M.cell P L true l)) B ψ =
+      wsum p P (M.adjusted B ψ) - wsum p P M.U := by
+  have hsplit : ∀ f : Ω → ℝ, wsum p P f =
+      ∑ l, (wsum p (M.cell P L true l) f + wsum p (M.cell P L false l) f) := by
+    intro f
+    rw [wsum_eq_sum_ev P L f]
+    refine sum_congr rfl fun l _ => ?_
+    rw [wsum_eq_sum_ev _ M.X f, Fintype.sum_bool]; rfl
+  have hsub : wsum p P (M.adjusted B ψ) - wsum p P M.U =
+      wsum p P (fun ω => M.adjusted B ψ ω - M.U ω) := by
+    simp only [wsum, mul_sub, sum_sub_distrib]
+  rw [hsub, hsplit, stageOne]
+  refine sum_congr rfl fun l _ => ?_
+  have hnon' : ∀ ω ∈ M.cell P L false l, M.X ω = false ∧ M.U ω = M.T ω := fun ω hω => by
+    have hX : M.X ω = false := mem_ev.1 (mem_inter.1 hω).2
+    exact ⟨hX, hnon ω (mem_inter.1 (mem_inter.1 hω).1).1 hX⟩
+  have h0 : wsum p (M.cell P L false l) (fun ω => M.adjusted B ψ ω - M.U ω) = 0 := by
+    rw [wsum_congr (g := fun _ => 0) fun ω hω => by
+      rw [M.adjusted_of_not_switch B ψ (hnon' ω hω).1, (hnon' ω hω).2, sub_self]]
+    simp [wsum]
+  rw [h0, add_zero]
+  have hres0 : condMean p (M.cell P L false l) (M.resid B ψ) =
+      condMean p (M.cell P L false l) (fun ω => M.U ω - M.S ω) :=
+    condMean_congr fun ω hω => by
+      rw [resid, M.adjusted_of_not_switch B ψ (hnon' ω hω).1, (hnon' ω hω).2]
+  have hdiff : wsum p (M.cell P L true l) (fun ω => M.adjusted B ψ ω - M.U ω) =
+      wsum p (M.cell P L true l) (M.resid B ψ) -
+        wsum p (M.cell P L true l) (fun ω => M.U ω - M.S ω) := by
+    simp only [wsum, ← sum_sub_distrib]
+    exact sum_congr rfl fun ω _ => by simp only [resid]; ring
+  rcases (wmass_nonneg p.nonneg (M.cell P L true l)).eq_or_lt with h1 | h1
+  · rw [← h1, zero_mul, wsum_eq_zero_of_wmass_eq_zero p.nonneg h1.symm]
+  · have hsw : condMean p (M.cell P L true l) (fun ω => M.U ω - M.S ω) =
+        condMean p (M.cell P L false l) (fun ω => M.U ω - M.S ω) :=
+      M.condMean_switch_eq (hnuc l) h1 (hpos l h1)
+    rw [hres0, ← hsw, hdiff, mul_sub, wmass_mul_condMean h1.ne', wmass_mul_condMean h1.ne']
 
 end StageOne
 

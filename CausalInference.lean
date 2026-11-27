@@ -191,3 +191,12 @@ public import CausalInference.SCM.LatentTypes
 public import CausalInference.Graphical.MSeparation
 public import CausalInference.Basic.PolynomialNullSet
 public import CausalInference.LinearSEM.InstrumentCriterionCorrelated
+public import CausalInference.StructuralNested.TwoStageAssumptions
+public import CausalInference.StructuralNested.TwoStageCensoring
+public import CausalInference.StructuralNested.TwoStageDelay
+public import CausalInference.StructuralNested.TwoStageExamples
+public import CausalInference.StructuralNested.TwoStageLogistic
+public import CausalInference.StructuralNested.TwoStageSample
+public import CausalInference.StructuralNested.TwoStageSwitchTypes
+public import CausalInference.StructuralNested.TwoStageTwoArm
+public import CausalInference.StructuralNested.TwoStageWeibull

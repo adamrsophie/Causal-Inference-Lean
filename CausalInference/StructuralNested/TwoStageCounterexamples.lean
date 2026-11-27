@@ -28,18 +28,20 @@ others are checked in Lean.
   survival (time ratio `1/2`) of switchers with `l = true` and has no effect for the others;
   no single parameter satisfies the structural model (`no_common_model`), while no unmeasured
   confounding, positivity and the timing hold. The stage-one root is `exp ψ = 4/5` (`root`) and
-  the transformed control arm has mean `43/20` against `2` (`biased`). The switch proportion
-  varies between the strata, which the equal stratum weights do not follow; this is where the
-  bias of the mean comes from in this model.
+  the transformed control arm has mean `43/20` against `2` (`biased`). With the stratum weights
+  equal to the switcher masses, stage one is the difference between the mean of the transformed
+  data and the untreated mean for every `ψ` (`stageOne_switcherWeights`, by
+  `TwoStageTrial.stageOne_switcherWeights_eq`); its root is `exp ψ = 2/3`
+  (`root_switcherWeights`), and there the transformed mean is the untreated mean `2`
+  (`mean_switcherWeights`). So in this model the bias of the mean comes from the equal stratum
+  weights.
 * Switching before the secondary baseline, `BeforeBaseline`: switchers switch at time `0`, the
   secondary baseline is time `1`. The structural model from the switch time, no unmeasured
   confounding and positivity hold; `not_switchAfterBaseline`. Shrinking the time after the
   secondary baseline is wrong even at the true parameter (`adjusted_S_true`), its stage-one root
   is `exp ψ = 2/5` (`root`) and the adjusted survival at time `2` is `3/4` against `1/2`
   (`biased`). With Equation (1) applied from the switch time the identity of `TwoStage` does
-  not use the timing assumption, and here gives the true root (`root_W`): in this model the
-  secondary baseline and the covariates at it are not affected by the earlier switch, which is
-  what the assumption protects against in general.
+  not use the timing assumption, and here gives the true root (`root_W`).
 * Weighting instead of recensoring (TSD 24, Section 4.2.3.1), `Weighting`, on a discrete clock
   after the secondary baseline (natural number times, the layer of `Survival.IPCW`): the
   untreated time `Ud` depends on a covariate `l` that also drives the switch, and the
@@ -48,9 +50,9 @@ others are checked in Lean.
   untreated hazard is `1/2` (`hazard_two`). Inverse probability of censoring weights given `l`
   (no unmeasured confounding of `Dd` given `l`, `nuc`, and positivity, `pos`) give `1/2`
   (`weighted`, by `Survival.IPCW.weightedHazard_ipcWeight`); recensoring gives `1/2` as well
-  (`recensored`). (Remark, not proved here: a weight model conditioning on the switch and
-  the follow-up, which determine `Dd`, would give probabilities of remaining uncensored equal to
-  `0` or `1`.)
+  (`recensored`). A weight model given the switch and the follow-up, which determine `Dd`,
+  violates positivity: in one risk cell the probability of remaining uncensored is `0`
+  (`stayProb_V2`, `not_pos_V2`).
 * The modified method with the switch time as secondary baseline (TSD 24, Section 4.2.3.1,
   Ouwens et al.), `Modified`: non-switchers are excluded and the switchers to the treatment of
   interest are compared with the switchers to an alternative treatment. Stage one identifies
@@ -60,10 +62,10 @@ others are checked in Lean.
 
 ## Scope
 
-The weighting result is a discrete-time instance: `Survival.IPCW` has natural number times,
-while the transformed times `B + exp ψ (T - B)` of `TwoStage` are real, so a general statement
-joining the two layers needs a real-time version of the weighting identities (or a
-discretization of the transformed times), which does not exist in the library. Time-dependent
+The weighting result here is on a discrete clock (`Survival.IPCW` has natural number times).
+The real-time weighting identity for the transformed times of a `TwoStageTrial` is
+`CausalInference.StructuralNested.TwoStageCensoring`, where this example is the trial
+`TwoStageCounterexample.Weighting.Mw`, whose transformed data are `Ud` and `Dd`. Time-dependent
 confounding between the secondary baseline and the switch is
 `SwitchingCounterexamples.TimeDependent` in
 `CausalInference.Survival.SwitchingCounterexamples`.
@@ -315,6 +317,42 @@ theorem biased : p.expect (M.adjusted M.S ψhat) = 43 / 20 ∧ p.expect M.U = 2 
     TwoStageTrial.toSwitchingTrial, TwoStageTrial.treated, exp_ψhat]
   norm_num
 
+/-- The switcher masses of the strata, `P(X = 1, L = l)`. -/
+noncomputable def wS (l : Bool) : ℝ := wmass p (M.cell univ L true l)
+
+/-- **With the switcher masses as stratum weights the stage-one equation is the difference of
+the adjusted and the untreated means** (`TwoStageTrial.stageOne_switcherWeights_eq`): here no
+common parameter exists, but the non-switchers are untreated and no unmeasured confounding
+holds. -/
+theorem stageOne_switcherWeights (ψ : ℝ) :
+    M.stageOne p univ L wS M.S ψ = p.expect (M.adjusted M.S ψ) - p.expect M.U := by
+  rw [show wS = fun l => wmass p (M.cell univ L true l) from rfl,
+    M.stageOne_switcherWeights_eq (fun ω _ hX => by rcases ω with ⟨l, x⟩; subst hX; simp [M]) nuc
+      (fun l _ => (positive l (by norm_num)).2) ψ]
+  simp [wsum, FiniteDist.expect]
+
+/-- The mean of the transformed control arm, `5/4 + 9/8 exp ψ`. -/
+theorem expect_adjusted (ψ : ℝ) : p.expect (M.adjusted M.S ψ) = 5 / 4 + 9 / 8 * Real.exp ψ := by
+  simp only [FiniteDist.expect, Fintype.sum_prod_type, Fintype.sum_bool]
+  simp [M, p, u, TwoStageTrial.adjusted, SwitchingTrial.counterfactual, SwitchingTrial.Tc,
+    TwoStageTrial.toSwitchingTrial, TwoStageTrial.treated]
+  ring
+
+/-- With the switcher-mass weights the stage-one root is `exp ψ = 2/3`. -/
+theorem root_switcherWeights (ψ : ℝ) :
+    M.stageOne p univ L wS M.S ψ = 0 ↔ Real.exp ψ = 2 / 3 := by
+  rw [stageOne_switcherWeights, expect_adjusted, biased.2]
+  constructor <;> intro h <;> linarith
+
+/-- **The weights are what makes the mean biased in this model**: at the root of the equation
+weighted by the switcher masses, the transformed control arm has the untreated mean `2`, while
+with equal weights it has mean `43/20` (`biased`). -/
+theorem mean_switcherWeights :
+    p.expect (M.adjusted M.S (Real.log (2 / 3))) = 2 ∧ p.expect M.U = 2 := by
+  have h := (root_switcherWeights (Real.log (2 / 3))).2 (Real.exp_log (by norm_num))
+  rw [stageOne_switcherWeights, sub_eq_zero] at h
+  exact ⟨h.trans biased.2, biased.2⟩
+
 end Heterogeneous
 
 /-! ### Switching before the secondary baseline -/
@@ -520,6 +558,32 @@ theorem weighted : weightedHazard p Ud Dd (ipcWeight p Ud Dd V Lh) 2 = 1 / 2 := 
     rw [atRisk_toMeasure, wmass, sum_filter]
     simp [Fintype.sum_prod_type, p, Ud]; norm_num
   rw [(weightedHazard_ipcWeight p 2 nuc pos hk).2, hazard_two]
+
+/-- A weight model given the switch and the follow-up, the two variables that determine the
+transformed censoring time. -/
+def V2 (ω : Ω) : Bool × Bool := ω.2
+
+/-- **Positivity fails for a weight model given the switch and the follow-up**: they determine
+the transformed censoring time, so in the risk cell of a switcher with short follow-up at
+period `1` nobody remains uncensored, and the probability of remaining uncensored is `0`. -/
+theorem stayProb_V2 : stayProb p Ud Dd V2 Lh 1 (true, true, false) = 0 := by
+  have e : riskCell Ud Dd V2 Lh 1 (true, true, false) ∩ uncensored Dd 2 = ∅ := by
+    ext ω'
+    simp only [mem_inter, Finset.notMem_empty, iff_false, not_and]
+    intro hω' hu
+    have hV : V2 ω' = (true, false) := (mem_riskCell.1 hω').1.2.2
+    have hD : Dd ω' = 1 := by
+      rcases ω' with ⟨l, x, c⟩; simp only [V2, Prod.mk.injEq] at hV
+      obtain ⟨rfl, rfl⟩ := hV; rfl
+    simp [uncensored, hD] at hu
+  simp [stayProb, condProb, e, wmass]
+
+/-- So the weight model given the switch and the follow-up violates positivity. -/
+theorem not_pos_V2 : ¬ SwitchPositive p Ud Dd V2 Lh 2 := by
+  intro h
+  have := h 1 (by norm_num) (true, true, false) (by simp [p]) (by simp [Dd]) (by simp [Ud])
+  rw [stayProb_V2] at this
+  exact lt_irrefl _ this
 
 end Weighting
 
