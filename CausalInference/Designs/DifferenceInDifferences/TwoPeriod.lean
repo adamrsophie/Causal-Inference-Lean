@@ -8,6 +8,7 @@ module
 public import Mathlib.Probability.ConditionalProbability
 public import Mathlib.MeasureTheory.Integral.Bochner.Set
 public import Mathlib.Probability.UniformOn
+public import Mathlib.MeasureTheory.Function.ConditionalExpectation.Basic
 
 /-!
 # Two by two difference in differences
@@ -23,7 +24,8 @@ assumption about the pre period.
 
 ## Main definitions
 
-* `TwoPeriod.Consistency`, `TwoPeriod.NoAnticipation`, `TwoPeriod.ParallelTrends`.
+* `TwoPeriod.Consistency`, `TwoPeriod.NoAnticipation` (mean form),
+  `TwoPeriod.UnitNoAnticipation` (unit-level form), `TwoPeriod.ParallelTrends`.
 * `TwoPeriod.att`, `TwoPeriod.did`, `TwoPeriod.trendGap`, `TwoPeriod.anticipationGap`.
 
 ## Main results
@@ -31,12 +33,17 @@ assumption about the pre period.
 * `DiD.did_sub_effect_eq`: the generic bias decomposition for two arbitrary events, reused for
   the staggered designs.
 * `TwoPeriod.did_sub_att`: `DiD - ATT = trendGap + anticipationGap`, with no parallel trends.
-* `TwoPeriod.att_eq_did`: identification of the ATT under consistency, no anticipation,
-  parallel trends, and integrability.
-* `TwoPeriod.cex_did_ne_att`: a concrete two-unit model where parallel trends fails and
-  `DiD = 1 ≠ 0 = ATT`.
+* `TwoPeriod.att_eq_did`: identification of the ATT on a probability space under consistency,
+  no anticipation, parallel trends, overlap, and integrability; `att_eq_did_of_integrable_cond`
+  needs only the moments that enter the comparison.
+* `TwoPeriod.noAnticipation_of_unitNoAnticipation`: the unit-level assumption implies the mean
+  form under consistency.
+* `TwoPeriod.cex_did_ne_att`: a concrete two-unit model satisfying consistency, no
+  anticipation, and overlap where parallel trends fails and `DiD = 1`, `ATT = 0`.
 * `TwoPeriod.att_eq_sum_treatedWeight_mul_didCell`: identification under conditional parallel
   trends given a covariate with finitely many values.
+* `TwoPeriod.att_eq_integral_sub_integral_comp`: identification under conditional parallel
+  trends given a general measurable covariate, stated with Mathlib conditional expectations.
 
 Sources: the textbook two by two argument; Callaway and Sant'Anna (2021), *Difference-in-differences
 with multiple time periods*, for the formulation with potential outcomes indexed by
@@ -77,27 +84,57 @@ theorem integral_cond_eq_of_eqOn {μ : Measure Ω} [IsFiniteMeasure μ] {s : Set
   simp
 
 /-- **Generic two by two bias decomposition.** Let `s` (treated) and `c` (comparison) be
-events, `opre, opost` observed outcomes, and `y1pre, y1post` (treated path) and
-`y0pre, y0post` (untreated path) potential outcomes, with `y1post, y0pre, y0post`
-integrable. If observed outcomes equal the treated path almost surely given `s` and the
-untreated path almost surely given `c`, then the difference in differences of observed
-conditional means, minus the effect `E[y1post - y0post | s]`, equals the differential
-trend of untreated outcomes `E[y0post - y0pre | s] - E[y0post - y0pre | c]` plus the
-anticipation term `E[y0pre | s] - E[y1pre | s]`. No parallel trends is assumed. -/
-theorem did_sub_effect_eq {μ : Measure Ω} {s c : Set Ω}
-    {opre opost y1pre y1post y0pre y0post : Ω → ℝ}
+events of positive measure under a finite measure `μ`, `opre, opost` observed outcomes, and
+`y1pre, y1post` (treated path, integrable given `s`) and `y0pre, y0post` (untreated path,
+integrable given `s` and given `c`) potential outcomes. If observed outcomes equal the
+treated path almost surely given `s` and the untreated path almost surely given `c`, then the
+difference in differences of observed conditional means, minus the effect
+`E[y1post - y0post | s]`, equals the differential trend of untreated outcomes
+`E[y0post - y0pre | s] - E[y0post - y0pre | c]` plus the anticipation term
+`E[y0pre | s] - E[y1pre | s]`. No parallel trends is assumed. The positivity
+and integrability hypotheses guarantee that every conditional mean in the identity is a genuine
+mean; the linear argument itself does not use positivity or the integrability of `y1pre`. -/
+theorem did_sub_effect_eq {μ : Measure Ω} [IsFiniteMeasure μ] {s c : Set Ω}
+    {opre opost y1pre y1post y0pre y0post : Ω → ℝ} (_hs : μ s ≠ 0) (_hc : μ c ≠ 0)
     (hpre_s : ∀ᵐ ω ∂μ[|s], opre ω = y1pre ω) (hpost_s : ∀ᵐ ω ∂μ[|s], opost ω = y1post ω)
     (hpre_c : ∀ᵐ ω ∂μ[|c], opre ω = y0pre ω) (hpost_c : ∀ᵐ ω ∂μ[|c], opost ω = y0post ω)
-    (hi1post : Integrable y1post μ) (hi0pre : Integrable y0pre μ) (hi0post : Integrable y0post μ) :
+    (_hi1pre : Integrable y1pre μ[|s]) (hi1post : Integrable y1post μ[|s])
+    (hi0pre_s : Integrable y0pre μ[|s]) (hi0post_s : Integrable y0post μ[|s])
+    (hi0pre_c : Integrable y0pre μ[|c]) (hi0post_c : Integrable y0post μ[|c]) :
     ((∫ ω, opost ω ∂μ[|s] - ∫ ω, opre ω ∂μ[|s]) - (∫ ω, opost ω ∂μ[|c] - ∫ ω, opre ω ∂μ[|c]))
         - ∫ ω, (y1post ω - y0post ω) ∂μ[|s]
       = (∫ ω, (y0post ω - y0pre ω) ∂μ[|s] - ∫ ω, (y0post ω - y0pre ω) ∂μ[|c])
         + (∫ ω, y0pre ω ∂μ[|s] - ∫ ω, y1pre ω ∂μ[|s]) := by
   rw [integral_congr_ae hpre_s, integral_congr_ae hpost_s,
     integral_congr_ae hpre_c, integral_congr_ae hpost_c,
-    integral_sub (integrable_cond hi1post s) (integrable_cond hi0post s),
-    integral_sub (integrable_cond hi0post s) (integrable_cond hi0pre s),
-    integral_sub (integrable_cond hi0post c) (integrable_cond hi0pre c)]
+    integral_sub hi1post hi0post_s, integral_sub hi0post_s hi0pre_s,
+    integral_sub hi0post_c hi0pre_c]
+  ring
+
+/-- **Generic two by two bias decomposition, mean form.** The same identity as
+`did_sub_effect_eq` when observed outcomes are only known to agree in conditional mean with the
+relevant potential outcomes: `E[opre | s] = E[y1pre | s]`, `E[opost | s] = E[y1post | s]`,
+`E[opre | c] = E[y0pre | c]`, and `E[opost | c] = E[y0post | c]`. The observed outcomes are
+assumed integrable under both conditional measures so that the observed conditional means are
+genuine means. -/
+theorem did_sub_effect_eq_of_integral {μ : Measure Ω} [IsFiniteMeasure μ] {s c : Set Ω}
+    {opre opost y1pre y1post y0pre y0post : Ω → ℝ} (_hs : μ s ≠ 0) (_hc : μ c ≠ 0)
+    (hpre_s : ∫ ω, opre ω ∂μ[|s] = ∫ ω, y1pre ω ∂μ[|s])
+    (hpost_s : ∫ ω, opost ω ∂μ[|s] = ∫ ω, y1post ω ∂μ[|s])
+    (hpre_c : ∫ ω, opre ω ∂μ[|c] = ∫ ω, y0pre ω ∂μ[|c])
+    (hpost_c : ∫ ω, opost ω ∂μ[|c] = ∫ ω, y0post ω ∂μ[|c])
+    (_hopre_s : Integrable opre μ[|s]) (_hopost_s : Integrable opost μ[|s])
+    (_hopre_c : Integrable opre μ[|c]) (_hopost_c : Integrable opost μ[|c])
+    (_hi1pre : Integrable y1pre μ[|s]) (hi1post : Integrable y1post μ[|s])
+    (hi0pre_s : Integrable y0pre μ[|s]) (hi0post_s : Integrable y0post μ[|s])
+    (hi0pre_c : Integrable y0pre μ[|c]) (hi0post_c : Integrable y0post μ[|c]) :
+    ((∫ ω, opost ω ∂μ[|s] - ∫ ω, opre ω ∂μ[|s]) - (∫ ω, opost ω ∂μ[|c] - ∫ ω, opre ω ∂μ[|c]))
+        - ∫ ω, (y1post ω - y0post ω) ∂μ[|s]
+      = (∫ ω, (y0post ω - y0pre ω) ∂μ[|s] - ∫ ω, (y0post ω - y0pre ω) ∂μ[|c])
+        + (∫ ω, y0pre ω ∂μ[|s] - ∫ ω, y1pre ω ∂μ[|s]) := by
+  rw [hpre_s, hpost_s, hpre_c, hpost_c,
+    integral_sub hi1post hi0post_s, integral_sub hi0post_s hi0pre_s,
+    integral_sub hi0post_c hi0pre_c]
   ring
 
 /-- For a finite measure, the set integral over `s` is `μ(s)` times the conditional mean given
@@ -176,6 +213,35 @@ path equals its mean untreated outcome: `E[Y pre 1 | G = 1] = E[Y pre 0 | G = 1]
 def NoAnticipation (μ : Measure Ω) (G : Ω → Bool) (Y : Period → Bool → Ω → ℝ) : Prop :=
   ∫ ω, Y pre true ω ∂μ[|treated G] = ∫ ω, Y pre false ω ∂μ[|treated G]
 
+/-- **Unit-level no anticipation** (almost surely): every treated unit's observed pre-period
+outcome is its untreated potential outcome, `G ω = 1 → Yobs pre ω = Y pre 0 ω` for almost every
+`ω`. Under consistency it implies the mean form `NoAnticipation`
+(`noAnticipation_of_unitNoAnticipation`). -/
+def UnitNoAnticipation (μ : Measure Ω) (G : Ω → Bool) (Y : Period → Bool → Ω → ℝ)
+    (Yobs : Period → Ω → ℝ) : Prop :=
+  ∀ᵐ ω ∂μ, G ω = true → Yobs pre ω = Y pre false ω
+
+/-- The pointwise form `∀ ω ∈ treated G, Yobs pre ω = Y pre false ω` implies the almost sure
+unit-level no anticipation. -/
+theorem unitNoAnticipation_of_forall {μ : Measure Ω} {G : Ω → Bool}
+    {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ}
+    (h : ∀ ω ∈ treated G, Yobs pre ω = Y pre false ω) : UnitNoAnticipation μ G Y Yobs :=
+  ae_of_all _ fun ω hω => h ω hω
+
+/-- **Unit-level no anticipation implies the mean form.** Under consistency, if almost every
+treated unit's observed pre-period outcome is its untreated potential outcome, then
+`E[Y pre 1 | G = 1] = E[Y pre 0 | G = 1]`. -/
+theorem noAnticipation_of_unitNoAnticipation {μ : Measure Ω} {G : Ω → Bool}
+    {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G))
+    (hcons : Consistency G Y Yobs) (h : UnitNoAnticipation μ G Y Yobs) :
+    NoAnticipation μ G Y := by
+  refine integral_congr_ae ?_
+  filter_upwards [ae_cond_mem hG, cond_absolutelyContinuous.ae_le h] with ω hω hna
+  have hω' : G ω = true := hω
+  have := hna hω'
+  rw [hcons, hω'] at this
+  exact this
+
 /-- **Parallel trends** in untreated potential outcomes:
 `E[Y post 0 - Y pre 0 | G = 1] = E[Y post 0 - Y pre 0 | G = 0]`. -/
 def ParallelTrends (μ : Measure Ω) (G : Ω → Bool) (Y : Period → Bool → Ω → ℝ) : Prop :=
@@ -213,48 +279,91 @@ theorem noAnticipation_iff_anticipationGap_eq_zero {μ : Measure Ω} {G : Ω →
     {Y : Period → Bool → Ω → ℝ} : NoAnticipation μ G Y ↔ anticipationGap μ G Y = 0 := by
   rw [anticipationGap, sub_eq_zero, NoAnticipation, eq_comm]
 
-/-- **Exact bias of difference in differences.** Under consistency and integrability, with no
-parallel trends and no no-anticipation assumption, the observed difference in differences minus
-the ATT equals the differential trend in untreated outcomes plus the anticipation gap. -/
-theorem did_sub_att {μ : Measure Ω} {G : Ω → Bool} {Y : Period → Bool → Ω → ℝ}
-    {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G)) (hcons : Consistency G Y Yobs)
-    (hY : ∀ t d, Integrable (Y t d) μ) :
+/-- **Exact bias of difference in differences, local moments.** For a finite measure under
+which both groups have positive mass, under consistency, with no parallel trends and no
+no-anticipation assumption, the observed difference in differences minus the ATT equals the
+differential trend in untreated outcomes plus the anticipation gap. Only the moments that enter
+the comparison are required: the treated-path outcomes given `G = 1`, and the untreated
+outcomes given `G = 1` and given `G = 0`. -/
+theorem did_sub_att_of_integrable_cond {μ : Measure Ω} [IsFiniteMeasure μ] {G : Ω → Bool}
+    {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G))
+    (hT : μ (treated G) ≠ 0) (hCpos : μ (control G) ≠ 0) (hcons : Consistency G Y Yobs)
+    (hT1 : ∀ t, Integrable (Y t true) μ[|treated G])
+    (hT0 : ∀ t, Integrable (Y t false) μ[|treated G])
+    (hC0 : ∀ t, Integrable (Y t false) μ[|control G]) :
     did μ G Yobs - att μ G Y = trendGap μ G Y + anticipationGap μ G Y := by
   have hC : MeasurableSet (control G) := control_eq_compl G ▸ hG.compl
   have key := DiD.did_sub_effect_eq (μ := μ) (opre := Yobs pre) (opost := Yobs post)
     (y1pre := Y pre true) (y1post := Y post true) (y0pre := Y pre false)
-    (y0post := Y post false)
+    (y0post := Y post false) hT hCpos
     (ae_cond_of_forall_mem hG fun ω hω => by rw [hcons, show G ω = true from hω])
     (ae_cond_of_forall_mem hG fun ω hω => by rw [hcons, show G ω = true from hω])
     (ae_cond_of_forall_mem hC fun ω hω => by rw [hcons, show G ω = false from hω])
     (ae_cond_of_forall_mem hC fun ω hω => by rw [hcons, show G ω = false from hω])
-    (hY _ _) (hY _ _) (hY _ _)
+    (hT1 _) (hT1 _) (hT0 _) (hT0 _) (hC0 _) (hC0 _)
   simpa [did, att, trendGap, anticipationGap] using key
 
-/-- **Bias under no anticipation.** Under consistency, no anticipation, and integrability,
-without parallel trends, `DiD - ATT` equals the differential trend in untreated outcomes. -/
-theorem did_sub_att_of_noAnticipation {μ : Measure Ω} {G : Ω → Bool}
+/-- **Exact bias of difference in differences.** For a finite measure under which both groups
+have positive mass, under consistency and integrability, with no parallel trends and no
+no-anticipation assumption, the observed difference in differences minus the ATT equals the
+differential trend in untreated outcomes plus the anticipation gap. -/
+theorem did_sub_att {μ : Measure Ω} [IsFiniteMeasure μ] {G : Ω → Bool}
     {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G))
+    (hT : μ (treated G) ≠ 0) (hCpos : μ (control G) ≠ 0) (hcons : Consistency G Y Yobs)
+    (hY : ∀ t d, Integrable (Y t d) μ) :
+    did μ G Yobs - att μ G Y = trendGap μ G Y + anticipationGap μ G Y :=
+  did_sub_att_of_integrable_cond hG hT hCpos hcons (fun _ => DiD.integrable_cond (hY _ _) _)
+    (fun _ => DiD.integrable_cond (hY _ _) _) fun _ => DiD.integrable_cond (hY _ _) _
+
+/-- **Bias under no anticipation.** For a finite measure under which both groups have positive
+mass, under consistency, no anticipation, and integrability, without parallel trends,
+`DiD - ATT` equals the differential trend in untreated outcomes. -/
+theorem did_sub_att_of_noAnticipation {μ : Measure Ω} [IsFiniteMeasure μ] {G : Ω → Bool}
+    {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G))
+    (hT : μ (treated G) ≠ 0) (hCpos : μ (control G) ≠ 0)
     (hcons : Consistency G Y Yobs) (hNA : NoAnticipation μ G Y)
     (hY : ∀ t d, Integrable (Y t d) μ) :
     did μ G Yobs - att μ G Y = trendGap μ G Y := by
-  rw [did_sub_att hG hcons hY, noAnticipation_iff_anticipationGap_eq_zero.mp hNA, add_zero]
+  rw [did_sub_att hG hT hCpos hcons hY, noAnticipation_iff_anticipationGap_eq_zero.mp hNA, add_zero]
 
-/-- **Identification of the ATT in the two by two design.** Under consistency, no
-anticipation, parallel trends in untreated potential outcomes, and integrability of every
-potential outcome, with overlap `0 < P(G = 1) < 1`, the ATT `E[Y post 1 - Y post 0 | G = 1]`
-equals the observed difference in differences. Overlap excludes the degenerate case in which
-one of the conditional measures `μ[|G = 1]`, `μ[|G = 0]` is the zero measure; the linear
-argument itself does not use it. -/
-theorem att_eq_did {μ : Measure Ω} {G : Ω → Bool} {Y : Period → Bool → Ω → ℝ}
-    {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G)) (hcons : Consistency G Y Yobs)
-    (hNA : NoAnticipation μ G Y) (hPT : ParallelTrends μ G Y)
-    (_hpos : 0 < μ (treated G)) (_hlt : μ (treated G) < 1)
-    (hY : ∀ t d, Integrable (Y t d) μ) :
+/-- Under a probability measure, overlap `P(G = 1) < 1` makes the comparison group non-null. -/
+theorem control_ne_zero {μ : Measure Ω} [IsProbabilityMeasure μ] {G : Ω → Bool}
+    (hG : MeasurableSet (treated G)) (hlt : μ (treated G) < 1) : μ (control G) ≠ 0 := by
+  rw [control_eq_compl, prob_compl_eq_one_sub hG]
+  exact (tsub_pos_of_lt hlt).ne'
+
+/-- **Identification of the ATT in the two by two design, local moments.** On a probability
+space, under consistency, no anticipation, parallel trends in untreated potential outcomes, and
+overlap `0 < P(G = 1) < 1`, the ATT equals the observed difference in differences, assuming
+only that the treated-path outcomes are integrable given `G = 1` and the untreated outcomes are
+integrable given `G = 1` and given `G = 0`. -/
+theorem att_eq_did_of_integrable_cond {μ : Measure Ω} [IsProbabilityMeasure μ] {G : Ω → Bool}
+    {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G))
+    (hcons : Consistency G Y Yobs) (hNA : NoAnticipation μ G Y) (hPT : ParallelTrends μ G Y)
+    (hpos : 0 < μ (treated G)) (hlt : μ (treated G) < 1)
+    (hT1 : ∀ t, Integrable (Y t true) μ[|treated G])
+    (hT0 : ∀ t, Integrable (Y t false) μ[|treated G])
+    (hC0 : ∀ t, Integrable (Y t false) μ[|control G]) :
     att μ G Y = did μ G Yobs := by
-  have h := did_sub_att_of_noAnticipation hG hcons hNA hY
-  rw [parallelTrends_iff_trendGap_eq_zero.mp hPT] at h
+  have h := did_sub_att_of_integrable_cond hG hpos.ne' (control_ne_zero hG hlt) hcons hT1 hT0 hC0
+  rw [parallelTrends_iff_trendGap_eq_zero.mp hPT,
+    noAnticipation_iff_anticipationGap_eq_zero.mp hNA] at h
   linarith
+
+/-- **Identification of the ATT in the two by two design.** On a probability space, under
+consistency, no anticipation, parallel trends in untreated potential outcomes, and
+integrability of every potential outcome, with overlap `0 < P(G = 1) < 1`, the ATT
+`E[Y post 1 - Y post 0 | G = 1]` equals the observed difference in differences. Overlap
+guarantees that neither conditional measure `μ[|G = 1]`, `μ[|G = 0]` is the zero measure. -/
+theorem att_eq_did {μ : Measure Ω} [IsProbabilityMeasure μ] {G : Ω → Bool}
+    {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ} (hG : MeasurableSet (treated G))
+    (hcons : Consistency G Y Yobs) (hNA : NoAnticipation μ G Y) (hPT : ParallelTrends μ G Y)
+    (hpos : 0 < μ (treated G)) (hlt : μ (treated G) < 1)
+    (hY : ∀ t d, Integrable (Y t d) μ) :
+    att μ G Y = did μ G Yobs :=
+  att_eq_did_of_integrable_cond hG hcons hNA hPT hpos hlt
+    (fun _ => DiD.integrable_cond (hY _ _) _) (fun _ => DiD.integrable_cond (hY _ _) _)
+    fun _ => DiD.integrable_cond (hY _ _) _
 
 /-! ### A counterexample: parallel trends fails -/
 
@@ -314,19 +423,30 @@ theorem cex_not_parallelTrends : ¬ ParallelTrends cexMeasure cexGroup cexY := b
   rw [parallelTrends_iff_trendGap_eq_zero, cex_trendGap]
   norm_num
 
-/-- **Counterexample.** In a concrete two-unit model satisfying consistency, no anticipation,
-overlap, and integrability, but not parallel trends, the difference in differences equals `1`
-while the ATT equals `0`. -/
+theorem cex_treated_measure : cexMeasure (treated cexGroup) = 1 / 2 := by
+  rw [cex_treated, cexMeasure, uniformOn_univ]
+  simp
+
+/-- **Counterexample.** A concrete two-unit model, with each unit of probability `1 / 2`,
+satisfies consistency, no anticipation, and overlap `0 < P(G = 1) < 1`, but not parallel
+trends; its difference in differences equals `1` while its ATT equals `0`. -/
 theorem cex_did_ne_att :
-    did cexMeasure cexGroup cexYobs = 1 ∧ att cexMeasure cexGroup cexY = 0 ∧
-      did cexMeasure cexGroup cexYobs ≠ att cexMeasure cexGroup cexY := by
-  have h := did_sub_att_of_noAnticipation (μ := cexMeasure) (Yobs := cexYobs)
-    (by rw [cex_treated]; exact MeasurableSet.singleton _) cex_consistency cex_noAnticipation
+    Consistency cexGroup cexY cexYobs ∧ NoAnticipation cexMeasure cexGroup cexY ∧
+      0 < cexMeasure (treated cexGroup) ∧ cexMeasure (treated cexGroup) < 1 ∧
+      ¬ ParallelTrends cexMeasure cexGroup cexY ∧
+      did cexMeasure cexGroup cexYobs = 1 ∧ att cexMeasure cexGroup cexY = 0 := by
+  have hT : MeasurableSet (treated cexGroup) := by
+    rw [cex_treated]; exact MeasurableSet.singleton _
+  have hlt : cexMeasure (treated cexGroup) < 1 := by
+    rw [cex_treated_measure]; exact ENNReal.half_lt_self one_ne_zero ENNReal.one_ne_top
+  have hpos : 0 < cexMeasure (treated cexGroup) := by
+    rw [cex_treated_measure]; simp
+  have h := did_sub_att_of_noAnticipation (μ := cexMeasure) (Yobs := cexYobs) hT hpos.ne'
+    (control_ne_zero hT hlt) cex_consistency cex_noAnticipation
     (fun _ _ => Integrable.of_finite)
   rw [cex_trendGap, cex_att] at h
-  refine ⟨by linarith, cex_att, ?_⟩
-  rw [cex_att]
-  linarith
+  exact ⟨cex_consistency, cex_noAnticipation, hpos, hlt, cex_not_parallelTrends,
+    by linarith, cex_att⟩
 
 end Counterexample
 
@@ -394,7 +514,8 @@ strata, overlap within strata, conditional parallel trends, a treated group of p
 probability, and integrability of every potential
 outcome, the ATT equals the treated-weighted average of the stratum differences in differences:
 `ATT = ∑ₓ P(X = x | G = 1) DiD(x)`. This is a finite-covariate result; the general version with
-a measurable covariate and Mathlib conditional expectation is not stated here. -/
+a measurable covariate and Mathlib conditional expectation is
+`att_eq_integral_sub_integral_comp`. -/
 theorem att_eq_sum_treatedWeight_mul_didCell {μ : Measure Ω} [IsFiniteMeasure μ]
     {G : Ω → Bool} {X : Ω → α} {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ}
     (hG : MeasurableSet (treated G)) (hX : Measurable X) (hcons : Consistency G Y Yobs)
@@ -412,14 +533,17 @@ theorem att_eq_sum_treatedWeight_mul_didCell {μ : Measure Ω} [IsFiniteMeasure 
   · congr 1
     have hT := hG.inter (hX (.singleton x))
     have hCx := hC.inter (hX (.singleton x))
-    have key := DiD.did_sub_effect_eq (μ := μ) (opre := Yobs pre) (opost := Yobs post)
+    have key := DiD.did_sub_effect_eq (μ := μ) (s := treated G ∩ X ⁻¹' {x})
+      (c := control G ∩ X ⁻¹' {x}) (opre := Yobs pre) (opost := Yobs post)
       (y1pre := Y pre true) (y1post := Y post true) (y0pre := Y pre false)
-      (y0post := Y post false)
+      (y0post := Y post false) hx (hov x hx)
       (ae_cond_of_forall_mem hT fun ω hω => by rw [hcons, show G ω = true from hω.1])
       (ae_cond_of_forall_mem hT fun ω hω => by rw [hcons, show G ω = true from hω.1])
       (ae_cond_of_forall_mem hCx fun ω hω => by rw [hcons, show G ω = false from hω.1])
       (ae_cond_of_forall_mem hCx fun ω hω => by rw [hcons, show G ω = false from hω.1])
-      (hY _ _) (hY _ _) (hY _ _)
+      (DiD.integrable_cond (hY _ _) _) (DiD.integrable_cond (hY _ _) _)
+      (DiD.integrable_cond (hY _ _) _) (DiD.integrable_cond (hY _ _) _)
+      (DiD.integrable_cond (hY _ _) _) (DiD.integrable_cond (hY _ _) _)
     have hpt := hPT x hx (hov x hx)
     have hna := hNA x
     simp only [treatedCell, controlCell] at hpt hna
@@ -427,6 +551,72 @@ theorem att_eq_sum_treatedWeight_mul_didCell {μ : Measure Ω} [IsFiniteMeasure 
     rw [didCell, treatedCell, controlCell, key]
 
 end Conditional
+
+/-! ### Conditional parallel trends given a general covariate -/
+
+section GeneralCovariate
+
+variable {𝒳 : Type*} [MeasurableSpace 𝒳]
+
+/-- **Identification under conditional parallel trends (general covariate).** Let `X : Ω → 𝒳`
+be a measurable covariate on a finite measure space, `mT = μ[|G = 1]` and `mC = μ[|G = 0]` the
+group conditional measures, and `σ(X)` the σ-algebra generated by `X`. Assume consistency, no
+anticipation, a treated group of positive mass, integrable potential outcomes, and:
+
+* overlap: the treated covariate law is absolutely continuous with respect to the comparison
+  covariate law, `mT.map X ≪ mC.map X`;
+* conditional parallel trends: one measurable function `τ` of the covariate is a version of
+  `E[Y post 0 - Y pre 0 | σ(X)]` under both `mT` and `mC`;
+* `φ` is a measurable version of the observed comparison-group conditional change
+  `E[Yobs post - Yobs pre | σ(X)]` under `mC`.
+
+Then `ATT = E[Yobs post - Yobs pre | G = 1] - E[φ(X) | G = 1]`: the observed treated change
+minus the comparison-group conditional change, averaged over the treated covariate law. On the
+comparison group the observed change is the untreated change, so `τ = φ` almost everywhere for
+`mC.map X`, hence (by overlap) for `mT.map X`. Overlap also forces the comparison group to have
+positive mass. -/
+theorem att_eq_integral_sub_integral_comp {μ : Measure Ω} [IsFiniteMeasure μ]
+    {G : Ω → Bool} {X : Ω → 𝒳} {Y : Period → Bool → Ω → ℝ} {Yobs : Period → Ω → ℝ}
+    {τ φ : 𝒳 → ℝ} (hG : MeasurableSet (treated G)) (hpos : μ (treated G) ≠ 0)
+    (hX : Measurable X) (hτ : Measurable τ) (hφ : Measurable φ)
+    (hcons : Consistency G Y Yobs) (hNA : NoAnticipation μ G Y)
+    (hov : (μ[|treated G]).map X ≪ (μ[|control G]).map X)
+    (hPTt : (μ[|treated G])[fun ω => Y post false ω - Y pre false ω |
+        MeasurableSpace.comap X inferInstance] =ᵐ[μ[|treated G]] τ ∘ X)
+    (hPTc : (μ[|control G])[fun ω => Y post false ω - Y pre false ω |
+        MeasurableSpace.comap X inferInstance] =ᵐ[μ[|control G]] τ ∘ X)
+    (hφc : (μ[|control G])[fun ω => Yobs post ω - Yobs pre ω |
+        MeasurableSpace.comap X inferInstance] =ᵐ[μ[|control G]] φ ∘ X)
+    (hY : ∀ t d, Integrable (Y t d) μ) :
+    att μ G Y = ∫ ω, (Yobs post ω - Yobs pre ω) ∂μ[|treated G] - ∫ ω, φ (X ω) ∂μ[|treated G] := by
+  have hC : MeasurableSet (control G) := control_eq_compl G ▸ hG.compl
+  have hΔ : (fun ω => Yobs post ω - Yobs pre ω)
+      =ᵐ[μ[|control G]] fun ω => Y post false ω - Y pre false ω :=
+    ae_cond_of_forall_mem hC fun ω hω => by
+      change Yobs post ω - Yobs pre ω = _
+      rw [hcons, hcons, show G ω = false from hω]
+  have h1 : τ ∘ X =ᵐ[μ[|control G]] φ ∘ X :=
+    hPTc.symm.trans ((condExp_congr_ae hΔ).symm.trans hφc)
+  have hmeas : MeasurableSet {x | τ x = φ x} := measurableSet_eq_fun hτ hφ
+  have h4 : τ ∘ X =ᵐ[μ[|treated G]] φ ∘ X :=
+    (ae_map_iff hX.aemeasurable hmeas).mp
+      (hov.ae_le ((ae_map_iff hX.aemeasurable hmeas).mpr h1))
+  have := cond_isProbabilityMeasure (μ := μ) hpos
+  have h5 : ∫ ω, (Y post false ω - Y pre false ω) ∂μ[|treated G]
+      = ∫ ω, φ (X ω) ∂μ[|treated G] := by
+    rw [← integral_condExp (Measurable.comap_le hX)]
+    exact integral_congr_ae (hPTt.trans h4)
+  have h6 : ∫ ω, (Yobs post ω - Yobs pre ω) ∂μ[|treated G]
+      = ∫ ω, (Y post true ω - Y pre true ω) ∂μ[|treated G] :=
+    DiD.integral_cond_congr hG fun ω hω => by
+      rw [hcons, hcons, show G ω = true from hω]
+  have hi : ∀ t d, Integrable (Y t d) μ[|treated G] := fun t d => DiD.integrable_cond (hY t d) _
+  rw [h6, ← h5, att, integral_sub (hi _ _) (hi _ _), integral_sub (hi _ _) (hi _ _),
+    integral_sub (hi _ _) (hi _ _)]
+  have hna : ∫ ω, Y pre true ω ∂μ[|treated G] = ∫ ω, Y pre false ω ∂μ[|treated G] := hNA
+  linarith
+
+end GeneralCovariate
 
 end TwoPeriod
 

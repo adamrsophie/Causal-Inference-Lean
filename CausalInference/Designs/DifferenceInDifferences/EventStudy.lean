@@ -29,6 +29,10 @@ only treatment coefficient that does (`eq_twfeCoef_of_normalEquations`).
 * `twfe_not_convex_combination`: with group-time effects `1, 4, 1` (computed with
   `Staggered.att` in an explicit staggered adoption model) the estimand is `-1/2`: wrong sign,
   and not in the convex hull of the group-time effects.
+* `dyn_lead_contamination`: in a dynamic event-study regression with a never-treated cohort,
+  the lead coefficient is `-2/5` although every pre-treatment effect is `0`.
+* `twfe_coef_mul_sum_sq`: in a general balanced panel, every solution of the two-way fixed
+  effects normal equations satisfies `β ∑ D̃² = ∑ D̃ y` for the double-demeaned regressor `D̃`.
 
 Sources: Goodman-Bacon (2021), *Difference-in-differences with variation in treatment timing*;
 Sun and Abraham (2021), *Estimating dynamic treatment effects in event studies with
@@ -136,19 +140,19 @@ theorem sum_twfeWeight : ∑ k, twfeWeight k = 1 := by
   simp [twfeWeight, Fin.sum_univ_succ]
   norm_num
 
-/-- **A negative weight.** The weight on `ATT(early, 2)`, the effect of the early cohort in the
-period where the late cohort, used as its comparison, is itself treated, is `-1/2 < 0`. So the
-two-way fixed effects coefficient is not a convex combination of the group-time effects. -/
+/-- **A negative weight.** The coefficient decomposes as `β = a / 2 + (c - (b - a)) / 2`: half
+the early cohort's effect `a` measured against the not-yet-treated late cohort in period `1`,
+plus half the late cohort's change `c` in period `2` measured against the already-treated early
+cohort, whose change `b - a` serves as the comparison. Through that comparison the weight on
+`ATT(early, 2) = b` is `-1/2 < 0`, so the two-way fixed effects coefficient is not a convex
+combination of the group-time effects. -/
 theorem twfeWeight_one_neg : twfeWeight 1 < 0 := by
   norm_num [twfeWeight]
 
 /-- **Wrong sign.** With `ATT(early, 1) = 1`, `ATT(early, 2) = 4`, and `ATT(late, 2) = 1`, every
 group-time effect is positive while the two-way fixed effects coefficient is `-1/2`. -/
-theorem twfeCoef_wrong_sign :
-    (0 < (1 : ℝ) ∧ 0 < (4 : ℝ) ∧ 0 < (1 : ℝ)) ∧ twfeCoef 1 4 1 = -1 / 2 := by
-  refine ⟨by norm_num, ?_⟩
-  simp [twfeCoef]
-  norm_num
+theorem twfeCoef_wrong_sign : twfeCoef 1 4 1 = -1 / 2 := by
+  norm_num [twfeCoef]
 
 /-- **Not a convex combination.** In the example with effects `1, 4, 1`, the two-way fixed
 effects coefficient, which is the unique treatment coefficient solving the normal equations,
@@ -163,7 +167,7 @@ theorem twfeCoef_not_mem_convexHull :
     rintro _ ⟨k, rfl⟩
     fin_cases k <;> simp
   have := hsub h
-  rw [twfeCoef_wrong_sign.2] at this
+  rw [twfeCoef_wrong_sign] at this
   norm_num at this
 
 /-! ### The example as a staggered adoption model
@@ -269,16 +273,24 @@ theorem ex_cell_mean (a b c : ℝ) (i : Fin 2) (t : Fin 3) :
     subst hj
     fin_cases t <;> simp [exYobs, exY, exCohort, adoption, effectNat, effect, outcome, treat]
 
+theorem ex_cohort_top : Staggered.cohort exCohort ⊤ = ∅ := by
+  ext i
+  simp [Staggered.cohort, exCohort]
+
 /-- **Two-way fixed effects is not a convex combination of group-time effects.** In the
-staggered adoption model with `ATT(1, 1) = 1`, `ATT(1, 2) = 4`, `ATT(2, 2) = 1` (consistency and
-no anticipation hold, and untreated outcomes are `0`, so parallel trends holds exactly by
-`ex_parallel_trends`), the static
-two-way fixed effects coefficient of the observed cohort-time means is `-1/2`: it is the unique
-solution of the normal equations, has the wrong sign, and lies outside the convex hull of the
-group-time effects. -/
+staggered adoption model with `ATT(1, 1) = 1`, `ATT(1, 2) = 4`, `ATT(2, 2) = 1`, consistency and
+no anticipation hold, the never-treated group is empty (so the design is the not-yet-treated
+one), and parallel trends against the not-yet-treated group holds for every cohort, period, and
+step, because untreated outcomes are `0`. The observed cohort-time means are the cells of the
+regression, and every solution of the normal equations has treatment coefficient `-1/2` (the
+cohort and period effects are determined only up to a constant shift between them, so only the
+treatment coefficient is unique). That coefficient solves the normal equations, has the wrong
+sign, and lies outside the convex hull of the group-time effects. -/
 theorem twfe_not_convex_combination :
     Staggered.Consistency exCohort (exY 1 4 1) (exYobs 1 4 1) ∧
     Staggered.NoAnticipation exMeasure exCohort (exY 1 4 1) ∧
+    Staggered.cohort exCohort ⊤ = ∅ ∧
+    (∀ (g t r : ℕ), Staggered.ParallelTrendsNotYetTreated exMeasure exCohort (exY 1 4 1) g t r) ∧
     (∀ (i : Fin 2) (t : Fin 3), ∫ ω, exYobs 1 4 1 t ω
         ∂exMeasure[|Staggered.cohort exCohort (adoption i)] = outcome 1 4 1 i t) ∧
     (∀ (α : Fin 2 → ℝ) (δ : Fin 3 → ℝ) (β : ℝ),
@@ -291,8 +303,9 @@ theorem twfe_not_convex_combination :
       Staggered.att exMeasure exCohort (exY 1 4 1) 1 2,
       Staggered.att exMeasure exCohort (exY 1 4 1) 2 2} := by
   obtain ⟨h11, h12, h22⟩ := ex_att 1 4 1
-  have hβ : twfeCoef 1 4 1 = -1 / 2 := twfeCoef_wrong_sign.2
-  refine ⟨ex_consistency 1 4 1, ex_noAnticipation 1 4 1, ex_cell_mean 1 4 1,
+  have hβ : twfeCoef 1 4 1 = -1 / 2 := twfeCoef_wrong_sign
+  refine ⟨ex_consistency 1 4 1, ex_noAnticipation 1 4 1, ex_cohort_top,
+    fun g t r => ex_parallel_trends 1 4 1 _ _ r, ex_cell_mean 1 4 1,
     fun α δ β h => (eq_twfeCoef_of_normalEquations h).trans hβ,
     hβ ▸ normalEquations_twfeCoef 1 4 1, by rw [h11]; norm_num, by rw [h12]; norm_num,
     by rw [h22]; norm_num, ?_⟩
@@ -307,6 +320,161 @@ theorem twfe_not_convex_combination :
   norm_num at this
 
 end Model
+
+/-! ### Lead contamination in a dynamic event-study regression
+
+Add an equally weighted never-treated cohort to the three-period panel. Cohort `0` adopts in
+period `1`, cohort `1` in period `2`, cohort `2` never. Untreated outcomes are `0` and all
+pre-treatment effects are `0`; the treated effects are `1, 4` for the early cohort (periods `1`,
+`2`) and `2` for the late cohort (period `2`). The dynamic regression adds cohort and period
+effects and event-time dummies for the event times `-2, 0, 1`, with `-1` as the reference.
+Every solution of its normal equations has lead coefficient `-2/5`, although every
+pre-treatment effect is `0`: heterogeneous post-treatment effects contaminate the lead. -/
+
+section Dynamic
+
+/-- The event-time dummies, indexed by `k : Fin 3` for the event times `-2, 0, 1`, as
+cohort-by-period indicator matrices. Event time `-2` occurs only for the late cohort in
+period `0`; event time `0` for the early cohort in period `1` and the late cohort in period `2`;
+event time `1` for the early cohort in period `2`. The never-treated cohort has no dummy. -/
+def dynDummy : Fin 3 → Fin 3 → Fin 3 → ℝ :=
+  ![![![0, 0, 0], ![1, 0, 0], ![0, 0, 0]],
+    ![![0, 1, 0], ![0, 0, 1], ![0, 0, 0]],
+    ![![0, 0, 1], ![0, 0, 0], ![0, 0, 0]]]
+
+/-- The cohort-time mean outcomes: early cohort `(0, 1, 4)`, late cohort `(0, 0, 2)`,
+never-treated cohort `(0, 0, 0)`. -/
+def dynOutcome : Fin 3 → Fin 3 → ℝ := ![![0, 1, 4], ![0, 0, 2], ![0, 0, 0]]
+
+/-- The residual of the dynamic fit with cohort effects `α`, period effects `δ`, and event-time
+coefficients `β`. -/
+noncomputable def dynResid (y : Fin 3 → Fin 3 → ℝ) (α δ β : Fin 3 → ℝ) (i t : Fin 3) : ℝ :=
+  y i t - α i - δ t - ∑ k, β k * dynDummy k i t
+
+/-- The **normal equations** of the dynamic event-study regression: the residual is orthogonal
+to every cohort dummy, every period dummy, and every event-time dummy. -/
+def DynNormalEquations (y : Fin 3 → Fin 3 → ℝ) (α δ β : Fin 3 → ℝ) : Prop :=
+  (∀ i, ∑ t, dynResid y α δ β i t = 0) ∧ (∀ t, ∑ i, dynResid y α δ β i t = 0) ∧
+    ∀ k, ∑ i, ∑ t, dynDummy k i t * dynResid y α δ β i t = 0
+
+/-- An explicit solution of the dynamic normal equations, with lead coefficient `-2/5`. -/
+theorem dynNormalEquations_solution :
+    DynNormalEquations dynOutcome ![-1 / 10, 2 / 5, 1 / 10] ![0, -3 / 10, 0]
+      ![-2 / 5, 3 / 2, 41 / 10] := by
+  refine ⟨fun i => ?_, fun t => ?_, fun k => ?_⟩
+  · fin_cases i <;> simp [dynResid, dynDummy, dynOutcome, Fin.sum_univ_succ] <;> norm_num
+  · fin_cases t <;> simp [dynResid, dynDummy, dynOutcome, Fin.sum_univ_succ] <;> norm_num
+  · fin_cases k <;> simp [dynResid, dynDummy, dynOutcome, Fin.sum_univ_succ] <;> norm_num
+
+/-- **Lead contamination.** In the panel above, all pre-treatment cells equal the untreated
+outcome `0`, yet every solution of the dynamic normal equations has lead coefficient
+`β₋₂ = -2/5 ≠ 0`, and such a solution exists. -/
+theorem dyn_lead_contamination :
+    (dynOutcome 0 0 = 0 ∧ dynOutcome 1 0 = 0 ∧ dynOutcome 1 1 = 0) ∧
+    (∃ α δ β : Fin 3 → ℝ, DynNormalEquations dynOutcome α δ β) ∧
+    ∀ α δ β : Fin 3 → ℝ, DynNormalEquations dynOutcome α δ β → β 0 = -2 / 5 := by
+  refine ⟨by simp [dynOutcome], ⟨_, _, _, dynNormalEquations_solution⟩, ?_⟩
+  intro α δ β ⟨hrow, hcol, hk⟩
+  have r0 := hrow 0
+  have r1 := hrow 1
+  have r2 := hrow 2
+  have c0 := hcol 0
+  have c1 := hcol 1
+  have c2 := hcol 2
+  have k0 := hk 0
+  have k1 := hk 1
+  have k2 := hk 2
+  simp [dynResid, dynDummy, dynOutcome, Fin.sum_univ_succ] at r0 r1 r2 c0 c1 c2 k0 k1 k2
+  linarith
+
+end Dynamic
+
+/-! ### The two-way fixed effects coefficient in a general balanced panel -/
+
+section Balanced
+
+variable {ι τ : Type*} [Fintype ι] [Fintype τ]
+
+/-- The **double-demeaned** regressor
+`D̃ i t = D i t - D̄ i· - D̄ ·t + D̄ ··`, with row, column, and grand means over a balanced
+panel. -/
+noncomputable def doubleDemean (D : ι → τ → ℝ) (i : ι) (t : τ) : ℝ :=
+  D i t - (Fintype.card τ : ℝ)⁻¹ * ∑ s, D i s - (Fintype.card ι : ℝ)⁻¹ * ∑ j, D j t
+    + ((Fintype.card ι : ℝ) * Fintype.card τ)⁻¹ * ∑ j, ∑ s, D j s
+
+/-- The **normal equations** of the least squares regression of `y` on unit dummies, period
+dummies, and the regressor `D` in a balanced panel: the residual is orthogonal to every unit
+dummy, every period dummy, and `D`. -/
+def PanelNormalEquations (D y : ι → τ → ℝ) (α : ι → ℝ) (δ : τ → ℝ) (β : ℝ) : Prop :=
+  (∀ i, ∑ t, (y i t - α i - δ t - β * D i t) = 0) ∧
+    (∀ t, ∑ i, (y i t - α i - δ t - β * D i t) = 0) ∧
+    ∑ i, ∑ t, D i t * (y i t - α i - δ t - β * D i t) = 0
+
+/-- A panel array with zero row sums and zero column sums is orthogonal to every additive
+array `u i + v t`. -/
+theorem sum_sum_mul_add_eq_zero {M : ι → τ → ℝ} (hrow : ∀ i, ∑ t, M i t = 0)
+    (hcol : ∀ t, ∑ i, M i t = 0) (u : ι → ℝ) (v : τ → ℝ) :
+    ∑ i, ∑ t, M i t * (u i + v t) = 0 := by
+  simp only [mul_add, Finset.sum_add_distrib]
+  rw [Finset.sum_comm (f := fun i t => M i t * v t)]
+  simp [← Finset.sum_mul, hrow, hcol]
+
+/-- The double-demeaned regressor differs from the regressor by an additive array. -/
+theorem doubleDemean_eq (D : ι → τ → ℝ) (i : ι) (t : τ) :
+    doubleDemean D i t = D i t + (-((Fintype.card τ : ℝ)⁻¹ * ∑ s, D i s)
+      + (((Fintype.card ι : ℝ) * Fintype.card τ)⁻¹ * ∑ j, ∑ s, D j s
+        - (Fintype.card ι : ℝ)⁻¹ * ∑ j, D j t)) := by
+  unfold doubleDemean
+  ring
+
+/-- The double-demeaned regressor has zero row sums. -/
+theorem sum_doubleDemean_row [Nonempty τ] (D : ι → τ → ℝ) (i : ι) :
+    ∑ t, doubleDemean D i t = 0 := by
+  have hτ : (Fintype.card τ : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
+  simp only [doubleDemean, Finset.sum_add_distrib, Finset.sum_sub_distrib, Finset.sum_const,
+    Finset.card_univ, nsmul_eq_mul, ← Finset.mul_sum]
+  rw [Finset.sum_comm (f := fun t j => D j t)]
+  field_simp
+  ring
+
+/-- The double-demeaned regressor has zero column sums. -/
+theorem sum_doubleDemean_col [Nonempty ι] (D : ι → τ → ℝ) (t : τ) :
+    ∑ i, doubleDemean D i t = 0 := by
+  have hι : (Fintype.card ι : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
+  simp only [doubleDemean, Finset.sum_add_distrib, Finset.sum_sub_distrib, Finset.sum_const,
+    Finset.card_univ, nsmul_eq_mul, ← Finset.mul_sum]
+  field_simp
+  ring
+
+/-- **The two-way fixed effects coefficient by double demeaning.** In a balanced panel with
+finitely many units and periods (both nonempty), every solution `(α, δ, β)` of the normal
+equations of the regression of `y` on unit dummies, period dummies, and `D` satisfies
+`β ∑ᵢ ∑ₜ D̃ᵢₜ² = ∑ᵢ ∑ₜ D̃ᵢₜ yᵢₜ`, where `D̃` is the double-demeaned regressor. When
+`∑ D̃² ≠ 0` this determines `β`. -/
+theorem twfe_coef_mul_sum_sq [Nonempty ι] [Nonempty τ] {D y : ι → τ → ℝ} {α : ι → ℝ}
+    {δ : τ → ℝ} {β : ℝ} (h : PanelNormalEquations D y α δ β) :
+    β * ∑ i, ∑ t, doubleDemean D i t ^ 2 = ∑ i, ∑ t, doubleDemean D i t * y i t := by
+  obtain ⟨hr, hc, hD⟩ := h
+  set u : ι → ℝ := fun i => -((Fintype.card τ : ℝ)⁻¹ * ∑ s, D i s)
+  set v : τ → ℝ := fun t => ((Fintype.card ι : ℝ) * Fintype.card τ)⁻¹ * ∑ j, ∑ s, D j s
+    - (Fintype.card ι : ℝ)⁻¹ * ∑ j, D j t
+  have hdd : ∀ i t, doubleDemean D i t = D i t + (u i + v t) := doubleDemean_eq D
+  have hA := sum_sum_mul_add_eq_zero hr hc u v
+  have hB := sum_sum_mul_add_eq_zero (sum_doubleDemean_row D) (sum_doubleDemean_col D) α δ
+  have hC := sum_sum_mul_add_eq_zero (sum_doubleDemean_row D) (sum_doubleDemean_col D) u v
+  have key : ∀ i t, doubleDemean D i t * y i t
+      = D i t * (y i t - α i - δ t - β * D i t)
+        + (y i t - α i - δ t - β * D i t) * (u i + v t)
+        + doubleDemean D i t * (α i + δ t)
+        + β * (doubleDemean D i t ^ 2 - doubleDemean D i t * (u i + v t)) := by
+    intro i t
+    have := hdd i t
+    linear_combination (y i t - α i - δ t - β * D i t - β * doubleDemean D i t) * this
+  simp only [key, Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_sub_distrib, hD, hA, hB,
+    hC]
+  ring
+
+end Balanced
 
 end EventStudy
 
