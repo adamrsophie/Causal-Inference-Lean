@@ -248,3 +248,6 @@ public import CausalInference.Discovery.Simplicial
 public import CausalInference.Estimation.DeltaMethodSeveralSamples
 public import CausalInference.BiasAnalysis.VarianceSeveralSamples
 public import CausalInference.BiasAnalysis.VarianceSeveralSamplesWitnesses
+public import CausalInference.Identification.IDCanonical
+public import CausalInference.Identification.IDCompletenessExamples
+public import CausalInference.Identification.IDCompletenessBow
