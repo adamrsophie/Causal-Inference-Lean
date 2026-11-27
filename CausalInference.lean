@@ -182,3 +182,6 @@ public import CausalInference.Survival.IPCWBridge
 public import CausalInference.StructuralNested.IPECensoring
 public import CausalInference.LinearSEM.CorrelatedErrors
 public import CausalInference.LinearSEM.SingleDoorConverse
+public import CausalInference.StructuralNested.TwoStage
+public import CausalInference.StructuralNested.TwoStageGEstimation
+public import CausalInference.StructuralNested.TwoStageCounterexamples
