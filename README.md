@@ -23,7 +23,7 @@ Project site with a dependency map, highlights, and a full reference:
 | `CausalInference/Designs/DifferenceInDifferences` | Two-period identification and bias, conditional parallel trends with a general covariate, staggered adoption with group-time effects and event-time aggregation, two-way fixed effects counterexamples including contaminated leads |
 | `CausalInference/Designs/RegressionDiscontinuity` | Sharp and fuzzy designs: identification at the cutoff from the observed law |
 | `CausalInference/Designs/SyntheticControl` | Synthetic control weights, fit, and the noiseless linear factor model |
-| `CausalInference/InstrumentalVariables` | Principal strata, the local average treatment effect theorem, counterexamples without monotonicity, bounds on the average effect with sharpness, instrumental inequalities, linear instrumental variables |
+| `CausalInference/InstrumentalVariables` | Principal strata, the local average treatment effect theorem, counterexamples without monotonicity, bounds on the average effect with sharpness, the Balke and Pearl bounds as the exact identified set of the response-type model, the instrumental inequality for binary and finite variables, the effect on the treated, linear instrumental variables |
 | `CausalInference/Interference` | Partial interference, direct and indirect effects, two-stage randomization |
 | `CausalInference/Mediation` | Controlled and natural effects, decompositions, the mediation formula, a cross-world counterexample |
 | `CausalInference/Longitudinal` | Time-varying treatments: sequential exchangeability, the g-formula at any finite horizon for static and dynamic regimes, inverse probability weighting at any horizon, treatment-confounder feedback, the g-null test and the g-null paradox setting |

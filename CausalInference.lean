@@ -119,3 +119,7 @@ public import CausalInference.Longitudinal.GNull
 public import CausalInference.BiasAnalysis.VarianceFormulas
 public import CausalInference.BiasAnalysis.MisclassificationTables
 public import CausalInference.BiasAnalysis.MisclassificationMatrix
+public import CausalInference.InstrumentalVariables.ResponseTypes
+public import CausalInference.InstrumentalVariables.BalkePearl
+public import CausalInference.InstrumentalVariables.InstrumentalInequality
+public import CausalInference.InstrumentalVariables.Treated
