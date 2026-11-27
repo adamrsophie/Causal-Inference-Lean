@@ -231,3 +231,6 @@ public import CausalInference.SCM.TwinBackDoor
 public import CausalInference.SCM.SWIG
 public import CausalInference.SCM.SWIGExamples
 public import CausalInference.SCM.SWIGTwin
+public import CausalInference.Discovery.FaithfulExistence
+public import CausalInference.Discovery.MeekCompleteness
+public import CausalInference.Discovery.FactorizationExamples

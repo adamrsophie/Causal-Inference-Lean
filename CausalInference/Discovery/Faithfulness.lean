@@ -45,7 +45,7 @@ and v-structures.
   `0 → 2 ← 1`.
 
 The existence of a faithful law for every acyclic graph (Meek 1995; Spirtes, Glymour and Scheines
-1993) is not proved here.
+1993) is proved in `CausalInference.Discovery.FaithfulExistence`.
 
 ## References
 
