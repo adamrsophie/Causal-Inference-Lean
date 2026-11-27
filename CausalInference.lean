@@ -130,3 +130,5 @@ public import CausalInference.Graphical.DSeparationLemmas
 public import CausalInference.BiasAnalysis.MultipleBias
 public import CausalInference.SCM.Adjustment
 public import CausalInference.SCM.Plans
+public import CausalInference.BiasAnalysis.Distributions
+public import CausalInference.BiasAnalysis.Bayesian
