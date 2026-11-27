@@ -200,3 +200,6 @@ public import CausalInference.StructuralNested.TwoStageSample
 public import CausalInference.StructuralNested.TwoStageSwitchTypes
 public import CausalInference.StructuralNested.TwoStageTwoArm
 public import CausalInference.StructuralNested.TwoStageWeibull
+public import CausalInference.LinearSEM.FactorWidth
+public import CausalInference.LinearSEM.SingleDoorGeneric
+public import CausalInference.LinearSEM.SingleDoorTrail

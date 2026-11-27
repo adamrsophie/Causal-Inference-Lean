@@ -49,13 +49,12 @@ the other variables are then uncorrelated with the pattern, and regressors uncor
 outcome and with the other regressors do not change a regression
 (`isRegCoeff_of_uncorrelated`).
 
-Not proved: the existence form for an arbitrary d-connecting path (any length, colliders opened
-through a directed path to `Z` rather than by membership in `Z`). The missing step is a closed
-form for the covariance of a model supported on such a path, with a common edge coefficient `t`,
-showing that the partial covariance of `x` and `y` given `Z` is a nonzero polynomial in `t`
-(its lowest-order term being the product of the path coefficients). Also not proved: that the
-bias times the regression determinant is a polynomial in all parameters of an arbitrary model,
-which together with `volume_zeroSet_eq_zero` would give the measure-zero form on every graph.
+The general case is proved in `CausalInference.LinearSEM.SingleDoorGeneric` and
+`CausalInference.LinearSEM.SingleDoorTrail`: the bias times the regression determinant is a
+polynomial in all parameters (`SingleDoorGeneric.biasPoly`), it is not the zero polynomial when
+the single-door condition fails (a witness is built from a minimal d-connecting trail of any
+length, or from a directed path from `y` to `Z`), and so the exceptional set is null on every
+acyclic graph (`SingleDoorGeneric.volume_exceptional_eq_zero_of_not_singleDoor`).
 
 Source: J. Pearl (2009), *Causality*, 2nd edition, Section 5.3.1, Theorem 5.3.1.
 -/
