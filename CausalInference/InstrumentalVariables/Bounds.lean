@@ -7,6 +7,7 @@ module
 
 public import CausalInference.InstrumentalVariables.Counterexamples
 public import CausalInference.PartialIdentification.Manski
+public import Mathlib.Analysis.SpecialFunctions.NonIntegrable
 
 /-!
 # Bounds on the average treatment effect with a binary instrument
@@ -29,15 +30,17 @@ assumptions.
   probabilities, outcomes in `[lo, hi]`.
 * `IVModel.refill`: the model with the never-takers' treated outcome and the always-takers'
   untreated outcome replaced by constants; it has the same observed data.
-* `MeanIndependence.MeanIndependent`: mean independence of the potential outcomes from an
-  instrument.
+* `MeanIndependence.MeanIndependent`: mean independence of the potential outcomes from a
+  measurable instrument under a probability measure, for integrable potential outcomes.
 
 ## Main results
 
 * `IVModel.ate_mem_Icc_bounds`: under exclusion and independence the average treatment effect lies
   in `[lowerBound, upperBound]`; `IVModel.ate_mem_Icc_boundsSwap`: the same for the bounds with the
   instrument arms swapped; `IVModel.ate_mem_Icc_bounds_inter`: hence in the intersection of the
-  two intervals.
+  four intervals given by the four choices of arms.
+* `IVBounds.lowerBound_eq_map`, `IVBounds.upperBound_eq_map`: the bounds depend on the model
+  only through the observed-data law `μ.map o`.
 * `IVBounds.upperBound_sub_lowerBound`: from the definitions alone, the width is
   `(hi - lo) (P(D=0 | Z=1) + P(D=1 | Z=0))`; `IVModel.upperBound_sub_lowerBound`: under
   independence and monotonicity it is `(hi - lo) (1 - P(compliers))`.
@@ -45,22 +48,31 @@ assumptions.
   `ATE = P(C) CACE + P(AT) E[Y 1 - Y 0 | AT] + P(NT) E[Y 1 - Y 0 | NT]`;
   `IVModel.obsMean_yTreated_false`, `IVModel.obsMean_yUntreated_true`,
   `IVModel.obsMean_treatedInd_false`, `IVModel.obsMean_untreatedInd_true` identify
-  `∫_AT Y 1`, `∫_NT Y 0`, `P(AT)` and `P(NT)`; `IVModel.meanY1_eq`, `IVModel.meanY0_eq` show that
+  `∫_AT Y 1`, `∫_NT Y 0`, `P(AT)` and `P(NT)`; `IVModel.condMean_alwaysTakers_Y1` and
+  `IVModel.condMean_neverTakers_Y0` identify `E[Y 1 | AT]` and `E[Y 0 | NT]` as ratios when the
+  stratum shares are positive; `IVModel.meanY1_eq`, `IVModel.meanY0_eq` show that
   `∫_NT Y 1` and `∫_AT Y 0` are the only unidentified parts.
 * `IVBounds.identifiedSet_ate`: sharpness. Under the assumptions of `IVBounds.models` the
   identified set is exactly `[lowerBound, upperBound]`; `IVBounds.exists_model_ate_eq_lowerBound`
   and `IVBounds.exists_model_ate_eq_upperBound` exhibit the endpoint models.
 * `MeanIndependence.meanY1_mem_Icc`, `MeanIndependence.meanY0_mem_Icc`,
   `MeanIndependence.ate_mem_Icc`: the bounds of Manski (1990) under mean independence, the
-  intersection over instrument values of the worst-case bounds; `MeanIndependence.Icc_meanY1_subset`
-  and `MeanIndependence.Icc_meanY0_subset`: they are at least as tight as the no-assumption bounds.
+  intersection over instrument values of the worst-case bounds;
+  `MeanIndependence.Icc_meanY1_subset`, `MeanIndependence.Icc_meanY0_subset`,
+  `MeanIndependence.Icc_ate_subset` and `MeanIndependence.ate_mem_Icc_subset`: they are at
+  least as tight as the no-assumption bounds.
+  `MeanIndependence.not_condMean_eq_twoPoint` and `MeanIndependence.condMean_eq_heavyTail`:
+  why `MeanIndependent` requires a probability measure and integrable outcomes.
 * `IVModel.instrumentalInequality_treated`, `IVModel.instrumentalInequality_untreated` and their
   observed-law versions: `P(Y ∈ B, D = 1 | Z = 1) ≥ P(Y ∈ B, D = 1 | Z = 0)` and
   `P(Y ∈ B, D = 0 | Z = 0) ≥ P(Y ∈ B, D = 0 | Z = 1)` for every measurable `B` (for a binary
   outcome, `B = {y}`).
 * `IVBounds.violatingLaw_lt`, `IVBounds.not_assumptions_of_law_eq_violatingLaw`: a concrete
   observed-data law with a binary outcome violating the first inequality, so no model with that
-  law satisfies exclusion, independence and monotonicity.
+  law satisfies exclusion, independence and monotonicity. The law comes from a model satisfying
+  exclusion and independence, so what it refutes is monotonicity jointly with them. The
+  instrumental inequality without monotonicity is in
+  `CausalInference.InstrumentalVariables.InstrumentalInequality`.
 
 ## Implementation notes
 
@@ -88,6 +100,20 @@ theorem measureReal_mul_integral_cond {Ω : Type*} [MeasurableSpace Ω] {μ : Me
   · have : μ s = 0 := (measureReal_eq_zero_iff).1 h
     rw [h, zero_mul, Measure.restrict_eq_zero.2 this, integral_zero_measure]
   · rw [← mul_assoc, mul_inv_cancel₀ h, one_mul]
+
+/-- Conditioning commutes with pushforward: `(f_* μ)[T | S] = μ[f⁻¹ T | f⁻¹ S]`. -/
+theorem map_cond_apply {α β : Type*} [MeasurableSpace α] [MeasurableSpace β] {μ : Measure α}
+    {f : α → β} (hf : Measurable f) {S T : Set β} (hS : MeasurableSet S) (hT : MeasurableSet T) :
+    (μ.map f)[T | S] = μ[f ⁻¹' T | f ⁻¹' S] := by
+  rw [cond_apply hS, cond_apply (hf hS), Measure.map_apply hf hS,
+    Measure.map_apply hf (hS.inter hT), preimage_inter]
+
+/-- Conditioning commutes with pushforward, as measures: `(f_* μ)[|S] = f_* (μ[|f⁻¹ S])`. -/
+theorem map_cond_eq {α β : Type*} [MeasurableSpace α] [MeasurableSpace β] (μ : Measure α)
+    {f : α → β} (hf : Measurable f) {S : Set β} (hS : MeasurableSet S) :
+    (μ.map f)[|S] = (μ[|f ⁻¹' S]).map f := by
+  ext T hT
+  rw [map_cond_apply hf hS hT, Measure.map_apply hf hT]
 
 namespace IVModel
 
@@ -170,6 +196,37 @@ theorem upperBound_sub_lowerBound (μ : Measure Ω) (lo hi : ℝ) (o : Ω → Bo
     upperBound μ lo hi o - lowerBound μ lo hi o =
       (hi - lo) * (obsMean μ o untreatedInd true + obsMean μ o treatedInd false) := by
   rw [upperBound, lowerBound]; ring
+
+/-- **Observed conditional means are functionals of the observed-data law.** For a measurable
+observation map `o` and an `h` measurable in the outcome for each treatment value,
+`E[h(D, Y) | Z = z]` computed from `(μ, o)` equals the same functional of the law `μ.map o`,
+computed with the identity observation. -/
+theorem obsMean_eq_map (μ : Measure Ω) {o : Ω → Bool × Bool × ℝ} (ho : Measurable o)
+    {h : Bool → ℝ → ℝ} (hh : ∀ d, Measurable (h d)) (z : Bool) :
+    obsMean μ o h z = obsMean (μ.map o) id h z := by
+  have hg : Measurable fun x : Bool × Bool × ℝ ↦ h x.2.1 x.2.2 :=
+    (measurable_from_prod_countable_right (f := fun p : Bool × ℝ ↦ h p.1 p.2) hh).comp
+      measurable_snd
+  change _ = ∫ x, h x.2.1 x.2.2 ∂(μ.map o)[|Prod.fst ⁻¹' {z}]
+  rw [obsMean, map_cond_eq μ ho (measurable_fst (measurableSet_singleton z)),
+    integral_map ho.aemeasurable hg.aestronglyMeasurable]
+  rfl
+
+/-- **The lower IV bound depends only on the observed-data law**: for a measurable observation
+map `o`, `lowerBound μ lo hi o = lowerBound (μ.map o) lo hi id`. -/
+theorem lowerBound_eq_map (μ : Measure Ω) (lo hi : ℝ) {o : Ω → Bool × Bool × ℝ}
+    (ho : Measurable o) : lowerBound μ lo hi o = lowerBound (μ.map o) lo hi id := by
+  simp only [lowerBound, obsMean_eq_map μ ho measurable_yTreated,
+    obsMean_eq_map μ ho measurable_yUntreated, obsMean_eq_map μ ho measurable_treatedInd,
+    obsMean_eq_map μ ho measurable_untreatedInd]
+
+/-- **The upper IV bound depends only on the observed-data law**: for a measurable observation
+map `o`, `upperBound μ lo hi o = upperBound (μ.map o) lo hi id`. -/
+theorem upperBound_eq_map (μ : Measure Ω) (lo hi : ℝ) {o : Ω → Bool × Bool × ℝ}
+    (ho : Measurable o) : upperBound μ lo hi o = upperBound (μ.map o) lo hi id := by
+  simp only [upperBound, obsMean_eq_map μ ho measurable_yTreated,
+    obsMean_eq_map μ ho measurable_yUntreated, obsMean_eq_map μ ho measurable_treatedInd,
+    obsMean_eq_map μ ho measurable_untreatedInd]
 
 end IVBounds
 
@@ -302,18 +359,38 @@ theorem ate_mem_Icc_boundsSwap [IsFiniteMeasure μ] {lo hi : ℝ} (hE : M.Exclus
     M.ate μ z ∈ Icc (lowerBoundSwap μ lo hi M.observed) (upperBoundSwap μ lo hi M.observed) :=
   M.ate_mem_Icc_arms hE hI h₀ h₁ hb z
 
-/-- **Intersection of the two arm orderings.** Under the assumptions of `ate_mem_Icc_bounds`,
-the average treatment effect lies in the intersection of the two intervals,
-`[max lowerBound lowerBoundSwap, min upperBound upperBoundSwap]`. No sharpness claim is made
-for this intersection. -/
+/-- **Intersection of all four arm pairings.** Under the assumptions of `ate_mem_Icc_bounds`,
+the average treatment effect lies in the intersection of the four intervals of
+`ate_mem_Icc_arms`, one for each choice of the arm `z₁` used for the treated mean and the arm
+`z₀` used for the untreated mean. Writing `L₁(z₁) = E[Y 1{D=1} | Z=z₁] + lo P(D=0 | Z=z₁)`,
+`U₁(z₁)` the same with `hi`, `U₀(z₀) = E[Y 1{D=0} | Z=z₀] + hi P(D=1 | Z=z₀)` and `L₀(z₀)` the
+same with `lo`, the interval is `[max_z L₁(z) - min_z U₀(z), min_z U₁(z) - max_z L₀(z)]`. The
+pairings `(1, 0)` and `(0, 1)` are `lowerBound`, `upperBound` and `lowerBoundSwap`,
+`upperBoundSwap`. No sharpness claim is made for this intersection. -/
 theorem ate_mem_Icc_bounds_inter [IsFiniteMeasure μ] {lo hi : ℝ} (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (h₁ : μ (M.instrumentEq true) ≠ 0)
     (h₀ : μ (M.instrumentEq false) ≠ 0) (hb : ∀ z d ω, M.Y z d ω ∈ Icc lo hi) (z : Bool) :
-    M.ate μ z ∈ Icc (max (lowerBound μ lo hi M.observed) (lowerBoundSwap μ lo hi M.observed))
-      (min (upperBound μ lo hi M.observed) (upperBoundSwap μ lo hi M.observed)) := by
-  have h := M.ate_mem_Icc_bounds hE hI h₁ h₀ hb z
-  have h' := M.ate_mem_Icc_boundsSwap hE hI h₁ h₀ hb z
-  exact ⟨max_le h.1 h'.1, le_min h.2 h'.2⟩
+    M.ate μ z ∈ Icc
+      (max (obsMean μ M.observed yTreated true + lo * obsMean μ M.observed untreatedInd true)
+          (obsMean μ M.observed yTreated false + lo * obsMean μ M.observed untreatedInd false) -
+        min (obsMean μ M.observed yUntreated true + hi * obsMean μ M.observed treatedInd true)
+          (obsMean μ M.observed yUntreated false + hi * obsMean μ M.observed treatedInd false))
+      (min (obsMean μ M.observed yTreated true + hi * obsMean μ M.observed untreatedInd true)
+          (obsMean μ M.observed yTreated false + hi * obsMean μ M.observed untreatedInd false) -
+        max (obsMean μ M.observed yUntreated true + lo * obsMean μ M.observed treatedInd true)
+          (obsMean μ M.observed yUntreated false + lo * obsMean μ M.observed treatedInd false))
+    := by
+  have htf := M.ate_mem_Icc_arms hE hI h₁ h₀ hb z
+  have hft := M.ate_mem_Icc_arms hE hI h₀ h₁ hb z
+  have htt := M.ate_mem_Icc_arms hE hI h₁ h₁ hb z
+  have hff := M.ate_mem_Icc_arms hE hI h₀ h₀ hb z
+  constructor
+  · rw [sub_le_iff_le_add, max_le_iff]
+    constructor <;> rw [← sub_le_iff_le_add', le_min_iff] <;> constructor <;> linarith [htf.1,
+      hft.1, htt.1, hff.1]
+  · rw [le_sub_iff_add_le, le_min_iff]
+    constructor <;> rw [← le_sub_iff_add_le', max_le_iff] <;> constructor <;> linarith [htf.2,
+      hft.2, htt.2, hff.2]
 
 /-- **Width of the IV bounds under monotonicity.** Under instrument independence, monotonicity
 and `P(Z = z) ≠ 0` for both `z`, the IV bounds have width `(hi - lo) (1 - P(compliers))`. It is
@@ -403,6 +480,32 @@ theorem obsMean_yUntreated_true [IsFiniteMeasure μ] (hE : M.Exclusion μ)
     (h₁ : μ (M.instrumentEq true) ≠ 0) {z : Bool} (hY : Integrable (M.Y z false) μ) :
     obsMean μ M.observed yUntreated true = ∫ ω in M.neverTakers, M.Y z false ω ∂μ := by
   rw [M.obsMean_yUntreated hE hI h₁ hY, setIntegral_congr_set (M.ae_eq_neverTakers hM)]
+
+/-- **The treated mean of the always-takers is identified.** Under exclusion, instrument
+independence, monotonicity, `P(Z = 0) ≠ 0` and a positive observed always-taker share
+`P(D = 1 | Z = 0) > 0`, the conditional mean `E[Y z 1 | AT]` (the integral against `μ[|AT]`) is
+`E[Y 1{D=1} | Z=0] / P(D = 1 | Z = 0)`. -/
+theorem condMean_alwaysTakers_Y1 [IsFiniteMeasure μ] (hE : M.Exclusion μ)
+    (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
+    (h₀ : μ (M.instrumentEq false) ≠ 0) {z : Bool} (hY : Integrable (M.Y z true) μ)
+    (hpos : 0 < obsMean μ M.observed treatedInd false) :
+    ∫ ω, M.Y z true ω ∂μ[|M.alwaysTakers] =
+      obsMean μ M.observed yTreated false / obsMean μ M.observed treatedInd false := by
+  rw [M.obsMean_yTreated_false hE hI hM h₀ hY, M.obsMean_treatedInd_false hI hM h₀] at *
+  rw [eq_div_iff hpos.ne', mul_comm, measureReal_mul_integral_cond]
+
+/-- **The untreated mean of the never-takers is identified.** Under exclusion, instrument
+independence, monotonicity, `P(Z = 1) ≠ 0` and a positive observed never-taker share
+`P(D = 0 | Z = 1) > 0`, the conditional mean `E[Y z 0 | NT]` is
+`E[Y 1{D=0} | Z=1] / P(D = 0 | Z = 1)`. -/
+theorem condMean_neverTakers_Y0 [IsFiniteMeasure μ] (hE : M.Exclusion μ)
+    (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
+    (h₁ : μ (M.instrumentEq true) ≠ 0) {z : Bool} (hY : Integrable (M.Y z false) μ)
+    (hpos : 0 < obsMean μ M.observed untreatedInd true) :
+    ∫ ω, M.Y z false ω ∂μ[|M.neverTakers] =
+      obsMean μ M.observed yUntreated true / obsMean μ M.observed untreatedInd true := by
+  rw [M.obsMean_yUntreated_true hE hI hM h₁ hY, M.obsMean_untreatedInd_true hI hM h₁] at *
+  rw [eq_div_iff hpos.ne', mul_comm, measureReal_mul_integral_cond]
 
 /-- `E[Y z 1] = E[Y 1{D=1} | Z=1] + ∫_NT Y z 1`: the only unidentified part of the treated mean
 is the treated outcome of the never-takers. -/
@@ -566,7 +669,8 @@ outcome of the never-takers and the untreated outcome of the always-takers with 
 The observation is the realized observed-data map `ω ↦ (Z ω, Dobs ω, Yobs ω)` on the fixed
 probability space `(Ω, μ)`; models differ in their potential outcomes. This observation is finer
 than the observed-data law, so the sharpness statement is at least as strong as sharpness for
-the law (models with equal observation maps have equal laws). -/
+the law (models with equal observation maps have equal laws). The endpoints themselves depend
+only on the law: `lowerBound_eq_map`, `upperBound_eq_map`. -/
 theorem identifiedSet_ate [IsFiniteMeasure μ] {M : IVModel Ω} (hM : M ∈ models μ lo hi)
     (z : Bool) :
     identifiedSet (models μ lo hi) IVModel.observed (fun M' ↦ M'.ate μ z) M.observed =
@@ -631,12 +735,153 @@ variable {Ω : Type*} [MeasurableSpace Ω] {μ : Measure Ω}
 
 /-- Mean independence of the potential outcomes from a binary instrument `Zi`:
 `E[Y1 | Zi = z] = E[Y1]` and `E[Y0 | Zi = z] = E[Y0]` for both instrument values, the
-conditional means being integrals against `μ[|Zi = z]`. The condition is imposed only for
-instrument values of positive probability, since conditioning on a null event is meaningless;
-the theorems below assume both values have positive probability. -/
-def MeanIndependent (μ : Measure Ω) (Zi : Ω → Bool) (m : POModel Ω) : Prop :=
-  ∀ z, μ (Zi ⁻¹' {z}) ≠ 0 →
+conditional means being integrals against `μ[|Zi = z]`. The predicate is meaningful only when
+these are means, so it bundles that `μ` is a probability measure, that `Zi` is measurable and
+that both potential outcomes are integrable; otherwise the totalized integrals could make the
+equations fail for a non-normalized measure (`not_condMean_eq_twoPoint`) or hold for outcomes
+without a mean (`condMean_eq_heavyTail`). The equations are imposed only for instrument values
+of positive probability, since conditioning on a null event is meaningless; the theorems below
+assume both values have positive probability. -/
+structure MeanIndependent (μ : Measure Ω) (Zi : Ω → Bool) (m : POModel Ω) : Prop where
+  /-- `μ` is a probability measure. -/
+  isProbabilityMeasure : IsProbabilityMeasure μ
+  /-- The instrument is measurable. -/
+  measurable_instrument : Measurable Zi
+  /-- The treated potential outcome has a mean. -/
+  integrable_Y1 : Integrable m.Y1 μ
+  /-- The untreated potential outcome has a mean. -/
+  integrable_Y0 : Integrable m.Y0 μ
+  /-- The conditional means equal the marginal means for each instrument value of positive
+  probability. -/
+  condMean_eq : ∀ z, μ (Zi ⁻¹' {z}) ≠ 0 →
     meanY1 (μ[|Zi ⁻¹' {z}]) m = meanY1 μ m ∧ meanY0 (μ[|Zi ⁻¹' {z}]) m = meanY0 μ m
+
+/-- Under a probability measure and a measurable instrument, constant potential outcomes are
+mean independent of the instrument. -/
+theorem meanIndependent_const [IsProbabilityMeasure μ] {Zi : Ω → Bool} (hZ : Measurable Zi)
+    (a b : ℝ) : MeanIndependent μ Zi ⟨fun _ ↦ a, fun _ ↦ b⟩ := by
+  refine ⟨inferInstance, hZ, integrable_const a, integrable_const b, fun z hz ↦ ?_⟩
+  have : IsProbabilityMeasure (μ[|Zi ⁻¹' {z}]) := cond_isProbabilityMeasure hz
+  simp [meanY1, meanY0]
+
+/-! #### Why the predicate bundles a probability measure and integrability -/
+
+/-- The measure on `Bool` with mass `1` at each point: a finite measure of total mass `2`. -/
+noncomputable def twoPoint : Measure Bool := Measure.dirac true + Measure.dirac false
+
+instance : IsFiniteMeasure twoPoint := by unfold twoPoint; infer_instance
+
+/-- **A non-normalized measure rejects constant outcomes.** Under `twoPoint`, with instrument
+`id` and both potential outcomes equal to `1`, the conditional mean given `{Zi = 1}` is `1`
+while the integral against `twoPoint` is `2`; so the equation of `MeanIndependent` fails for
+outcomes that do not depend on anything. `MeanIndependent` excludes this case by requiring a
+probability measure. -/
+theorem not_condMean_eq_twoPoint :
+    meanY1 (twoPoint[|id ⁻¹' {true}]) (⟨fun _ ↦ 1, fun _ ↦ 1⟩ : POModel Bool) = 1 ∧
+      meanY1 twoPoint (⟨fun _ ↦ 1, fun _ ↦ 1⟩ : POModel Bool) = 2 := by
+  constructor
+  · have : IsProbabilityMeasure (twoPoint[|id ⁻¹' {true}]) :=
+      cond_isProbabilityMeasure (by simp [twoPoint])
+    rw [meanY1, integral_const, probReal_univ, smul_eq_mul, mul_one]
+  · rw [meanY1, twoPoint, integral_add_measure (integrable_const _) (integrable_const _)]
+    simp; norm_num
+
+/-- The uniform probability measure on `(0, 1]`. -/
+noncomputable def heavyTailMeasure : Measure ℝ := volume.restrict (Ioc 0 1)
+
+instance : IsProbabilityMeasure heavyTailMeasure := ⟨by simp [heavyTailMeasure]⟩
+
+/-- The instrument `1{x ≤ 1/2}`; each arm has probability `1/2` under `heavyTailMeasure`. -/
+noncomputable def heavyTailInstrument (x : ℝ) : Bool := decide (x ≤ 1 / 2)
+
+/-- Potential outcomes without a mean: `Y1 = 1/x` in the arm `{x ≤ 1/2}` and `0` in the other
+arm, and `Y0 = 0`. -/
+noncomputable def heavyTailModel : POModel ℝ where
+  Y1 x := if x ≤ 1 / 2 then x⁻¹ else 0
+  Y0 _ := 0
+
+theorem heavyTailInstrument_true : heavyTailInstrument ⁻¹' {true} = Iic (1 / 2) := by
+  ext x; simp [heavyTailInstrument]
+
+theorem heavyTailInstrument_false : heavyTailInstrument ⁻¹' {false} = Ioi (1 / 2) := by
+  ext x; simp [heavyTailInstrument]
+
+theorem not_integrable_heavyTailModel_Ioc :
+    ¬ Integrable heavyTailModel.Y1 (volume.restrict (Ioc 0 (1 / 2))) := by
+  intro h
+  have h' : IntegrableOn (fun x : ℝ ↦ x⁻¹) (Ioc 0 (1 / 2)) :=
+    (show IntegrableOn heavyTailModel.Y1 (Ioc 0 (1 / 2)) volume from h).congr_fun
+      (fun x hx ↦ by
+        change (if x ≤ 1 / 2 then x⁻¹ else 0) = x⁻¹
+        split_ifs with h
+        · rfl
+        · exact absurd hx.2 h) measurableSet_Ioc
+  rw [← intervalIntegrable_iff_integrableOn_Ioc_of_le (by norm_num)] at h'
+  rcases intervalIntegrable_inv_iff.1 h' with h0 | h0
+  · norm_num at h0
+  · exact h0 Set.left_mem_uIcc
+
+/-- Both instrument arms have probability `1/2` under `heavyTailMeasure`. -/
+theorem heavyTailMeasure_arm (z : Bool) :
+    heavyTailMeasure (heavyTailInstrument ⁻¹' {z}) = 2⁻¹ := by
+  cases z
+  · rw [heavyTailInstrument_false, heavyTailMeasure, Measure.restrict_apply measurableSet_Ioi,
+      show Ioi (1 / 2 : ℝ) ∩ Ioc 0 1 = Ioc (1 / 2) 1 by
+        ext x; simp only [mem_inter_iff, mem_Ioi, mem_Ioc]; constructor <;> intro h <;>
+          refine ⟨?_, ?_⟩ <;> (try refine ⟨?_, ?_⟩) <;> linarith [h.1, h.2]]
+    rw [Real.volume_Ioc, show (1 : ℝ) - 1 / 2 = 2⁻¹ by norm_num,
+      ENNReal.ofReal_inv_of_pos (by norm_num)]
+    simp
+  · rw [heavyTailInstrument_true, heavyTailMeasure, Measure.restrict_apply measurableSet_Iic,
+      show Iic (1 / 2 : ℝ) ∩ Ioc 0 1 = Ioc 0 (1 / 2) by
+        ext x; simp only [mem_inter_iff, mem_Iic, mem_Ioc]; constructor <;> intro h <;>
+          refine ⟨?_, ?_⟩ <;> (try refine ⟨?_, ?_⟩) <;> linarith [h.1, h.2]]
+    rw [Real.volume_Ioc, show (1 / 2 : ℝ) - 0 = 2⁻¹ by norm_num,
+      ENNReal.ofReal_inv_of_pos (by norm_num)]
+    simp
+
+/-- The treated outcome of `heavyTailModel` has no mean under `heavyTailMeasure`. -/
+theorem not_integrable_heavyTailModel : ¬ Integrable heavyTailModel.Y1 heavyTailMeasure :=
+  fun h ↦ not_integrable_heavyTailModel_Ioc (h.mono_measure (by
+    rw [heavyTailMeasure]; exact Measure.restrict_mono (Ioc_subset_Ioc_right (by norm_num)) le_rfl))
+
+theorem not_integrable_heavyTailModel_cond :
+    ¬ Integrable heavyTailModel.Y1 (heavyTailMeasure[|heavyTailInstrument ⁻¹' {true}]) := by
+  intro h
+  rw [ProbabilityTheory.cond, integrable_smul_measure (by simp [heavyTailMeasure_arm])
+    (by simp [heavyTailMeasure_arm])] at h
+  refine not_integrable_heavyTailModel_Ioc (h.mono_measure ?_)
+  rw [heavyTailMeasure, Measure.restrict_restrict
+    (by rw [heavyTailInstrument_true]; exact measurableSet_Iic), heavyTailInstrument_true]
+  refine Measure.restrict_mono (fun x hx ↦ ?_) le_rfl
+  simp only [mem_inter_iff, mem_Iic, mem_Ioc] at hx ⊢
+  exact ⟨hx.2, hx.1, hx.2.trans (by norm_num)⟩
+
+/-- **Totalized integrals let outcomes without a mean satisfy the equations.** Under the
+probability measure `heavyTailMeasure`, whose two instrument arms both have probability `1/2`
+(`heavyTailMeasure_arm`), the equations of `MeanIndependent` hold for `heavyTailModel`: every
+integral involved is `0`, because the treated outcome is not integrable either marginally or
+in the arm `{x ≤ 1/2}`, and vanishes in the other arm. Yet that outcome has no mean
+(`not_integrable_heavyTailModel`), so `MeanIndependent` does not hold. -/
+theorem condMean_eq_heavyTail :
+    (∀ z, heavyTailMeasure (heavyTailInstrument ⁻¹' {z}) ≠ 0 →
+      meanY1 (heavyTailMeasure[|heavyTailInstrument ⁻¹' {z}]) heavyTailModel =
+          meanY1 heavyTailMeasure heavyTailModel ∧
+        meanY0 (heavyTailMeasure[|heavyTailInstrument ⁻¹' {z}]) heavyTailModel =
+          meanY0 heavyTailMeasure heavyTailModel) ∧
+      ¬ MeanIndependent heavyTailMeasure heavyTailInstrument heavyTailModel := by
+  refine ⟨fun z _ ↦ ⟨?_, by simp [meanY0, heavyTailModel]⟩,
+    fun h ↦ not_integrable_heavyTailModel h.integrable_Y1⟩
+  rw [meanY1, meanY1, integral_undef not_integrable_heavyTailModel]
+  cases z
+  · rw [ProbabilityTheory.cond, integral_smul_measure,
+      setIntegral_eq_zero_of_forall_eq_zero (fun x hx ↦ ?_), smul_zero]
+    rw [heavyTailInstrument_false] at hx
+    change (if x ≤ 1 / 2 then x⁻¹ else 0) = 0
+    split_ifs with h
+    · exact absurd h (not_le.2 (mem_Ioi.1 hx))
+    · rfl
+  · exact integral_undef not_integrable_heavyTailModel_cond
 
 /-- A finite mean is the weighted average of the two conditional means given `s` and `sᶜ`:
 `∫ g = μ(s) E[g | s] + μ(sᶜ) E[g | sᶜ]`. -/
@@ -705,37 +950,39 @@ independent of the instrument `Zi`, both instrument values have positive probabi
 potential outcomes are bounded in `[lo, hi]`, then `E[Y1]` lies in the intersection over `z` of
 the worst-case bounds computed within `{Zi = z}`: between `max_z` of the conditional lower
 bounds and `min_z` of the conditional upper bounds. -/
-theorem meanY1_mem_Icc [IsFiniteMeasure μ] (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
+theorem meanY1_mem_Icc (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
     (hMI : MeanIndependent μ Zi m) (hz : ∀ z, μ (Zi ⁻¹' {z}) ≠ 0) :
     meanY1 μ m ∈ Icc
       (max (boundY1 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
         (boundY1 (μ[|Zi ⁻¹' {false}]) A lo (observed A m)))
       (min (boundY1 (μ[|Zi ⁻¹' {true}]) A hi (observed A m))
         (boundY1 (μ[|Zi ⁻¹' {false}]) A hi (observed A m))) := by
+  have := hMI.isProbabilityMeasure
   have h1 := Manski.meanY1_mem_Icc (μ := μ[|Zi ⁻¹' {true}]) hA hm
   have h0 := Manski.meanY1_mem_Icc (μ := μ[|Zi ⁻¹' {false}]) hA hm
-  rw [(hMI true (hz true)).1] at h1
-  rw [(hMI false (hz false)).1] at h0
+  rw [(hMI.condMean_eq true (hz true)).1] at h1
+  rw [(hMI.condMean_eq false (hz false)).1] at h0
   exact ⟨max_le h1.1 h0.1, le_min h1.2 h0.2⟩
 
 /-- **Mean-independence bounds on `E[Y0]`** (Manski 1990): the intersection over `z` of the
 worst-case bounds for `E[Y0]` computed within `{Zi = z}`. -/
-theorem meanY0_mem_Icc [IsFiniteMeasure μ] (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
+theorem meanY0_mem_Icc (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
     (hMI : MeanIndependent μ Zi m) (hz : ∀ z, μ (Zi ⁻¹' {z}) ≠ 0) :
     meanY0 μ m ∈ Icc
       (max (boundY0 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
         (boundY0 (μ[|Zi ⁻¹' {false}]) A lo (observed A m)))
       (min (boundY0 (μ[|Zi ⁻¹' {true}]) A hi (observed A m))
         (boundY0 (μ[|Zi ⁻¹' {false}]) A hi (observed A m))) := by
+  have := hMI.isProbabilityMeasure
   have h1 := Manski.meanY0_mem_Icc (μ := μ[|Zi ⁻¹' {true}]) hA hm
   have h0 := Manski.meanY0_mem_Icc (μ := μ[|Zi ⁻¹' {false}]) hA hm
-  rw [(hMI true (hz true)).2] at h1
-  rw [(hMI false (hz false)).2] at h0
+  rw [(hMI.condMean_eq true (hz true)).2] at h1
+  rw [(hMI.condMean_eq false (hz false)).2] at h0
   exact ⟨max_le h1.1 h0.1, le_min h1.2 h0.2⟩
 
 /-- **Mean-independence bounds on the average treatment effect**: combining the bounds on
 `E[Y1]` and `E[Y0]`, `max_z L1_z - min_z U0_z ≤ E[Y1] - E[Y0] ≤ min_z U1_z - max_z L0_z`. -/
-theorem ate_mem_Icc [IsFiniteMeasure μ] (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
+theorem ate_mem_Icc (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
     (hMI : MeanIndependent μ Zi m) (hz : ∀ z, μ (Zi ⁻¹' {z}) ≠ 0) :
     ate μ m ∈ Icc
       (max (boundY1 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
@@ -750,44 +997,132 @@ theorem ate_mem_Icc [IsFiniteMeasure μ] (hA : Measurable A) (hm : m ∈ bounded
   have h0 := meanY0_mem_Icc hA hm hMI hz
   exact ⟨by unfold ate; linarith [h1.1, h0.2], by unfold ate; linarith [h1.2, h0.1]⟩
 
+/-- A convex combination is at most the maximum: if `p, q ≥ 0` and `p + q = 1`, then
+`p a + q b ≤ max a b`. -/
+theorem weighted_le_max {p q a b : ℝ} (hp : 0 ≤ p) (hq : 0 ≤ q) (hpq : p + q = 1) :
+    p * a + q * b ≤ max a b := by
+  have i1 := mul_le_mul_of_nonneg_left (le_max_left a b) hp
+  have i2 := mul_le_mul_of_nonneg_left (le_max_right a b) hq
+  have e : p * max a b + q * max a b = max a b := by rw [← add_mul, hpq, one_mul]
+  linarith
+
+/-- A convex combination is at least the minimum: if `p, q ≥ 0` and `p + q = 1`, then
+`min a b ≤ p a + q b`. -/
+theorem min_le_weighted {p q a b : ℝ} (hp : 0 ≤ p) (hq : 0 ≤ q) (hpq : p + q = 1) :
+    min a b ≤ p * a + q * b := by
+  have i1 := mul_le_mul_of_nonneg_left (min_le_left a b) hp
+  have i2 := mul_le_mul_of_nonneg_left (min_le_right a b) hq
+  have e : p * min a b + q * min a b = min a b := by rw [← add_mul, hpq, one_mul]
+  linarith
+
+/-- For a probability measure and a measurable binary `Zi`, the no-assumption Manski bound
+`boundY1 μ A c y` lies between the minimum and the maximum over `z` of the bounds computed
+within `{Zi = z}`, since it is their `P(Zi = z)`-weighted average. -/
+theorem boundY1_mem_Icc_min_max [IsProbabilityMeasure μ] (hA : Measurable A)
+    (hZ : Measurable Zi) (c : ℝ) {y : Ω → ℝ} (hy : Integrable y μ) :
+    boundY1 μ A c y ∈ Icc
+      (min (boundY1 (μ[|Zi ⁻¹' {true}]) A c y) (boundY1 (μ[|Zi ⁻¹' {false}]) A c y))
+      (max (boundY1 (μ[|Zi ⁻¹' {true}]) A c y) (boundY1 (μ[|Zi ⁻¹' {false}]) A c y)) := by
+  have hs : MeasurableSet (Zi ⁻¹' {true}) := hZ (measurableSet_singleton true)
+  have hpq : μ.real (Zi ⁻¹' {true}) + μ.real (Zi ⁻¹' {true})ᶜ = 1 := by
+    rw [probReal_compl_eq_one_sub hs]; ring
+  rw [boundY1_eq_weighted hA hs c hy, preimage_false_eq_compl]
+  exact ⟨min_le_weighted measureReal_nonneg measureReal_nonneg hpq,
+    weighted_le_max measureReal_nonneg measureReal_nonneg hpq⟩
+
+/-- The analog of `boundY1_mem_Icc_min_max` for the Manski bound on `E[Y0]`. -/
+theorem boundY0_mem_Icc_min_max [IsProbabilityMeasure μ] (hA : Measurable A)
+    (hZ : Measurable Zi) (c : ℝ) {y : Ω → ℝ} (hy : Integrable y μ) :
+    boundY0 μ A c y ∈ Icc
+      (min (boundY0 (μ[|Zi ⁻¹' {true}]) A c y) (boundY0 (μ[|Zi ⁻¹' {false}]) A c y))
+      (max (boundY0 (μ[|Zi ⁻¹' {true}]) A c y) (boundY0 (μ[|Zi ⁻¹' {false}]) A c y)) := by
+  have hs : MeasurableSet (Zi ⁻¹' {true}) := hZ (measurableSet_singleton true)
+  have hpq : μ.real (Zi ⁻¹' {true}) + μ.real (Zi ⁻¹' {true})ᶜ = 1 := by
+    rw [probReal_compl_eq_one_sub hs]; ring
+  rw [boundY0_eq_weighted hA hs c hy, preimage_false_eq_compl]
+  exact ⟨min_le_weighted measureReal_nonneg measureReal_nonneg hpq,
+    weighted_le_max measureReal_nonneg measureReal_nonneg hpq⟩
+
 /-- The mean-independence bounds on `E[Y1]` are at least as tight as the no-assumption Manski
 bounds: for a probability measure and a measurable binary `Zi`, the interval
 `[max_z L_z, min_z U_z]` is contained in `[L, U]`, because `L` and `U` are the
-`P(Zi = z)`-weighted averages of `L_z` and `U_z`. -/
+`P(Zi = z)`-weighted averages of `L_z` and `U_z`.
+
+The inclusion holds for any `Zi`, but the left side is read as a bound on `E[Y1]` only when
+both instrument values have positive probability, as `meanY1_mem_Icc` assumes: for a null arm
+the conditional measure is zero, its bounds are the totalized value `0`, and the left side can
+then be empty or misleading. -/
 theorem Icc_meanY1_subset [IsProbabilityMeasure μ] (hA : Measurable A) (hZ : Measurable Zi)
     {y : Ω → ℝ} (hy : Integrable y μ) :
     Icc (max (boundY1 (μ[|Zi ⁻¹' {true}]) A lo y) (boundY1 (μ[|Zi ⁻¹' {false}]) A lo y))
         (min (boundY1 (μ[|Zi ⁻¹' {true}]) A hi y) (boundY1 (μ[|Zi ⁻¹' {false}]) A hi y)) ⊆
-      Icc (boundY1 μ A lo y) (boundY1 μ A hi y) := by
-  have hs : MeasurableSet (Zi ⁻¹' {true}) := hZ (measurableSet_singleton true)
-  rw [boundY1_eq_weighted hA hs lo hy, boundY1_eq_weighted hA hs hi hy,
-    preimage_false_eq_compl]
-  exact Icc_max_min_subset measureReal_nonneg measureReal_nonneg
-    (by rw [probReal_compl_eq_one_sub hs]; ring)
+      Icc (boundY1 μ A lo y) (boundY1 μ A hi y) :=
+  Icc_subset_Icc (boundY1_mem_Icc_min_max hA hZ lo hy).2 (boundY1_mem_Icc_min_max hA hZ hi hy).1
 
 /-- The mean-independence bounds on `E[Y0]` are at least as tight as the no-assumption Manski
-bounds. -/
+bounds. As for `Icc_meanY1_subset`, the left side is read as a bound only when both instrument
+values have positive probability. -/
 theorem Icc_meanY0_subset [IsProbabilityMeasure μ] (hA : Measurable A) (hZ : Measurable Zi)
     {y : Ω → ℝ} (hy : Integrable y μ) :
     Icc (max (boundY0 (μ[|Zi ⁻¹' {true}]) A lo y) (boundY0 (μ[|Zi ⁻¹' {false}]) A lo y))
         (min (boundY0 (μ[|Zi ⁻¹' {true}]) A hi y) (boundY0 (μ[|Zi ⁻¹' {false}]) A hi y)) ⊆
-      Icc (boundY0 μ A lo y) (boundY0 μ A hi y) := by
-  have hs : MeasurableSet (Zi ⁻¹' {true}) := hZ (measurableSet_singleton true)
-  rw [boundY0_eq_weighted hA hs lo hy, boundY0_eq_weighted hA hs hi hy,
-    preimage_false_eq_compl]
-  exact Icc_max_min_subset measureReal_nonneg measureReal_nonneg
-    (by rw [probReal_compl_eq_one_sub hs]; ring)
+      Icc (boundY0 μ A lo y) (boundY0 μ A hi y) :=
+  Icc_subset_Icc (boundY0_mem_Icc_min_max hA hZ lo hy).2 (boundY0_mem_Icc_min_max hA hZ hi hy).1
+
+/-- **The mean-independence interval for the average treatment effect is contained in the
+no-assumption interval.** For a probability measure and a measurable binary `Zi`,
+`[max_z L1_z - min_z U0_z, min_z U1_z - max_z L0_z] ⊆ [L1 - U0, U1 - L0]`, where `L1, U1` and
+`L0, U0` are the worst-case bounds on `E[Y1]` and `E[Y0]` and the subscript `z` marks the same
+bounds computed within `{Zi = z}`. It follows from the endpoint comparisons
+`boundY1_mem_Icc_min_max` and `boundY0_mem_Icc_min_max`, so it holds even when the left side is
+empty. The left side is read as a bound on the average treatment effect only when both instrument
+values have positive probability, as in `ate_mem_Icc` and `ate_mem_Icc_subset`. -/
+theorem Icc_ate_subset [IsProbabilityMeasure μ] (hA : Measurable A) (hZ : Measurable Zi)
+    {y : Ω → ℝ} (hy : Integrable y μ) :
+    Icc (max (boundY1 (μ[|Zi ⁻¹' {true}]) A lo y) (boundY1 (μ[|Zi ⁻¹' {false}]) A lo y) -
+          min (boundY0 (μ[|Zi ⁻¹' {true}]) A hi y) (boundY0 (μ[|Zi ⁻¹' {false}]) A hi y))
+        (min (boundY1 (μ[|Zi ⁻¹' {true}]) A hi y) (boundY1 (μ[|Zi ⁻¹' {false}]) A hi y) -
+          max (boundY0 (μ[|Zi ⁻¹' {true}]) A lo y) (boundY0 (μ[|Zi ⁻¹' {false}]) A lo y)) ⊆
+      Icc (boundY1 μ A lo y - boundY0 μ A hi y) (boundY1 μ A hi y - boundY0 μ A lo y) :=
+  Icc_subset_Icc
+    (sub_le_sub (boundY1_mem_Icc_min_max hA hZ lo hy).2 (boundY0_mem_Icc_min_max hA hZ hi hy).1)
+    (sub_le_sub (boundY1_mem_Icc_min_max hA hZ hi hy).1 (boundY0_mem_Icc_min_max hA hZ lo hy).2)
+
+/-- **Mean-independence bounds on the average treatment effect, with the comparison.** Under
+mean independence, both instrument values of positive probability and potential outcomes in
+`[lo, hi]`, the average treatment effect lies in the mean-independence interval of
+`ate_mem_Icc`, and that interval is contained in the no-assumption interval
+`[L1 - U0, U1 - L0]`. -/
+theorem ate_mem_Icc_subset (hA : Measurable A) (hm : m ∈ boundedModels lo hi)
+    (hMI : MeanIndependent μ Zi m) (hz : ∀ z, μ (Zi ⁻¹' {z}) ≠ 0) :
+    ate μ m ∈ Icc
+      (max (boundY1 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
+          (boundY1 (μ[|Zi ⁻¹' {false}]) A lo (observed A m)) -
+        min (boundY0 (μ[|Zi ⁻¹' {true}]) A hi (observed A m))
+          (boundY0 (μ[|Zi ⁻¹' {false}]) A hi (observed A m)))
+      (min (boundY1 (μ[|Zi ⁻¹' {true}]) A hi (observed A m))
+          (boundY1 (μ[|Zi ⁻¹' {false}]) A hi (observed A m)) -
+        max (boundY0 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
+          (boundY0 (μ[|Zi ⁻¹' {false}]) A lo (observed A m))) ∧
+    Icc
+      (max (boundY1 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
+          (boundY1 (μ[|Zi ⁻¹' {false}]) A lo (observed A m)) -
+        min (boundY0 (μ[|Zi ⁻¹' {true}]) A hi (observed A m))
+          (boundY0 (μ[|Zi ⁻¹' {false}]) A hi (observed A m)))
+      (min (boundY1 (μ[|Zi ⁻¹' {true}]) A hi (observed A m))
+          (boundY1 (μ[|Zi ⁻¹' {false}]) A hi (observed A m)) -
+        max (boundY0 (μ[|Zi ⁻¹' {true}]) A lo (observed A m))
+          (boundY0 (μ[|Zi ⁻¹' {false}]) A lo (observed A m))) ⊆
+      Icc (boundY1 μ A lo (observed A m) - boundY0 μ A hi (observed A m))
+        (boundY1 μ A hi (observed A m) - boundY0 μ A lo (observed A m)) := by
+  have := hMI.isProbabilityMeasure
+  obtain ⟨hyo, hyob⟩ := observed_measurable_mem_Icc hA hm
+  exact ⟨ate_mem_Icc hA hm hMI hz,
+    Icc_ate_subset hA hMI.measurable_instrument (integrable_of_mem_Icc hyo hyob)⟩
 
 end MeanIndependence
 
 /-! ### Testable implications -/
-
-/-- Conditioning commutes with pushforward: `(f_* μ)[T | S] = μ[f⁻¹ T | f⁻¹ S]`. -/
-theorem map_cond_apply {α β : Type*} [MeasurableSpace α] [MeasurableSpace β] {μ : Measure α}
-    {f : α → β} (hf : Measurable f) {S T : Set β} (hS : MeasurableSet S) (hT : MeasurableSet T) :
-    (μ.map f)[T | S] = μ[f ⁻¹' T | f ⁻¹' S] := by
-  rw [cond_apply hS, cond_apply (hf hS), Measure.map_apply hf hS,
-    Measure.map_apply hf (hS.inter hT), preimage_inter]
 
 namespace IVBounds
 
@@ -838,7 +1173,12 @@ theorem cond_obs_event [IsFiniteMeasure μ] (hI : M.InstrumentIndependence μ) {
 monotonicity). Under exclusion, instrument independence, monotonicity and `P(Z = z) ≠ 0` for both
 `z`, for every measurable outcome set `B`:
 `P(Y ∈ B, D = 1 | Z = 0) ≤ P(Y ∈ B, D = 1 | Z = 1)`. The difference is the probability that a
-complier has treated outcome in `B`. For a binary outcome take `B = {y}`. -/
+complier has treated outcome in `B`. For a binary outcome take `B = {y}`.
+
+This inequality uses monotonicity. The instrumental inequality of Pearl, which follows from
+exclusion and instrument independence alone, is `IVModel.instrumentalInequality` (with its
+observed-law form `IVModel.law_instrumentalInequality`) in
+`CausalInference.InstrumentalVariables.InstrumentalInequality`. -/
 theorem instrumentalInequality_treated [IsFiniteMeasure μ] (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
     (h₁ : μ (M.instrumentEq true) ≠ 0) (h₀ : μ (M.instrumentEq false) ≠ 0) {B : Set ℝ}
@@ -857,7 +1197,9 @@ theorem instrumentalInequality_treated [IsFiniteMeasure μ] (hE : M.Exclusion μ
 
 /-- **Instrumental inequality for the untreated.** Under the same assumptions, for every
 measurable outcome set `B`: `P(Y ∈ B, D = 0 | Z = 1) ≤ P(Y ∈ B, D = 0 | Z = 0)`. The difference
-is the probability that a complier has untreated outcome in `B`. -/
+is the probability that a complier has untreated outcome in `B`. Like
+`instrumentalInequality_treated`, it uses monotonicity; see `IVModel.instrumentalInequality` for
+the inequality without monotonicity. -/
 theorem instrumentalInequality_untreated [IsFiniteMeasure μ] (hE : M.Exclusion μ)
     (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ)
     (h₁ : μ (M.instrumentEq true) ≠ 0) (h₀ : μ (M.instrumentEq false) ≠ 0) {B : Set ℝ}
@@ -930,8 +1272,14 @@ theorem binaryModel_instrument_ne_zero (z : Bool) : P 3 (binaryModel.instrumentE
 `(Z, Dobs, Yobs)` in `binaryModel`. -/
 noncomputable def violatingLaw : Measure (Bool × Bool × ℝ) := (P 3).map binaryModel.observed
 
-/-- The law `violatingLaw` violates the instrumental inequality for the treated with
-`B = {1}`: `P(D = 1, Y = 1 | Z = 1) = 0 < P(D = 1, Y = 1 | Z = 0)`. -/
+/-- The law `violatingLaw` violates the monotonicity inequality for the treated
+(`IVModel.instrumentalInequality_treated`) with `B = {1}`:
+`P(D = 1, Y = 1 | Z = 1) = 0 < P(D = 1, Y = 1 | Z = 0)`. It does not violate the instrumental
+inequality without monotonicity: it is the law of `binaryModel`, which satisfies exclusion
+(its outcomes do not depend on the instrument) and instrument independence
+(`binaryModel_independence`), so `IVModel.law_instrumentalInequality` of
+`CausalInference.InstrumentalVariables.InstrumentalInequality` applies to it. That module
+imports this one, so the statement is not repeated here. -/
 theorem violatingLaw_lt :
     violatingLaw[obsEvent true {1} | Prod.fst ⁻¹' {true}] <
       violatingLaw[obsEvent true {1} | Prod.fst ⁻¹' {false}] := by
@@ -960,7 +1308,10 @@ theorem violatingLaw_lt :
 /-- **The IV assumptions are falsifiable.** No binary IV model, on any probability space, whose
 observed-data law is `violatingLaw` satisfies the exclusion restriction, instrument independence
 and monotonicity. (Both instrument values have probability `1 / 2` under `violatingLaw`, so the
-positivity conditions of the instrumental inequalities hold automatically.) -/
+positivity conditions of the instrumental inequalities hold automatically.) What is refuted is
+monotonicity jointly with the other two assumptions: `violatingLaw` is the law of a model that
+satisfies exclusion and independence (see `violatingLaw_lt`). For a law refuting exclusion and
+independence without monotonicity, see `IVBounds.not_exclusion_and_independence_of_law_eq`. -/
 theorem not_assumptions_of_law_eq_violatingLaw {Ω' : Type*} [MeasurableSpace Ω']
     {μ' : Measure Ω'} [IsFiniteMeasure μ'] (M' : IVModel Ω')
     (hlaw : μ'.map M'.observed = violatingLaw) :
