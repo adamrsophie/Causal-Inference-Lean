@@ -155,3 +155,4 @@ public import CausalInference.BiasAnalysis.EcologicalBias
 public import CausalInference.Survival.HazardRatio
 public import CausalInference.Bias.HazardMixture
 public import CausalInference.BiasAnalysis.DiagnosticAccuracy
+public import CausalInference.Sensitivity.ZBias
