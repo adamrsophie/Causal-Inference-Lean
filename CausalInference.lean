@@ -140,3 +140,5 @@ public import CausalInference.Estimation.InstrumentalVariables
 public import CausalInference.InstrumentalVariables.Heterogeneity
 public import CausalInference.InstrumentalVariables.InvalidInstrument
 public import CausalInference.Graphical.GlobalMarkovCompletenessLemmas
+public import CausalInference.Designs.Panel.DifferenceInDifferences
+public import CausalInference.Designs.Panel.FixedEffects
