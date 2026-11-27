@@ -20,13 +20,16 @@ the conditional laws given `A = 1` and `A = 0`, or the laws of two counterfactua
   the ratios `(1 - h₁ m) / (1 - h₀ m)` of one minus the hazards; it is not a function of the
   hazard ratios `h₁ m / h₀ m` alone.
 * `survival_eq_survival_of_hazard_eq`: if the hazards of the two arms agree at every time
-  `m ≤ k` at which arm `0` has positive at-risk probability (a hazard ratio identically `1`
-  where it is defined), the survivals, and hence the risks, agree at `k`.
-  `risk_eq_risk_of_hazard_eq` is the same for risks.
+  `m ≤ k` at which arm `0` has positive at-risk probability, including the times at which the
+  hazard of arm `0` is zero, the survivals, and hence the risks, agree at `k`.
+  `risk_eq_risk_of_hazard_eq` is the same for risks. A hazard ratio equal to `1` wherever it is
+  defined (`h₀ m > 0`) is not enough: at a time with `h₀ m = 0 < h₁ m` the ratio is undefined
+  and the survivals separate (`ComparisonExample.hazardRatio_one_where_defined_survival_ne`).
 * `survival_eq_prod_hazardRatio`: `S₁ k = ∏_{m = 1}^{k} (1 - HR m * h₀ m)`: the survival in
   arm `1` depends on the hazard ratios at all times up to `k` and on the hazards of arm `0`.
 * `risk_sub_risk`: the risk difference is minus the survival difference.
-* `hazardRatio_one_eq_risk_ratio`: at time `1` the hazard ratio is the risk ratio.
+* `hazardRatio_one_eq_risk_ratio`: at time `1` the hazard ratio is the risk ratio, when the
+  reference risk at time `1` is positive.
 * `hazard_eq_hazard_of_survival_eq`: conversely, equal survival curves up to `k` give equal
   hazards at every `m ≤ k` with positive at-risk probability.
 
@@ -36,6 +39,14 @@ Examples (namespace `ComparisonExample`), all with event time `id` on `ℕ`:
   time `2`, while the survival and the risk at time `2` are equal in the two arms (risk ratio
   `1`). The period-specific hazard ratio changes over time, and no single hazard ratio
   summarizes the effect.
+* `hazardRatio_one_where_defined_survival_ne`: arm `0` with masses `1/2, 0, 1/2` and arm `1`
+  with masses `1/2, 1/4, 1/4` at times `1, 2, 3`. The hazard ratio is `1` at every time
+  `m ≤ 2` at which it is defined, yet `S₀ 2 = 1/2` and `S₁ 2 = 1/4`: at time `2` the hazard of
+  arm `0` is `0` and that of arm `1` is `1/2`.
+* `techPoint81_hazardRatio`: a numerical instance of What If Technical Point 8.1 written with
+  `hazardRatio`: two arms, each a mixture of two frailty strata with equal time `2` hazards in
+  the two arms within each stratum, with hazard ratio `1/3` at time `1` and `50/49` at time
+  `2`, while each stratum has hazard ratio `1` at time `2`.
 * `weighted_hazardRatio_eq_one_survival_ne`: the average of the hazard ratios at times `1` and
   `2`, weighted by the distribution of the event time in arm `0` among those with the event by
   time `2`, equals `1`, yet the survivals at time `2` differ. This is the numerical phenomenon
@@ -49,8 +60,9 @@ M. A. Hernán and J. M. Robins, *Causal Inference: What If* (2020), Chapter 17, 
 (contrasts of survival and risk, hazard ratio) and Fine Point 17.2 (the hazards of hazard
 ratios); Chapter 8, Technical Point 8.1 (the hazard at time `1` is the risk at time `1`; from
 time `2` on the hazard conditions on survival). The selection bias built into period-specific
-hazard ratios (the second part of Fine Point 17.2, and the example of Technical Point 8.1) is
-not treated in this file.
+hazard ratios (the second part of Fine Point 17.2, and Technical Point 8.1) is treated in
+`CausalInference.Bias.HazardRatio`, in a two-period model with a binary frailty; this file only
+records the numerical instance `techPoint81_hazardRatio` in the vocabulary of `hazardRatio`.
 -/
 
 @[expose] public section
@@ -136,13 +148,17 @@ theorem risk_sub_risk (k : ℕ) :
   rw [risk, risk]; ring
 
 /-- At time `1` the hazard ratio is the risk ratio (Hernán and Robins, Technical Point 8.1):
-if nobody has the event at time `0` in either arm, `h₁ 1 / h₀ 1 = P(T₁ ≤ 1) / P(T₀ ≤ 1)`.
+if nobody has the event at time `0` in either arm and the reference risk `P(T₀ ≤ 1)` is
+positive, then the reference hazard `h₀ 1` is positive and
+`h₁ 1 / h₀ 1 = P(T₁ ≤ 1) / P(T₀ ≤ 1)`, an equality of two genuine ratios.
 From time `2` on, the hazard conditions on survival through the previous time, which is
 where the selection bias described in Technical Point 8.1 and Fine Point 17.2 enters. -/
 theorem hazardRatio_one_eq_risk_ratio (hT₀ : Measurable T₀) (hT₁ : Measurable T₁)
-    (h0₀ : μ₀.real {ω | T₀ ω = 0} = 0) (h0₁ : μ₁.real {ω | T₁ ω = 0} = 0) :
-    hazardRatio μ₁ T₁ μ₀ T₀ 1 = risk μ₁ T₁ 1 / risk μ₀ T₀ 1 := by
+    (h0₀ : μ₀.real {ω | T₀ ω = 0} = 0) (h0₁ : μ₁.real {ω | T₁ ω = 0} = 0)
+    (hpos : 0 < risk μ₀ T₀ 1) :
+    0 < hazard μ₀ T₀ 1 ∧ hazardRatio μ₁ T₁ μ₀ T₀ 1 = risk μ₁ T₁ 1 / risk μ₀ T₀ 1 := by
   rw [hazardRatio, hazard_one_eq_risk_one hT₀ h0₀, hazard_one_eq_risk_one hT₁ h0₁]
+  exact ⟨hpos, rfl⟩
 
 omit [IsProbabilityMeasure μ₀] [IsProbabilityMeasure μ₁] in
 /-- Equal survival curves give equal hazards: if `S₁ m = S₀ m` for every `m ≤ k` and the
@@ -247,6 +263,112 @@ theorem weighted_hazardRatio_eq_one_survival_ne :
   simp only [Finset.sum_Icc_succ_top (show 1 ≤ 1 + 1 by norm_num), Finset.Icc_self,
     Finset.sum_singleton, hazardRatio, hazard, survival, atRisk, arm₀_real, arm₂_real, id,
     Set.indicator_apply, Set.mem_ofPred_eq]
+  norm_num
+
+/-- Arm `0` of the third example: masses `1/2, 0, 1/2` at times `1, 2, 3`; hazards `1/2` at
+time `1` and `0` at time `2`. -/
+noncomputable def arm₃ : Measure ℕ := threePoint (1 / 2) 0 (1 / 2)
+
+/-- Arm `1` of the third example: masses `1/2, 1/4, 1/4` at times `1, 2, 3`; hazards `1/2` at
+time `1` and `1/2` at time `2`. -/
+noncomputable def arm₄ : Measure ℕ := threePoint (1 / 2) (1 / 4) (1 / 4)
+
+theorem arm₃_real (s : Set ℕ) : arm₃.real s =
+    s.indicator (fun _ => 1 / 2) 1 + s.indicator (fun _ => 0) 2 +
+      s.indicator (fun _ => 1 / 2) 3 :=
+  threePoint_real (by norm_num) (by norm_num) (by norm_num) s
+
+instance : IsProbabilityMeasure arm₃ :=
+  isProbabilityMeasure_threePoint (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+
+instance : IsProbabilityMeasure arm₄ :=
+  isProbabilityMeasure_threePoint (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+
+theorem arm₄_real (s : Set ℕ) : arm₄.real s =
+    s.indicator (fun _ => 1 / 2) 1 + s.indicator (fun _ => 1 / 4) 2 +
+      s.indicator (fun _ => 1 / 4) 3 :=
+  threePoint_real (by norm_num) (by norm_num) (by norm_num) s
+
+/-- A hazard ratio equal to `1` wherever it is defined does not give equal survival. With
+arm `0` `arm₃` and arm `1` `arm₄`, at every time `m ≤ 2` at which the reference hazard is
+positive the hazard ratio is `1`; yet at time `2` arm `0` has positive at-risk probability and
+hazard `0` while arm `1` has hazard `1/2`, and the survivals at time `2` are `1/4` and `1/2`.
+So `survival_eq_survival_of_hazard_eq` needs hazard equality at every time of positive at-risk
+probability, including the times at which the reference hazard is zero. -/
+theorem hazardRatio_one_where_defined_survival_ne :
+    (∀ m ≤ 2, 0 < hazard arm₃ id m → hazardRatio arm₄ id arm₃ id m = 1) ∧
+      0 < atRisk arm₃ id 2 ∧ hazard arm₃ id 2 = 0 ∧ hazard arm₄ id 2 = 1 / 2 ∧
+      survival arm₄ id 2 = 1 / 4 ∧ survival arm₃ id 2 = 1 / 2 := by
+  refine ⟨fun m hm => ?_, ?_⟩
+  · rcases m with _ | _ | _ | m
+    all_goals try (simp only [hazardRatio, hazard, atRisk, arm₃_real, arm₄_real, id,
+      Set.indicator_apply, Set.mem_ofPred_eq]; norm_num; done)
+    omega
+  · simp only [hazard, survival, atRisk, arm₃_real, arm₄_real, id,
+      Set.indicator_apply, Set.mem_ofPred_eq]
+    norm_num
+
+/-- Numerical instance of Technical Point 8.1 (the book gives no numbers), arm `a`, frailty
+stratum `u = 1`: time `1` risk `0` if treated and
+`1/4` if untreated, then time `2` risk `1/4` among the survivors in both arms. As masses at
+times `1, 2, 3`: treated `0, 1/4, 3/4`; untreated `1/4, 3/16, 9/16`. -/
+noncomputable def tp81Stratum₁ (a : Bool) : Measure ℕ :=
+  if a then threePoint 0 (1 / 4) (3 / 4) else threePoint (1 / 4) (3 / 16) (9 / 16)
+
+/-- Numerical instance of Technical Point 8.1, arm `a`, frailty stratum `u = 0`: time `1`
+risk `1/4` if treated and `1/2` if untreated, then time `2` risk `1/2` among the survivors
+in both arms. As masses at times `1, 2, 3`: treated `1/4, 3/8, 3/8`; untreated `1/2, 1/4, 1/4`. -/
+noncomputable def tp81Stratum₀ (a : Bool) : Measure ℕ :=
+  if a then threePoint (1 / 4) (3 / 8) (3 / 8) else threePoint (1 / 2) (1 / 4) (1 / 4)
+
+/-- Numerical instance of Technical Point 8.1, the law of the event time in arm `a`: the
+mixture with weights `1/2` of the two frailty strata, masses `1/8, 5/16, 9/16` if treated
+and `3/8, 7/32, 13/32` if untreated (`tp81Arm_real_eq_mix`). -/
+noncomputable def tp81Arm (a : Bool) : Measure ℕ :=
+  if a then threePoint (1 / 8) (5 / 16) (9 / 16) else threePoint (3 / 8) (7 / 32) (13 / 32)
+
+theorem tp81Stratum₁_real (a : Bool) (s : Set ℕ) : (tp81Stratum₁ a).real s =
+    if a then s.indicator (fun _ => 0) 1 + s.indicator (fun _ => 1 / 4) 2 +
+        s.indicator (fun _ => 3 / 4) 3
+      else s.indicator (fun _ => 1 / 4) 1 + s.indicator (fun _ => 3 / 16) 2 +
+        s.indicator (fun _ => 9 / 16) 3 := by
+  cases a <;> exact threePoint_real (by norm_num) (by norm_num) (by norm_num) s
+
+theorem tp81Stratum₀_real (a : Bool) (s : Set ℕ) : (tp81Stratum₀ a).real s =
+    if a then s.indicator (fun _ => 1 / 4) 1 + s.indicator (fun _ => 3 / 8) 2 +
+        s.indicator (fun _ => 3 / 8) 3
+      else s.indicator (fun _ => 1 / 2) 1 + s.indicator (fun _ => 1 / 4) 2 +
+        s.indicator (fun _ => 1 / 4) 3 := by
+  cases a <;> exact threePoint_real (by norm_num) (by norm_num) (by norm_num) s
+
+theorem tp81Arm_real (a : Bool) (s : Set ℕ) : (tp81Arm a).real s =
+    if a then s.indicator (fun _ => 1 / 8) 1 + s.indicator (fun _ => 5 / 16) 2 +
+        s.indicator (fun _ => 9 / 16) 3
+      else s.indicator (fun _ => 3 / 8) 1 + s.indicator (fun _ => 7 / 32) 2 +
+        s.indicator (fun _ => 13 / 32) 3 := by
+  cases a <;> exact threePoint_real (by norm_num) (by norm_num) (by norm_num) s
+
+/-- The arm law is the equal-weight mixture of the two frailty strata. -/
+theorem tp81Arm_real_eq_mix (a : Bool) (s : Set ℕ) :
+    (tp81Arm a).real s = 1 / 2 * (tp81Stratum₁ a).real s + 1 / 2 * (tp81Stratum₀ a).real s := by
+  classical
+  rw [tp81Arm_real, tp81Stratum₁_real, tp81Stratum₀_real]
+  cases a <;> simp only [Bool.false_eq_true, ↓reduceIte, Set.indicator_apply] <;>
+    split_ifs <;> norm_num
+
+/-- A numerical instance of What If Technical Point 8.1 with `hazardRatio`: the hazard ratio of
+the treated arm versus the untreated arm is `1/3` at time `1` and `50/49` at time `2`, although
+within each frailty stratum the time `2` hazards are equal in the two arms (hazard ratio `1`).
+The time `2` hazard ratio is above `1` because the survivors of time `1` differ in their
+frailty distribution between the arms. The same numbers appear in
+`CausalInference.Bias.HazardRatio` (`example_hazardRatio1`, `example_hazardRatio2`). -/
+theorem techPoint81_hazardRatio :
+    hazardRatio (tp81Arm true) id (tp81Arm false) id 1 = 1 / 3 ∧
+      hazardRatio (tp81Arm true) id (tp81Arm false) id 2 = 50 / 49 ∧
+      hazardRatio (tp81Stratum₁ true) id (tp81Stratum₁ false) id 2 = 1 ∧
+      hazardRatio (tp81Stratum₀ true) id (tp81Stratum₀ false) id 2 = 1 := by
+  simp only [hazardRatio, hazard, atRisk, tp81Arm_real, tp81Stratum₁_real, tp81Stratum₀_real,
+    id, Bool.false_eq_true, ↓reduceIte, Set.indicator_apply, Set.mem_ofPred_eq]
   norm_num
 
 end ComparisonExample

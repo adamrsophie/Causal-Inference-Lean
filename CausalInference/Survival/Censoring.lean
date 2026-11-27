@@ -30,11 +30,14 @@ the event was observed. An individual is at risk and uncensored at time `k` when
 * `hazard_eq_of_indepFun`: under independent censoring (`T` independent of `C`), the hazard
   among those at risk and uncensored equals the true hazard:
   `P(T = k | T ≥ k, C ≥ k) = h k` whenever `P(T ≥ k, C ≥ k) > 0`.
-* `productLimit_map_observed_eq_survival`: under independent censoring, the product-limit
-  functional of the observed-data law equals the survival `P(T > k)` at every `k` at which
-  the at-risk probability `P(min T C ≥ k)` is positive. This is identification of the
-  survival function from the population law of the observed data; it says nothing about
-  sampling.
+* `productLimit_map_observed_eq_survival_of_hazard_eq`: if the hazard among those at risk and
+  uncensored equals the true hazard, `P(T = m | T ≥ m, C ≥ m) = P(T = m | T ≥ m)`, at every
+  `m ≤ k`, then the product-limit functional of the observed-data law equals the survival
+  `P(T > k)` at every `k` at which the at-risk probability `P(min T C ≥ k)` is positive. This
+  is the condition the proof uses.
+* `productLimit_map_observed_eq_survival`: the corollary under independent censoring. Both are
+  identification of the survival function from the population law of the observed data; they
+  say nothing about sampling.
 * `measureReal_survivor_uncensored_of_indepFun`: under independent censoring the fraction of
   uncensored survivors is `P(T > k, C ≥ k) = S k * P(C ≥ k)`, not `S k`.
 
@@ -49,7 +52,14 @@ Counterexamples (namespace `CensoringExample`):
   functional no longer equals the survival (`depModel_productLimit_ne_survival`), and `T` and
   `C` are not independent there (`not_indepFun_depModel`). Hence without the independence
   assumption the survival function is not identified from the observed-data law
-  (`survival_not_identified_without_independence`).
+  (`survival_not_identified_without_independence`). The condition that fails is the hazard
+  equality at time `2`: `P(T = 2 | T ≥ 2, C ≥ 2) = 1/10` but `h 2 = 11/20`
+  (`depModel_hazard_two_ne`).
+* loss of risk-set support: two models with `T` independent of `C`, `(T, C) = (2, 1)` and
+  `(T, C) = (3, 1)` surely, have the same observed-data law and no one at risk and uncensored
+  at time `2`, but survival `0` and `1` at time `2`
+  (`survival_not_identified_without_support`). So the positivity hypothesis is needed even
+  under independent censoring.
 
 ## Source
 
@@ -127,14 +137,19 @@ theorem observedHazard_map_observed (hT : Measurable T) (hC : Measurable C) (k :
   congr 2 <;> ext ω <;> simp only [observed, Set.mem_preimage, Set.mem_ofPred_eq,
     decide_eq_true_eq] <;> omega
 
-/-- Identification of survival under independent censoring (Hernán and Robins, Section 17.3):
-if `T` and `C` are independent then, at every time `k` at which the at-risk probability
-`P(min T C ≥ k)` is positive, the product-limit functional of the observed-data law equals the
-survival `P(T > k)`. Every factor of the product is one minus a genuine conditional
-probability, since `P(min T C ≥ m) ≥ P(min T C ≥ k) > 0` for `m ≤ k`. -/
-theorem productLimit_map_observed_eq_survival [IsProbabilityMeasure μ] (hT : Measurable T)
-    (hC : Measurable C) (hind : IndepFun T C μ) (k : ℕ)
-    (hk : 0 < μ.real {ω | k ≤ T ω ∧ k ≤ C ω}) :
+/-- Identification of survival by the product-limit functional, general form: if at every
+time `m ≤ k` with `P(T ≥ m, C ≥ m) > 0` the hazard among those at risk and uncensored equals
+the true hazard, `P(T = m | T ≥ m, C ≥ m) = P(T = m | T ≥ m)`, and the at-risk probability
+`P(min T C ≥ k)` is positive, then the product-limit functional of the observed-data law equals
+the survival `P(T > k)`. Positivity at `k` gives positivity at every `m ≤ k`, so the hazard
+condition is required, and used, at every `m ≤ k`. Without positivity the conclusion fails
+even under independent censoring (`CensoringExample.survival_not_identified_without_support`).
+-/
+theorem productLimit_map_observed_eq_survival_of_hazard_eq [IsProbabilityMeasure μ]
+    (hT : Measurable T) (hC : Measurable C) (k : ℕ)
+    (hk : 0 < μ.real {ω | k ≤ T ω ∧ k ≤ C ω})
+    (h : ∀ m ≤ k, 0 < μ.real {ω | m ≤ T ω ∧ m ≤ C ω} →
+      μ.real {ω | T ω = m ∧ m ≤ C ω} / μ.real {ω | m ≤ T ω ∧ m ≤ C ω} = hazard μ T m) :
     productLimit (μ.map (observed T C)) k = survival μ T k := by
   rw [survival_eq_prod_one_sub_hazard' hT, productLimit]
   refine Finset.prod_congr rfl fun m hm => ?_
@@ -142,7 +157,20 @@ theorem productLimit_map_observed_eq_survival [IsProbabilityMeasure μ] (hT : Me
   have hpos : 0 < μ.real {ω | m ≤ T ω ∧ m ≤ C ω} :=
     lt_of_lt_of_le hk (measureReal_mono fun ω (h : k ≤ T ω ∧ k ≤ C ω) =>
       ⟨hmk.trans h.1, hmk.trans h.2⟩)
-  rw [observedHazard_map_observed hT hC, hazard_eq_of_indepFun hind m hpos]
+  rw [observedHazard_map_observed hT hC, h m hmk hpos]
+
+/-- Identification of survival under independent censoring (Hernán and Robins, Section 17.3):
+if `T` and `C` are independent then, at every time `k` at which the at-risk probability
+`P(min T C ≥ k)` is positive, the product-limit functional of the observed-data law equals the
+survival `P(T > k)`. Every factor of the product is one minus a genuine conditional
+probability, since `P(min T C ≥ m) ≥ P(min T C ≥ k) > 0` for `m ≤ k`. This is the corollary of
+`productLimit_map_observed_eq_survival_of_hazard_eq` through `hazard_eq_of_indepFun`. -/
+theorem productLimit_map_observed_eq_survival [IsProbabilityMeasure μ] (hT : Measurable T)
+    (hC : Measurable C) (hind : IndepFun T C μ) (k : ℕ)
+    (hk : 0 < μ.real {ω | k ≤ T ω ∧ k ≤ C ω}) :
+    productLimit (μ.map (observed T C)) k = survival μ T k :=
+  productLimit_map_observed_eq_survival_of_hazard_eq hT hC k hk fun m _ hm =>
+    hazard_eq_of_indepFun hind m hm
 
 /-- Under independent censoring the fraction of individuals who survived through `k` and were
 uncensored through `k` is `P(T > k, C ≥ k) = S k * P(C ≥ k)`. It differs from the survival
@@ -317,6 +345,51 @@ theorem survival_not_identified_without_independence :
   refine ⟨map_observed_depModel, ?_⟩
   rw [depModel_survival_two, indepModel_survival_two]
   norm_num
+
+/-- The hazard condition of `productLimit_map_observed_eq_survival_of_hazard_eq` fails in
+`depModel` at time `2`: among those at risk and uncensored at `2`, the proportion with the event
+at `2` is `P(T = 2 | T ≥ 2, C ≥ 2) = 9/90 = 1/10`, while the true hazard is
+`h 2 = P(T = 2 | T ≥ 2) = 99/180 = 11/20`. (At times `0` and `1` the two agree.) -/
+theorem depModel_hazard_two_ne :
+    depModel.real {p | p.1 = 2 ∧ 2 ≤ p.2} / depModel.real {p | 2 ≤ p.1 ∧ 2 ≤ p.2} = 1 / 10 ∧
+      hazard depModel Prod.fst 2 = 11 / 20 := by
+  constructor <;>
+  simp [depModel, hazard, atRisk, measureReal_def, add_apply, smul_apply, Measure.dirac_apply,
+    Set.indicator, ENNReal.toReal_add, ENNReal.mul_eq_top, ENNReal.toReal_mul,
+    ENNReal.toReal_inv] <;>
+  norm_num
+
+/-- A model with independent censoring and no observed risk set at time `2`: `(T, C) = (2, 1)`
+surely, written as a product law. -/
+noncomputable def supportModel₂ : Measure (ℕ × ℕ) := (Measure.dirac 2).prod (Measure.dirac 1)
+
+/-- A second such model: `(T, C) = (3, 1)` surely. -/
+noncomputable def supportModel₃ : Measure (ℕ × ℕ) := (Measure.dirac 3).prod (Measure.dirac 1)
+
+instance : IsProbabilityMeasure supportModel₂ := by unfold supportModel₂; infer_instance
+
+instance : IsProbabilityMeasure supportModel₃ := by unfold supportModel₃; infer_instance
+
+/-- Loss of risk-set support: two laws of `(T, C)`, both with `T` independent of `C`, with the
+same observed-data law (the observation `(1, censored)` surely) and with probability zero of
+being at risk and uncensored at time `2`, yet with survival `0` and `1` at time `2`. So the
+positivity hypothesis of `productLimit_map_observed_eq_survival` cannot be dropped: independent
+censoring alone does not identify the survival at a time with no observed risk set. -/
+theorem survival_not_identified_without_support :
+    IndepFun Prod.fst Prod.snd supportModel₂ ∧ IndepFun Prod.fst Prod.snd supportModel₃ ∧
+      supportModel₂.map (observed Prod.fst Prod.snd) =
+        supportModel₃.map (observed Prod.fst Prod.snd) ∧
+      supportModel₂.real {p | 2 ≤ p.1 ∧ 2 ≤ p.2} = 0 ∧
+      supportModel₃.real {p | 2 ≤ p.1 ∧ 2 ≤ p.2} = 0 ∧
+      survival supportModel₂ Prod.fst 2 = 0 ∧ survival supportModel₃ Prod.fst 2 = 1 := by
+  refine ⟨indepFun_prod (X := id) (Y := id) measurable_id measurable_id,
+    indepFun_prod (X := id) (Y := id) measurable_id measurable_id, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [supportModel₂, supportModel₃, Measure.dirac_prod_dirac, Measure.dirac_prod_dirac,
+      Measure.map_dirac' measurable_observed_fst_snd,
+      Measure.map_dirac' measurable_observed_fst_snd]
+    rfl
+  all_goals simp [supportModel₂, supportModel₃, survival, Measure.dirac_prod_dirac,
+    measureReal_def, Measure.dirac_apply, Set.indicator]
 
 end CensoringExample
 

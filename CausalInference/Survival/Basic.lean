@@ -19,14 +19,18 @@ intervals. We define
 * `risk μ T k = 1 - P(T > k) = P(T ≤ k)`, the risk (cumulative incidence) at time `k`;
 * `atRisk μ T k = P(T ≥ k)`, the probability of being still at risk at the start of interval
   `k`; for `k ≥ 1` this is `P(T > k - 1)`;
-* `hazard μ T k = P(T = k) / P(T ≥ k)`, the discrete-time hazard
-  `P(T = k | T > k - 1)` of the book. It is a genuine conditional probability only when
-  `0 < atRisk μ T k`; every result below that uses a hazard as a conditional probability
-  carries that positivity hypothesis.
+* `hazard μ T k = P(T = k) / P(T ≥ k)`, the discrete-time hazard `P(T = k | T ≥ k)`. For
+  `k ≥ 1` this is the book's `P(T = k | T > k - 1)`; at `k = 0` it is `P(T = 0)` for a
+  probability measure, since everybody is at risk at time `0`. It is a genuine conditional
+  probability only when `0 < atRisk μ T k`; every result below that uses a hazard as a
+  conditional probability carries that positivity hypothesis.
 
 ## Main results
 
 * `survival_antitone`, `risk_monotone`: survival is nonincreasing and risk nondecreasing.
+* Range: `hazard_nonneg`, `hazard_le_one`, `survival_nonneg`, `survival_le_one`,
+  `risk_nonneg`, `risk_le_one`, `atRisk_nonneg`, `atRisk_le_one`; and `hazard_zero`:
+  `h 0 = P(T = 0)`.
 * `measureReal_eq_hazard_mul_atRisk`: `P(T = k) = h k * P(T ≥ k)`; when the at-risk event is
   null, both sides are zero because the event `T = k` is contained in it (no division by zero
   is used to get the left side).
@@ -34,7 +38,9 @@ intervals. We define
 * `survival_eq_prod_one_sub_hazard`: the product formula
   `S k = ∏_{m = 0}^{k} (1 - h m)` whenever `P(T ≥ k) > 0`; then every factor is one minus a
   genuine conditional probability. `survival_eq_prod_Icc` is the book's form
-  `S k = ∏_{m = 1}^{k} (1 - h m)` when `P(T = 0) = 0` (everybody is alive at time `0`).
+  `S k = ∏_{m = 1}^{k} (1 - h m)` when `P(T = 0) = 0` (everybody is alive at time `0`) and
+  `P(T ≥ k) > 0`; `survival_eq_prod_Icc_filter` is the same at every horizon `k`, with the
+  product over the times `1 ≤ m ≤ k` with `P(T ≥ m) > 0`.
 * `exists_hazard_eq_one_of_survival_eq_zero`: if `S k = 0` then some `m ≤ k` has positive
   at-risk probability and hazard exactly `1`. So once survival reaches zero, the product
   formula has a genuine zero factor; `survival_eq_prod_one_sub_hazard_of_survival_eq_zero`
@@ -78,10 +84,13 @@ this is `P(T > k - 1) = S (k - 1)` (`atRisk_succ`). -/
 noncomputable def atRisk (μ : Measure Ω) (T : Ω → ℕ) (k : ℕ) : ℝ :=
   μ.real {ω | k ≤ T ω}
 
-/-- The discrete-time hazard at time `k`: `h k = P(T = k) / P(T ≥ k)`, the probability of the
-event in interval `k` among those who had not had it before `k` (`P(T = k | T > k - 1)`). It
-is a conditional probability only when `0 < atRisk μ T k`; at other times its value is the
-conventional `0` and no result uses it as a probability. -/
+/-- The discrete-time hazard at time `k`: `h k = P(T = k) / P(T ≥ k)`, the probability
+`P(T = k | T ≥ k)` of the event in interval `k` among those who had not had it before `k`.
+For `k ≥ 1` the conditioning event `T ≥ k` is `T > k - 1`, so `h k = P(T = k | T > k - 1)` as
+in the book; at `k = 0` the conditioning event is the whole space and, for a probability
+measure, `h 0 = P(T = 0)` (`hazard_zero`). It is a conditional probability only when
+`0 < atRisk μ T k`; at other times its value is the conventional `0` and no result uses it as
+a probability. -/
 noncomputable def hazard (μ : Measure Ω) (T : Ω → ℕ) (k : ℕ) : ℝ :=
   μ.real {ω | T ω = k} / atRisk μ T k
 
@@ -92,6 +101,29 @@ theorem atRisk_succ (k : ℕ) : atRisk μ T (k + 1) = survival μ T k := by
 
 theorem atRisk_zero [IsProbabilityMeasure μ] : atRisk μ T 0 = 1 := by
   simp [atRisk]
+
+/-- The hazard at time `0` is the probability of the event at time `0`: `h 0 = P(T = 0)`. -/
+theorem hazard_zero [IsProbabilityMeasure μ] : hazard μ T 0 = μ.real {ω | T ω = 0} := by
+  rw [hazard, atRisk_zero, div_one]
+
+theorem survival_nonneg (k : ℕ) : 0 ≤ survival μ T k := measureReal_nonneg
+
+theorem atRisk_nonneg (k : ℕ) : 0 ≤ atRisk μ T k := measureReal_nonneg
+
+theorem hazard_nonneg (k : ℕ) : 0 ≤ hazard μ T k :=
+  div_nonneg measureReal_nonneg measureReal_nonneg
+
+theorem survival_le_one [IsProbabilityMeasure μ] (k : ℕ) : survival μ T k ≤ 1 :=
+  measureReal_le_one
+
+theorem atRisk_le_one [IsProbabilityMeasure μ] (k : ℕ) : atRisk μ T k ≤ 1 :=
+  measureReal_le_one
+
+theorem risk_nonneg [IsProbabilityMeasure μ] (k : ℕ) : 0 ≤ risk μ T k :=
+  sub_nonneg.2 (survival_le_one k)
+
+theorem risk_le_one (k : ℕ) : risk μ T k ≤ 1 :=
+  sub_le_self _ (survival_nonneg k)
 
 variable [IsFiniteMeasure μ]
 
@@ -110,6 +142,10 @@ theorem survival_le_atRisk (k : ℕ) : survival μ T k ≤ atRisk μ T k :=
 
 theorem measureReal_eq_le_atRisk (k : ℕ) : μ.real {ω | T ω = k} ≤ atRisk μ T k :=
   measureReal_mono fun ω (h : T ω = k) => h.ge
+
+/-- The hazard is at most one: `P(T = k) ≤ P(T ≥ k)`. So `0 ≤ 1 - h k` at every time. -/
+theorem hazard_le_one (k : ℕ) : hazard μ T k ≤ 1 :=
+  div_le_one_of_le₀ (measureReal_eq_le_atRisk k) (atRisk_nonneg k)
 
 /-- Risk is nondecreasing in time. -/
 theorem risk_monotone : Monotone (risk μ T) := by
@@ -240,6 +276,31 @@ theorem survival_eq_prod_Icc (h0 : μ.real {ω | T ω = 0} = 0) (k : ℕ)
   | zero => simp [hazard, h0]
   | succ k ih => rw [Finset.prod_range_succ, ih, Finset.prod_Icc_succ_top (by omega)]
 
+open Classical in
+/-- The product formula in the book's indexing at every horizon: if nobody has the event at
+time `0` (`P(T = 0) = 0`), then for every `k`,
+`S k = ∏ (1 - h m)` over the times `1 ≤ m ≤ k` with positive at-risk probability
+`P(T ≥ m) > 0`. Every factor is one minus a genuine conditional probability
+`h m = P(T = m | T > m - 1)`; no conventional hazard value enters. When `S k = 0` the product
+contains a genuine zero factor, the first time at which the hazard is `1`
+(`exists_hazard_eq_one_of_survival_eq_zero`). -/
+theorem survival_eq_prod_Icc_filter (h0 : μ.real {ω | T ω = 0} = 0) (k : ℕ) :
+    survival μ T k =
+      ∏ m ∈ (Finset.Icc 1 k).filter (fun m => 0 < atRisk μ T m), (1 - hazard μ T m) := by
+  rcases (survival_nonneg (μ := μ) (T := T) k).eq_or_lt with hS | hS
+  · obtain ⟨m, hm, hpos, hh⟩ := exists_hazard_eq_one_of_survival_eq_zero hT hS.symm
+    have hm1 : 1 ≤ m := by
+      rcases Nat.eq_zero_or_pos m with rfl | hm1
+      · rw [hazard_zero, h0] at hh; exact absurd hh zero_ne_one
+      · exact hm1
+    rw [← hS, eq_comm]
+    exact Finset.prod_eq_zero (Finset.mem_filter.2 ⟨Finset.mem_Icc.2 ⟨hm1, hm⟩, hpos⟩)
+      (by rw [hh, sub_self])
+  · have hk : 0 < atRisk μ T k := lt_of_lt_of_le hS (survival_le_atRisk k)
+    rw [Finset.filter_true_of_mem fun m hm =>
+      lt_of_lt_of_le hk (atRisk_antitone (Finset.mem_Icc.1 hm).2)]
+    exact survival_eq_prod_Icc hT h0 k hk
+
 /-- Risk as a cumulative sum of hazards: `1 - S k = ∑_{m = 0}^{k} h m * P(T ≥ m)`. Each term
 equals `P(T = m)` (`measureReal_eq_hazard_mul_atRisk`); a term with `P(T ≥ m) = 0` is zero
 because `P(T = m) = 0`, not because of a convention. -/
@@ -282,7 +343,10 @@ theorem hazard_one_eq_risk_one (h0 : μ.real {ω | T ω = 0} = 0) :
 
 omit [IsProbabilityMeasure μ] hT in
 /-- The law of `T` determines the hazards: two event times with the same distribution have
-the same hazard at every time. -/
+the same hazard at every time. The identity is between the expressions
+`P(T = k) / P(T ≥ k)` as defined, and it holds because numerators and denominators agree
+separately; at a time with `P(T ≥ k) = 0` both sides are the conventional value `0`, and only
+at times of positive at-risk probability is it an equality of conditional probabilities. -/
 theorem hazard_eq_of_map_eq {Ω' : Type*} [MeasurableSpace Ω'] {ν : Measure Ω'} {T' : Ω' → ℕ}
     (hT : Measurable T) (hT' : Measurable T') (h : μ.map T = ν.map T') (k : ℕ) :
     hazard μ T k = hazard ν T' k := by
