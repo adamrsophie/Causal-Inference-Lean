@@ -239,3 +239,7 @@ public import CausalInference.Identification.IDConcrete
 public import CausalInference.Identification.IDFailure
 public import CausalInference.Identification.IDFailureExamples
 public import CausalInference.Identification.IDNonIdent
+public import CausalInference.Estimation.DeltaMethodMultivariate
+public import CausalInference.BiasAnalysis.VarianceFormulasWitnesses
+public import CausalInference.BiasAnalysis.Tables
+public import CausalInference.BiasAnalysis.VarianceCovariance

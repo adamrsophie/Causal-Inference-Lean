@@ -44,7 +44,9 @@ Main results:
 * `duplicated_erase`, `pvwCell_erase`: in the duplicated dataset of predictive value weighting,
   leaving out one record removes exactly its two weighted copies, of total weight one;
   `Examples.pvw_jackknife_example` is the record-level jackknife of Table 10.3 (`SE ≈ 0.076`,
-  interval `(1.00, 1.35)`).
+  interval `(1.00, 1.35)`) for any labeling with the counts of Table 10.1, and
+  `pvw_jackknife_table101` in `BiasAnalysis.VarianceFormulasWitnesses` is the same statement for
+  an explicit record-level labeling, with no hypotheses.
 * `rubinVariance_eq`: Equation 10.21 is Rubin's `W + (1 + 1/M) B`.
 * `ivPooled_eq_sum_weights`, `ivPooledVariance_le`, `firstOrderVariance_ivWeights`: for a
   nonempty family of positive variances the pooled estimate is a weighted average, and
@@ -54,12 +56,21 @@ Main results:
   `se + sp = 1` and can leave the unit interval.
 * `Examples`: the worked numbers of Chapter 2 and Chapter 10, recomputed.
 
-The joint asymptotic normality of several independent estimates (two binomial samples, or a
-validation study and a main study) is not formalized: the delta method of the library is
-univariate, so the multivariate step is represented by the gradient identities and
-`variance_linearization`. The methods are attributed in the chapter to Greenland (1988),
-Marshall (1990), Lyles and colleagues (2010) for predictive value weighting, and Rubin for the
-combination rules of multiple imputation.
+The probabilistic step behind these formulas is in `Estimation.DeltaMethodMultivariate` (the
+multivariate delta method for asymptotically linear estimators of one i.i.d. sample, with the
+asymptotic variance as the quadratic form of the gradient in the covariance matrix of the
+influence functions) and in `BiasAnalysis.VarianceCovariance` (the covariance form
+`quadraticVariance` of `firstOrderVariance` and of `variance_linearization`, and the theorems
+`greenland_nondifferential_asymptotic`, `marshall_asymptotic` and `ivPooled_asymptotic`, which
+show that the Greenland, Marshall and inverse-variance pooled variances are asymptotic
+variances of the plug-in estimators when the inputs have pairwise independent influence
+functions with the stated asymptotic variances). There every input is computed from the same
+`n` observations; inputs from studies of different sizes, which the printed formulas allow
+through the group sizes, are not covered, and for them the identities of this file remain
+algebra about the gradient. Explicit inputs satisfying the hypotheses of the theorems of this
+file are in `BiasAnalysis.VarianceFormulasWitnesses`. The methods are attributed in the chapter
+to Greenland (1988), Marshall (1990), Lyles and colleagues (2010) for predictive value
+weighting, and Rubin for the combination rules of multiple imputation.
 -/
 
 @[expose] public section
@@ -1220,7 +1231,8 @@ unexposed cases and `101/479` controls; `PPV₁ = 29/51`, `NPV₁ = 143/160`, `P
 `NPV₀ = 168/184`, each with binomial variance `p (1 - p)/n`, and `Var P(eᵢ)` binomial in the
 row total. Then `a₁ ∈ (0.000650, 0.000660)`, `a₀ ∈ (0.000580, 0.000590)` and the variance of
 Equation 10.5 lies in `(0.0500, 0.0510)` (printed `0.051`; the unrounded value is `0.0505`). The
-printed rounded inputs give `0.0503` instead. -/
+printed rounded inputs give `0.05038…` instead, which rounds to `0.0504`
+(`marshall_example_rounded_inputs` in `BiasAnalysis.VarianceFormulasWitnesses`). -/
 theorem marshall_example :
     let a₁ := marshallA ((29 / 51) * (1 - 29 / 51) / 51) ((143 / 160) * (1 - 143 / 160) / 160)
       ((122 / 564) * (1 - 122 / 564) / 564) (29 / 51) (143 / 160) (122 / 564)
@@ -1643,7 +1655,9 @@ ratios of the weighted table take four values, with multiplicities `122, 442, 10
 jackknife standard error lies in `(0.0758, 0.0763)` (printed `0.076`), and the interval
 `exp (ln OR ± 1.96 SE)`, with `ln OR` from the full weighted table, has endpoints in
 `(0.995, 1.005)` and `(1.345, 1.355)` (printed `(1.00, 1.35)`). The predictive values are held
-fixed at those of Table 10.2 when a record is deleted. -/
+fixed at those of Table 10.2 when a record is deleted. An explicit labeling satisfying the four
+count hypotheses, and the resulting unconditional statement, are `table101_counts` and
+`pvw_jackknife_table101` in `BiasAnalysis.VarianceFormulasWitnesses`. -/
 theorem pvw_jackknife_example (case obs : Fin 1144 → Bool)
     (h₁₁ : #{i | case i = true ∧ obs i = true} = 122)
     (h₁₀ : #{i | case i = true ∧ obs i = false} = 442)
