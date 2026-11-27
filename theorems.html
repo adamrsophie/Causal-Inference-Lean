@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Highlighted theorems: Causal Inference in Lean</title>
+<meta name="description" content="The flagship result of each area of the library in plain language, with its exact Lean statement: Fisher&#x27;s randomization test, Neyman&#x27;s variance, the LATE theorem, difference in differences, Manski bounds, the mediation formula, latent projection, d-separation, Hudgens and Halloran, and more.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+<nav class="navbar" aria-label="Main">
+<a class="brand" href="index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="11" r="2.6" fill="currentColor"/><circle cx="22" cy="11" r="2.6" fill="currentColor"/><circle cx="16" cy="22" r="2.6" fill="currentColor"/><path d="M11.5 13.2 14.6 19.4M20.5 13.2 17.4 19.4M12.8 11h6.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Causal Inference <small>in Lean</small></span></a>
+<ul class="tabs" id="site-tabs">
+<li><a href="map.html">Map</a></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-learn">Learn<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-learn"><li><a href="background.html"><b>Background</b><span>The causal inference terms used in the library, each with an example.</span></a></li><li><a href="methods.html"><b>Methods</b><span>How results are stated here, each rule with an instance from the source.</span></a></li><li><a href="survey.html"><b>Survey</b><span>The published sources the modules formalize, in aggregate.</span></a></li><li><a href="register.html"><b>Source register</b><span>Every cited source with the Lean files that formalize it.</span></a></li></ul></li>
+<li class="sec current"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-library">Library<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-library"><li><a href="theorems.html" aria-current="page"><b>Highlights</b><span>The flagship result of each area, in plain language, with its Lean statement.</span></a></li><li><a href="reference.html"><b>Reference</b><span>Every module and public declaration, grouped by area, with a filter.</span></a></li><li><a href="network.html"><b>Network</b><span>The areas of the library and how they depend on one another.</span></a></li><li><a href="milestones.html"><b>Milestones</b><span>The timeline of commits on the main branch.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-status">Status<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-status"><li><a href="roadmap.html"><b>Roadmap</b><span>One table with the status of every area: on the main branch, in progress, planned.</span></a></li><li><a href="obstacles.html"><b>Limits</b><span>What the library does not cover, and the counterexamples that mark its boundaries.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-take-part">Take part<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-take-part"><li><a href="procedure.html"><b>Procedure</b><span>What verified means here, the trust policy, and how to reproduce the check.</span></a></li><li><a href="join.html"><b>Contribute</b><span>How to propose a result and how it is checked.</span></a></li></ul></li>
+</ul>
+<div class="nav-end"><a class="source" href="https://github.com/adamrsophie/Causal-Inference-Lean">Source</a></div>
+</nav>
+</header>
+<div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
+<div class="page wrap with-toc">
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#fisher">Fisher's randomization test is valid</a></li><li class="l2"><a href="#neyman">Neyman's variance formula</a></li><li class="l2"><a href="#hudgens-halloran">Unbiased estimation under interference</a></li><li class="l2"><a href="#late">The local average treatment effect theorem</a></li><li class="l2"><a href="#did">Difference in differences</a></li><li class="l2"><a href="#manski">Manski bounds, with sharpness</a></li><li class="l2"><a href="#mediation">The mediation formula, and why it needs a cross-world assumption</a></li><li class="l2"><a href="#latent-projection">Latent projection composes</a></li><li class="l2"><a href="#d-separation">d-separation and the local Markov property</a></li><li class="l2"><a href="#g-formula">The g-formula for treatments over time</a></li><li class="l2"><a href="#simpson">The sure-thing principle and Simpson's reversal</a></li><li class="l2"><a href="#global-markov">d-separation implies conditional independence</a></li><li class="l2"><a href="#rd">Regression discontinuity</a></li><li class="l2"><a href="#synthetic-control">Synthetic control under a factor model</a></li><li class="l2"><a href="#missing-data">Missing data: weighting under MAR</a></li><li class="l2"><a href="#sensitivity">Sensitivity to hidden bias</a></li><li class="l2"><a href="#estimation">Coverage of the Wald interval</a></li><li class="l2"><a href="#identification">What point identification means</a></li></ul></nav></details></aside>
+<main id="content" tabindex="-1">
+<h1>Highlighted theorems</h1>
+<p class="lead">One or two results from each area, each with its Lean statement and a plain mathematical reading. Statements are copied from the source on the main branch by the site generator; the names are the Lean identifiers and link to the <a href="reference.html">Reference</a> page, where every hypothesis and every docstring can be read in full. These 31 theorems are drawn with a white ring on the <a href="map.html">map</a>.</p>
+<p class="sub">Labels: <span class="cls known">identification</span> a causal quantity equals a functional of the observed data under stated assumptions. <span class="cls general">design-based inference</span> a statement about an estimator or a test over the randomization distribution or the sampling distribution. <span class="cls tooling">structure</span> a fact about graphs or about the definitions themselves. <span class="cls restricted">counterexample</span> a concrete model showing that a hypothesis cannot be dropped or that a quantity is not identified. Every assumption is a hypothesis of the theorem; nothing is assumed globally (see <a href="methods.html">Methods</a>).</p>
+
+<h2 id="fisher">Fisher's randomization test is valid</h2>
+<span class="cls general">design-based inference</span>
+<p>Under Fisher's sharp null hypothesis (no unit is affected by treatment), the observed outcomes are the same under every assignment, so the randomization distribution of any test statistic is known exactly. The randomization p-value p then satisfies P(p ≤ α) ≤ α for every α ≥ 0, for any design and any statistic T.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">fisher_pValue_valid</span> (po : PotentialOutcomes ι) (hnull : po.SharpNull) (d : Design ι)
+  (T : (ι → Bool) → (ι → <span class="t"><span class="t">ℝ</span></span>) → <span class="t"><span class="t">ℝ</span></span>) {α : <span class="t"><span class="t">ℝ</span></span>} (hα : 0 ≤ α) :
+  d.prob (<span class="k"><span class="k">fun</span></span> a =&gt; d.fisherPValue T (po.observed a) a ≤ α) ≤ α</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Randomized.fisher_pValue_valid">CausalInference.Randomized.fisher_pValue_valid</a> in <a href="reference.html#mod-Designs.Randomized.Fisher">CausalInference.Designs.Randomized.Fisher</a></p>
+
+<h2 id="neyman">Neyman's variance formula</h2>
+<span class="cls general">design-based inference</span>
+<p>Under complete randomization of n<sub>1</sub> treated and n<sub>0</sub> control units out of N, the variance of the difference in means over the randomization distribution is S<sub>1</sub>²/n<sub>1</sub> + S<sub>0</sub>²/n<sub>0</sub> − S<sub>τ</sub>²/N, where the S² are finite population variances of the treated outcomes, the control outcomes and the unit effects. Since S<sub>τ</sub>² is never negative, the usual variance S<sub>1</sub>²/n<sub>1</sub> + S<sub>0</sub>²/n<sub>0</sub> is conservative; the <a href="background.html#design-based">Background</a> page works through a four unit example.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">neyman_variance</span> [DecidableEq ι] (po : PotentialOutcomes ι) {n1 n0 : <span class="t"><span class="t">ℕ</span></span>}
+  (hn : n1 + n0 = Fintype.card ι) (hn1 : 0 &lt; n1) (hn0 : 0 &lt; n0) :
+  (completeDesign n1 (<span class="k"><span class="k">by</span></span> omega)).variance (po.diffInMeans n1 n0) =
+    po.varTreated / n1 + po.varControl / n0 - po.varEffect / Fintype.card ι</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Randomized.neyman_variance">CausalInference.Randomized.neyman_variance</a> in <a href="reference.html#mod-Designs.Randomized.Neyman">CausalInference.Designs.Randomized.Neyman</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">neyman_variance_le</span> [DecidableEq ι] (po : PotentialOutcomes ι) {n1 n0 : <span class="t"><span class="t">ℕ</span></span>}
+  (hn : n1 + n0 = Fintype.card ι) (hn1 : 0 &lt; n1) (hn0 : 0 &lt; n0) :
+  (completeDesign n1 (<span class="k"><span class="k">by</span></span> omega)).variance (po.diffInMeans n1 n0) ≤
+    po.varTreated / n1 + po.varControl / n0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Randomized.neyman_variance_le">CausalInference.Randomized.neyman_variance_le</a> in <a href="reference.html#mod-Designs.Randomized.Neyman">CausalInference.Designs.Randomized.Neyman</a></p>
+
+<h2 id="hudgens-halloran">Unbiased estimation under interference</h2>
+<span class="cls general">design-based inference</span>
+<p>In the two-stage design of Hudgens and Halloran, groups are first assigned to one of two allocation strategies by complete randomization, and then units within each group are completely randomized according to the strategy of their group. Under partial interference (a unit's outcome depends only on the assignments in its own group), the population estimator is unbiased for the population average potential outcome, for both strategies and both treatment values. The direct, indirect and total effects satisfy TE = DE + IE.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">twoStageExpect_popEstimator_completeRandomization</span>
+  (Y : (g : G) → (κ g → Bool) → κ g → <span class="t"><span class="t">ℝ</span></span>) {c : <span class="t"><span class="t">ℕ</span></span>} (hc : c ≤ Fintype.card G)
+  (k : Bool → G → <span class="t"><span class="t">ℕ</span></span>) (hk : <span class="k"><span class="k">∀</span></span> b g, k b g ≤ Fintype.card (κ g)) (b t : Bool)
+  (hcb : <span class="k"><span class="k">if</span></span> b <span class="k"><span class="k">then</span></span> 0 &lt; c <span class="k"><span class="k">else</span></span> c &lt; Fintype.card G)
+  (hkb : <span class="k"><span class="k">∀</span></span> g, <span class="k"><span class="k">if</span></span> t <span class="k"><span class="k">then</span></span> 0 &lt; k b g <span class="k"><span class="k">else</span></span> k b g &lt; Fintype.card (κ g)) :
+  twoStageExpect (completeRandomization G c hc)
+      (<span class="k"><span class="k">fun</span></span> b g ↦ completeRandomization (κ g) (k b g) (hk b g)) (popEstimator Y b t) =
+    popAvg Y (<span class="k"><span class="k">fun</span></span> g ↦ completeRandomization (κ g) (k b g) (hk b g)) t</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Interference.twoStageExpect_popEstimator_completeRandomization">CausalInference.Interference.twoStageExpect_popEstimator_completeRandomization</a> in <a href="reference.html#mod-Interference.TwoStage">CausalInference.Interference.TwoStage</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">totalEffect_eq_directEffect_add_indirectEffect</span> (ybar : Bool → S → <span class="t"><span class="t">ℝ</span></span>) (φ ψ : S) :
+  totalEffect ybar φ ψ = directEffect ybar ψ + indirectEffect ybar φ ψ</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Interference.totalEffect_eq_directEffect_add_indirectEffect">CausalInference.Interference.totalEffect_eq_directEffect_add_indirectEffect</a> in <a href="reference.html#mod-Interference.PartialInterference">CausalInference.Interference.PartialInterference</a></p>
+
+<h2 id="late">The local average treatment effect theorem</h2>
+<span class="cls known">identification</span>
+<p>With a binary instrument Z and a binary treatment, assume the exclusion restriction, independence of the instrument from the potential variables, monotonicity (no defiers), relevance (a nonzero first stage), 0 &lt; P(Z = 1) &lt; 1 and integrable potential outcomes. Then the Wald ratio, the difference in mean outcomes between the instrument arms divided by the difference in treatment rates, equals the average effect among compliers.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">wald_eq_complierEffect</span> [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
+  (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ) (hR : M.Relevance μ)
+  (hY : <span class="k"><span class="k">∀</span></span> z, Integrable (M.YD z) μ) (z : Bool) :
+  M.wald μ = M.complierEffect μ z</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVModel.wald_eq_complierEffect">CausalInference.IVModel.wald_eq_complierEffect</a> in <a href="reference.html#mod-InstrumentalVariables.LATE">CausalInference.InstrumentalVariables.LATE</a></p>
+<span class="cls restricted">counterexample</span>
+<p>The assumptions identify only the complier effect: two models with the same observed law, both satisfying every assumption above, have different average treatment effects. Without monotonicity the Wald ratio can differ from both the complier effect and the average effect.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">ate_not_identified</span> :
+  (modelB 0).LATEAssumptions (P 2) ∧ (modelB 1).LATEAssumptions (P 2) ∧
+    (P 2).map (modelB 0).observed = (P 2).map (modelB 1).observed ∧
+    <span class="k"><span class="k">∀</span></span> z, (modelB 0).ate (P 2) z ≠ (modelB 1).ate (P 2) z</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVCounterexample.ate_not_identified">CausalInference.IVCounterexample.ate_not_identified</a> in <a href="reference.html#mod-InstrumentalVariables.Counterexamples">CausalInference.InstrumentalVariables.Counterexamples</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">wald_ne_of_not_monotonicity</span> :
+  modelA.Exclusion (P 3) ∧ modelA.InstrumentIndependence (P 3) ∧ modelA.Relevance (P 3) ∧
+    0 &lt; P 3 (modelA.instrumentEq true) ∧ P 3 (modelA.instrumentEq true) &lt; 1 ∧
+    (<span class="k"><span class="k">∀</span></span> z d, Integrable (modelA.Y z d) (P 3)) ∧ ¬ modelA.Monotonicity (P 3) ∧
+    (¬ <span class="k"><span class="k">∀</span></span>ᵐ ω ∂P 3, modelA.D true ω ≤ modelA.D false ω) ∧
+    <span class="k"><span class="k">∀</span></span> z, modelA.wald (P 3) ≠ modelA.complierEffect (P 3) z ∧
+      modelA.wald (P 3) ≠ modelA.ate (P 3) z</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVCounterexample.wald_ne_of_not_monotonicity">CausalInference.IVCounterexample.wald_ne_of_not_monotonicity</a> in <a href="reference.html#mod-InstrumentalVariables.Counterexamples">CausalInference.InstrumentalVariables.Counterexamples</a></p>
+<span class="cls known">identification</span>
+<p>What the instrument does tell about the average treatment effect: with outcomes in [lo, hi], exclusion and instrument independence alone place it in an interval computed from the observed data (Robins 1989, Manski 1990). Under monotonicity as well, the interval is exactly the identified set, so it cannot be narrowed without further assumptions.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">ate_mem_Icc_bounds</span> [IsFiniteMeasure μ] {lo hi : <span class="t"><span class="t">ℝ</span></span>} (hE : M.Exclusion μ)
+  (hI : M.InstrumentIndependence μ) (h₁ : μ (M.instrumentEq true) ≠ 0)
+  (h₀ : μ (M.instrumentEq false) ≠ 0) (hb : <span class="k"><span class="k">∀</span></span> z d ω, M.Y z d ω ∈ Icc lo hi) (z : Bool) :
+  M.ate μ z ∈ Icc (lowerBound μ lo hi M.observed) (upperBound μ lo hi M.observed)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVModel.ate_mem_Icc_bounds">CausalInference.IVModel.ate_mem_Icc_bounds</a> in <a href="reference.html#mod-InstrumentalVariables.Bounds">CausalInference.InstrumentalVariables.Bounds</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">identifiedSet_ate</span> [IsFiniteMeasure μ] {M : IVModel Ω} (hM : M ∈ models μ lo hi)
+  (z : Bool) :
+  identifiedSet (models μ lo hi) IVModel.observed (<span class="k"><span class="k">fun</span></span> M' ↦ M'.ate μ z) M.observed =
+    Icc (lowerBound μ lo hi M.observed) (upperBound μ lo hi M.observed)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVBounds.identifiedSet_ate">CausalInference.IVBounds.identifiedSet_ate</a> in <a href="reference.html#mod-InstrumentalVariables.Bounds">CausalInference.InstrumentalVariables.Bounds</a></p>
+
+<h2 id="did">Difference in differences</h2>
+<span class="cls known">identification</span>
+<p>In the design with two groups and two periods, under consistency, no anticipation, parallel trends in the untreated potential outcomes, overlap and integrability, the average treatment effect on the treated equals the observed difference in differences. The library also proves the exact bias without parallel trends (the trend gap plus the anticipation gap) and group-time identification under staggered adoption.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">att_eq_did</span> {μ : Measure Ω} [IsProbabilityMeasure μ] {G : Ω → Bool}
+  {Y : Period → Bool → Ω → <span class="t"><span class="t">ℝ</span></span>} {Yobs : Period → Ω → <span class="t"><span class="t">ℝ</span></span>} (hG : MeasurableSet (treated G))
+  (hcons : Consistency G Y Yobs) (hNA : NoAnticipation μ G Y) (hPT : ParallelTrends μ G Y)
+  (hpos : 0 &lt; μ (treated G)) (hlt : μ (treated G) &lt; 1)
+  (hY : <span class="k"><span class="k">∀</span></span> t d, Integrable (Y t d) μ) :
+  att μ G Y = did μ G Yobs</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.TwoPeriod.att_eq_did">CausalInference.TwoPeriod.att_eq_did</a> in <a href="reference.html#mod-Designs.DifferenceInDifferences.TwoPeriod">CausalInference.Designs.DifferenceInDifferences.TwoPeriod</a></p>
+<span class="cls restricted">counterexample</span>
+<p>Under staggered adoption the static two-way fixed effects coefficient need not average the group-time effects. In an explicit panel where consistency, no anticipation and parallel trends hold and every group-time effect is positive (1, 4 and 1), the coefficient is the unique solution of the normal equations and equals −1/2: the wrong sign, outside the convex hull of the effects.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">twfe_not_convex_combination</span> :
+  Staggered.Consistency exCohort (exY 1 4 1) (exYobs 1 4 1) ∧
+  Staggered.NoAnticipation exMeasure exCohort (exY 1 4 1) ∧
+  Staggered.cohort exCohort ⊤ = ∅ ∧
+  (<span class="k"><span class="k">∀</span></span> (g t r : <span class="t"><span class="t">ℕ</span></span>), Staggered.ParallelTrendsNotYetTreated exMeasure exCohort (exY 1 4 1) g t r) ∧
+  (<span class="k"><span class="k">∀</span></span> (i : Fin 2) (t : Fin 3), <span class="k"><span class="k">∫</span></span> ω, exYobs 1 4 1 t ω
+      ∂exMeasure[|Staggered.cohort exCohort (adoption i)] = outcome 1 4 1 i t) ∧
+  (<span class="k"><span class="k">∀</span></span> (α : Fin 2 → <span class="t"><span class="t">ℝ</span></span>) (δ : Fin 3 → <span class="t"><span class="t">ℝ</span></span>) (β : <span class="t"><span class="t">ℝ</span></span>),
+      NormalEquations (outcome 1 4 1) α δ β → β = -1 / 2) ∧
+  NormalEquations (outcome 1 4 1) (twfeCohortEffect 1 4 1) (twfePeriodEffect 1 4 1) (-1 / 2) ∧
+  0 &lt; Staggered.att exMeasure exCohort (exY 1 4 1) 1 1 ∧
+  0 &lt; Staggered.att exMeasure exCohort (exY 1 4 1) 1 2 ∧
+  0 &lt; Staggered.att exMeasure exCohort (exY 1 4 1) 2 2 ∧
+  (-1 / 2 : <span class="t"><span class="t">ℝ</span></span>) ∉ convexHull <span class="t"><span class="t">ℝ</span></span> {Staggered.att exMeasure exCohort (exY 1 4 1) 1 1,
+    Staggered.att exMeasure exCohort (exY 1 4 1) 1 2,
+    Staggered.att exMeasure exCohort (exY 1 4 1) 2 2}</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.EventStudy.twfe_not_convex_combination">CausalInference.EventStudy.twfe_not_convex_combination</a> in <a href="reference.html#mod-Designs.DifferenceInDifferences.EventStudy">CausalInference.Designs.DifferenceInDifferences.EventStudy</a></p>
+
+<h2 id="manski">Manski bounds, with sharpness</h2>
+<span class="cls known">identification</span>
+<p>With a binary treatment and outcomes known to lie in [lo, hi], and no other assumption, the identified set of the average treatment effect is exactly an interval computed from the observed outcomes and the treatment probabilities, of width hi − lo when the measure is a probability measure. The inclusion is the bound; the equality says that every value of the interval is attained by some model, so the bounds are sharp. Under monotone treatment response the lower end rises to 0.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">identifiedSet_ate</span> [IsFiniteMeasure μ] (hA : Measurable A) {y : Ω → <span class="t"><span class="t">ℝ</span></span>}
+  (hy : Measurable y) (hyb : <span class="k"><span class="k">∀</span></span> ω, y ω ∈ Icc lo hi) :
+  identifiedSet (boundedModels lo hi) (observed A) (ate μ) y =
+    Icc (boundY1 μ A lo y - boundY0 μ A hi y) (boundY1 μ A hi y - boundY0 μ A lo y)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Manski.identifiedSet_ate">CausalInference.Manski.identifiedSet_ate</a> in <a href="reference.html#mod-PartialIdentification.Manski">CausalInference.PartialIdentification.Manski</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">identifiedSet_ate_mtr</span> [IsFiniteMeasure μ] (hA : Measurable A) {y : Ω → <span class="t"><span class="t">ℝ</span></span>}
+  (hy : Measurable y) (hyb : <span class="k"><span class="k">∀</span></span> ω, y ω ∈ Icc lo hi) :
+  identifiedSet (mtrModels lo hi) (observed A) (ate μ) y =
+    Icc 0 (boundY1 μ A hi y - boundY0 μ A lo y)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Manski.identifiedSet_ate_mtr">CausalInference.Manski.identifiedSet_ate_mtr</a> in <a href="reference.html#mod-PartialIdentification.Manski">CausalInference.PartialIdentification.Manski</a></p>
+
+<h2 id="mediation">The mediation formula, and why it needs a cross-world assumption</h2>
+<span class="cls known">identification</span>
+<p>For a binary treatment and a finite mediator, under treatment ignorability, mediator ignorability given treatment, positivity, integrability and the cross-world independence of Y(a, m) and M(a′), the mean of the nested potential outcome Y(a, M(a′)) equals Σ<sub>m</sub> E[Y | A = a, M = m] P(M = m | A = a′).</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">integral_nested_eq_mediationFormula</span> [Fintype 𝓜] [IsProbabilityMeasure μ] {a a' : Bool}
+  (hA : Measurable P.A) (hMa : Measurable (P.M a)) (hMa' : Measurable (P.M a'))
+  (hY : <span class="k"><span class="k">∀</span></span> m, μ (P.M a' ⁻¹' {m}) ≠ 0 → Integrable (P.Y a m) μ)
+  (hrandY : <span class="k"><span class="k">∀</span></span> m, μ (P.M a' ⁻¹' {m}) ≠ 0 → IndepFun (P.Y a m) P.A μ)
+  (hrandM : IndepFun (P.M a') P.A μ)
+  (hmed : <span class="k"><span class="k">∀</span></span> m, μ (P.M a' ⁻¹' {m}) ≠ 0 → IndepFun (P.Y a m) (P.M a) μ[|P.A ⁻¹' {a}])
+  (hcross : <span class="k"><span class="k">∀</span></span> m, μ (P.M a' ⁻¹' {m}) ≠ 0 → IndepFun (P.Y a m) (P.M a') μ)
+  (hposA : μ (P.A ⁻¹' {a'}) ≠ 0)
+  (hpos : <span class="k"><span class="k">∀</span></span> m, μ (P.M a' ⁻¹' {m}) ≠ 0 → μ (P.A ⁻¹' {a} ∩ P.Mobs ⁻¹' {m}) ≠ 0) :
+  <span class="k"><span class="k">∫</span></span> ω, P.nested a a' ω ∂μ = P.mediationFormula μ a a'</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Mediation.MediationModel.integral_nested_eq_mediationFormula">CausalInference.Mediation.MediationModel.integral_nested_eq_mediationFormula</a> in <a href="reference.html#mod-Mediation.Identification">CausalInference.Mediation.Identification</a></p>
+<span class="cls restricted">counterexample</span>
+<p>The cross-world assumption cannot be dropped: two models with randomized treatment, the same joint law of (A, M(a), Y(a, m)) for every a and m, and the same observed law have different natural direct effects. No observational or experimental data distinguish them.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">nde_ne</span> : model₁.nde μ₀ false ≠ model₂.nde μ₀ false</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Mediation.Counterexample.nde_ne">CausalInference.Mediation.Counterexample.nde_ne</a> in <a href="reference.html#mod-Mediation.Counterexamples">CausalInference.Mediation.Counterexamples</a></p>
+
+<h2 id="latent-projection">Latent projection composes</h2>
+<span class="cls tooling">structure</span>
+<p>Projecting the latent vertices L<sub>1</sub> out of a directed mixed graph and then the latent vertices L<sub>2</sub> gives the same graph as projecting out L<sub>1</sub> ∪ L<sub>2</sub> in one step. The library also proves that projection preserves acyclicity and the ancestor relation among observed vertices.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">project_project</span> (G : ADMG V) (L1 L2 : Set V) :
+  (G.project L1).project L2 = G.project (L1 ∪ L2)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.ADMG.project_project">CausalInference.ADMG.project_project</a> in <a href="reference.html#mod-Graphical.LatentProjection">CausalInference.Graphical.LatentProjection</a></p>
+
+<h2 id="d-separation">d-separation and the local Markov property</h2>
+<span class="cls tooling">structure</span>
+<p>In an acyclic graph, every vertex is d-separated from its non-descendants given its parents: the graph side of the local Markov property. d-separation is defined by reachability, proved equivalent to the path definition, and decided by a checked procedure on finite graphs.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">IsAcyclic.dSep_nondescendants_parents</span> (hG : G.IsAcyclic) (v : V) :
+  G.DSep {v} (G.descendantsOf {v})ᶜ (G.parents v)</code></code></pre><p class="src-link"><a href="reference.html#Digraph.IsAcyclic.dSep_nondescendants_parents">Digraph.IsAcyclic.dSep_nondescendants_parents</a> in <a href="reference.html#mod-Graphical.DSeparation">CausalInference.Graphical.DSeparation</a></p>
+
+<h2 id="g-formula">The g-formula for treatments over time</h2>
+<span class="cls known">identification</span>
+<p>In a finite longitudinal model with K time points, assume outcome consistency, sequential exchangeability (in mean independence form) and sequential positivity for a static regime ā. Then the mean of the potential outcome Y(ā) equals Robins's g-formula: the sum over covariate histories of the outcome mean given the history and the regime, weighted by the product of the conditional covariate probabilities at each time. It also equals the recursive form computed by iterated conditional means.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">expect_Ypo_eq_gFormula</span> (a : Fin K → 𝒜) (hcons : M.OutcomeConsistent a)
+  (hex : M.SeqExchangeable a) (hpos : M.SeqPositive a) :
+  M.p.expect (M.Ypo a) = gFormula M.p M.A M.L a M.Y ∧
+    gFormula M.p M.A M.L a M.Y = iceGFormula K M.p M.A M.L a M.Y</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Longitudinal.Model.expect_Ypo_eq_gFormula">CausalInference.Longitudinal.Model.expect_Ypo_eq_gFormula</a> in <a href="reference.html#mod-Longitudinal.GFormula">CausalInference.Longitudinal.GFormula</a></p>
+<span class="cls restricted">counterexample</span>
+<p>When a covariate is affected by the earlier treatment and affects the later one, regression adjustment fails. In an explicit model with two time points the true effect and the g-formula contrast are both 0, while the contrast adjusted for the covariate and the unadjusted contrast are both nonzero.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">adjustment_fails</span> :
+  p.expect (Ypo true true) - p.expect (Ypo false false) = 0 ∧
+    gFormula2 p L0 A0 L1 A1 (<span class="k"><span class="k">fun</span></span> _ =&gt; true) (<span class="k"><span class="k">fun</span></span> _ _ =&gt; true) Y -
+      gFormula2 p L0 A0 L1 A1 (<span class="k"><span class="k">fun</span></span> _ =&gt; false) (<span class="k"><span class="k">fun</span></span> _ _ =&gt; false) Y = 0 ∧
+    naiveAdjusted ≠ 0 ∧ unadjusted ≠ 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Longitudinal.FeedbackExample.adjustment_fails">CausalInference.Longitudinal.FeedbackExample.adjustment_fails</a> in <a href="reference.html#mod-Longitudinal.Counterexamples">CausalInference.Longitudinal.Counterexamples</a></p>
+
+<h2 id="simpson">The sure-thing principle and Simpson's reversal</h2>
+<span class="cls tooling">structure</span>
+<p>If an action does not change the distribution of the strata, and raises the probability of an event in every stratum, then it raises the probability in the whole population. A reversal, as in the drug example of Pearl, Glymour and Jewell (recovery rates higher among men and among women, lower in the combined data: 273/350 against 289/350), is therefore possible only when the stratum distribution differs between the arms.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">sure_thing_principle</span> {q₁ q₀ e₁ e₀ : V → <span class="t"><span class="t">ℝ</span></span>} (hq : IsWeights q₀) (hno : q₁ = q₀)
+  (h : <span class="k"><span class="k">∀</span></span> v, e₀ v &lt; e₁ v) : standardizedRisk q₀ e₀ &lt; standardizedRisk q₁ e₁</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.EffectMeasure.sure_thing_principle">CausalInference.EffectMeasure.sure_thing_principle</a> in <a href="reference.html#mod-Measures.Simpson">CausalInference.Measures.Simpson</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">simpson_table11</span> :
+  (<span class="k"><span class="k">∀</span></span> v, risk11 false v &lt; risk11 true v) ∧ margRisk11 true &lt; margRisk11 false ∧
+    margRisk11 true = 273 / 350 ∧ margRisk11 false = 289 / 350</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.EffectMeasure.simpson_table11">CausalInference.EffectMeasure.simpson_table11</a> in <a href="reference.html#mod-Measures.Simpson">CausalInference.Measures.Simpson</a></p>
+
+<h2 id="global-markov">d-separation implies conditional independence</h2>
+<span class="cls tooling">structure</span>
+<p>If a finite distribution factorizes along an acyclic graph, then any two sets of variables that are d-separated by a third set are conditionally independent given it. No positivity is assumed. This is the soundness half of the theorem of Verma and Pearl and of Lauritzen, Dawid, Larsen and Leimer; with it, factorization, the local Markov property and the global Markov property are equivalent.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">Factorizes.condIndep_of_dSep</span> (hG : G.IsAcyclic) {p : FiniteDist (<span class="k"><span class="k">∀</span></span> v, α v)}
+  (h : G.Factorizes p) {X Y Z : Finset V} (hsep : G.DSep ↑X ↑Y ↑Z) : p.CondIndep X Y Z</code></code></pre><p class="src-link"><a href="reference.html#Digraph.Factorizes.condIndep_of_dSep">Digraph.Factorizes.condIndep_of_dSep</a> in <a href="reference.html#mod-Graphical.GlobalMarkov">CausalInference.Graphical.GlobalMarkov</a></p>
+
+<h2 id="rd">Regression discontinuity</h2>
+<span class="cls known">identification</span>
+<p>In the sharp design, if the conditional mean of the treated outcome is right-continuous at the cutoff and that of the control outcome is left-continuous, the jump of the observed regression at the cutoff equals the average treatment effect there. In the fuzzy design, with no defiers at the cutoff and continuity of the stratum shares and means, the ratio of the outcome jump to the treatment jump is the average effect for compliers at the cutoff.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">sharp_rd_identification</span> {c : <span class="t"><span class="t">ℝ</span></span>} {m1 m0 : <span class="t"><span class="t">ℝ</span></span> → <span class="t"><span class="t">ℝ</span></span>}
+  (h1 : Tendsto m1 (𝓝[&gt;] c) (𝓝 (m1 c))) (h0 : Tendsto m0 (𝓝[&lt;] c) (𝓝 (m0 c)))
+  {yPlus yMinus : <span class="t"><span class="t">ℝ</span></span>}
+  (hPlus : Tendsto (observedRegression c m1 m0) (𝓝[&gt;] c) (𝓝 yPlus))
+  (hMinus : Tendsto (observedRegression c m1 m0) (𝓝[&lt;] c) (𝓝 yMinus)) :
+  yPlus - yMinus = m1 c - m0 c</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.RD.sharp_rd_identification">CausalInference.RD.sharp_rd_identification</a> in <a href="reference.html#mod-Designs.RegressionDiscontinuity.Sharp">CausalInference.Designs.RegressionDiscontinuity.Sharp</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">fuzzy_rd_complier_identification</span> {c : <span class="t"><span class="t">ℝ</span></span>} (hM : M.IsValid)
+  (hcont : M.ContinuousAtCutoff c) (hmono : M.share .defier c = 0)
+  {pPlus pMinus yPlus yMinus : <span class="t"><span class="t">ℝ</span></span>}
+  (hpPlus : Tendsto (M.treatmentProb c) (𝓝[&gt;] c) (𝓝 pPlus))
+  (hpMinus : Tendsto (M.treatmentProb c) (𝓝[&lt;] c) (𝓝 pMinus))
+  (hyPlus : Tendsto (M.outcomeReg c) (𝓝[&gt;] c) (𝓝 yPlus))
+  (hyMinus : Tendsto (M.outcomeReg c) (𝓝[&lt;] c) (𝓝 yMinus))
+  (hjump : pPlus ≠ pMinus) :
+  pMinus &lt; pPlus ∧ 0 &lt; M.share .complier c ∧ pPlus - pMinus = M.share .complier c ∧
+    (yPlus - yMinus) / (pPlus - pMinus) = M.mean1 .complier c - M.mean0 .complier c</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.RD.FuzzyModel.fuzzy_rd_complier_identification">CausalInference.RD.FuzzyModel.fuzzy_rd_complier_identification</a> in <a href="reference.html#mod-Designs.RegressionDiscontinuity.Fuzzy">CausalInference.Designs.RegressionDiscontinuity.Fuzzy</a></p>
+
+<h2 id="synthetic-control">Synthetic control under a factor model</h2>
+<span class="cls known">identification</span>
+<p>In the noiseless linear factor model, if weights summing to one reproduce the treated unit's covariates and its untreated outcomes in every pre-treatment period, and the pre-treatment factor matrix is invertible, then the synthetic control equals the treated unit's untreated outcome in every period. Without the rank condition an exact pre-treatment fit can coexist with a bias of 1.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">factorOutcome_sub_synth_eq_zero_of_preFit</span> (δ : T → <span class="t"><span class="t">ℝ</span></span>) (θ : T → R → <span class="t"><span class="t">ℝ</span></span>)
+  (lam : T → F → <span class="t"><span class="t">ℝ</span></span>) (Z₁ : R → <span class="t"><span class="t">ℝ</span></span>) (μ₁ : F → <span class="t"><span class="t">ℝ</span></span>) (Z : J → R → <span class="t"><span class="t">ℝ</span></span>) (μ : J → F → <span class="t"><span class="t">ℝ</span></span>) (w : J → <span class="t"><span class="t">ℝ</span></span>)
+  (pre : Finset T) (hw : <span class="k"><span class="k">∑</span></span> j, w j = 1) (hZ : <span class="k"><span class="k">∑</span></span> j, w j • Z j = Z₁)
+  (hpre : <span class="k"><span class="k">∀</span></span> t ∈ pre,
+    factorOutcome δ θ lam Z₁ μ₁ t = synth w (<span class="k"><span class="k">fun</span></span> j =&gt; factorOutcome δ θ lam (Z j) (μ j)) t)
+  (hrank : <span class="k"><span class="k">∀</span></span> d : F → <span class="t"><span class="t">ℝ</span></span>, (<span class="k"><span class="k">∀</span></span> t ∈ pre, lam t ⬝ᵥ d = 0) → d = 0) (t : T) :
+  factorOutcome δ θ lam Z₁ μ₁ t - synth w (<span class="k"><span class="k">fun</span></span> j =&gt; factorOutcome δ θ lam (Z j) (μ j)) t
+    = 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.SyntheticControl.factorOutcome_sub_synth_eq_zero_of_preFit">CausalInference.SyntheticControl.factorOutcome_sub_synth_eq_zero_of_preFit</a> in <a href="reference.html#mod-Designs.SyntheticControl.FactorModel">CausalInference.Designs.SyntheticControl.FactorModel</a></p>
+
+<h2 id="missing-data">Missing data: weighting under MAR</h2>
+<span class="cls known">identification</span>
+<p>If the outcome is missing at random given covariates X (in mean-independence form) and the response propensity π(X) is almost surely positive, then inverse probability weighting recovers the full-data mean: E[1{R} Y / π(X)] = E[Y]. Without MAR the full-data mean is not point identified from the observed-data law.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">ipw_identity</span> [IsFiniteMeasure μ] (hX : Measurable X) (hY : Measurable Y)
+  (hR : Measurable R) {π : 𝒳 → <span class="t"><span class="t">ℝ</span></span>} (hπ : Measurable π)
+  (hprop : μ[respInd R | MeasurableSpace.comap X inferInstance] =ᵐ[μ] <span class="k"><span class="k">fun</span></span> ω =&gt; π (X ω))
+  (hmar : MARMean μ X Y R) (hpos : <span class="k"><span class="k">∀</span></span>ᵐ ω ∂μ, 0 &lt; π (X ω)) (hYi : Integrable Y μ) :
+  <span class="k"><span class="k">∫</span></span> ω, respInd R ω * Y ω / π (X ω) ∂μ = <span class="k"><span class="k">∫</span></span> ω, Y ω ∂μ</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.MissingData.ipw_identity">CausalInference.MissingData.ipw_identity</a> in <a href="reference.html#mod-MissingData.Weighting">CausalInference.MissingData.Weighting</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">fullMean_not_pointIdentified</span> :
+  ¬ PointIdentified positiveResponseModels MissingDataModel.observedLaw
+    MissingDataModel.fullMean</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.MissingData.Counterexample.fullMean_not_pointIdentified">CausalInference.MissingData.Counterexample.fullMean_not_pointIdentified</a> in <a href="reference.html#mod-MissingData.Counterexamples">CausalInference.MissingData.Counterexamples</a></p>
+
+<h2 id="sensitivity">Sensitivity to hidden bias</h2>
+<span class="cls general">design-based inference</span>
+<p>In Rosenbaum's model for matched pairs, where the odds of treatment within a pair may differ by at most a factor Γ, the tail probability of the sign statistic under the sharp null is at most the corresponding tail of a binomial distribution with success probability Γ/(1 + Γ). The library also proves the matching lower bound and that the upper bound is attained.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">signTestTail_le_binomialTail</span> {S : <span class="t"><span class="t">ℕ</span></span>} {Γ : <span class="t"><span class="t">ℝ</span></span>} (hΓ : 1 ≤ Γ) {p : Fin S → <span class="t"><span class="t">ℝ</span></span>}
+  (hp : <span class="k"><span class="k">∀</span></span> s, InSensitivityModel Γ (p s)) (f : Fin S → Bool) (k : <span class="t"><span class="t">ℕ</span></span>) :
+  signTestTail p f k ≤ binomialTail S (Γ / (1 + Γ)) k</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Rosenbaum.signTestTail_le_binomialTail">CausalInference.Rosenbaum.signTestTail_le_binomialTail</a> in <a href="reference.html#mod-Sensitivity.Rosenbaum">CausalInference.Sensitivity.Rosenbaum</a></p>
+
+<h2 id="estimation">Coverage of the Wald interval</h2>
+<span class="cls general">design-based inference</span>
+<p>If √n (θ̂<sub>n</sub> − θ) converges in distribution to a normal law with variance σ² &gt; 0 and the standard error estimate is consistent for σ, then the coverage probability of the Wald interval θ̂<sub>n</sub> ± z σ̂<sub>n</sub>/√n converges to 1 − α, where Φ(z) = 1 − α/2.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">tendsto_waldInterval_coverage</span> {μ : Measure Ω} [IsProbabilityMeasure μ]
+  {θhat σhat : <span class="t"><span class="t">ℕ</span></span> → Ω → <span class="t"><span class="t">ℝ</span></span>} {θ σ z α : <span class="t"><span class="t">ℝ</span></span>} (hσ : 0 &lt; σ) (hz : 0 ≤ z)
+  (hzα : cdf (gaussianReal 0 1) z = 1 - α / 2)
+  {Ω' : <span class="k"><span class="k">Type</span></span>*} {mΩ' : MeasurableSpace Ω'} {P' : Measure Ω'} [IsProbabilityMeasure P']
+  {Y : Ω' → <span class="t"><span class="t">ℝ</span></span>} (hY : HasLaw Y (gaussianReal 0 (σ ^ 2).toNNReal) P')
+  (hAN : TendstoInDistribution (<span class="k"><span class="k">fun</span></span> (n : <span class="t"><span class="t">ℕ</span></span>) ω ↦ √n * (θhat n ω - θ)) atTop Y (<span class="k"><span class="k">fun</span></span> _ ↦ μ) P')
+  (hσhat : IsConsistent σhat σ μ) (hσmeas : <span class="k"><span class="k">∀</span></span> n, AEMeasurable (σhat n) μ) :
+  Tendsto (<span class="k"><span class="k">fun</span></span> n ↦ μ.real {ω | θ ∈ waldInterval (θhat n ω) (σhat n ω) z n}) atTop
+    (𝓝 (1 - α))</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.tendsto_waldInterval_coverage">CausalInference.tendsto_waldInterval_coverage</a> in <a href="reference.html#mod-Estimation.ConfidenceInterval">CausalInference.Estimation.ConfidenceInterval</a></p>
+
+<h2 id="identification">What point identification means</h2>
+<span class="cls tooling">structure</span>
+<p>A parameter is point identified on a class of models exactly when it factors through the observation: there is a function f of the observed data with θ(m) = f(obs(m)) for every model m in the class. The missing data result above is stated in this framework, and the Manski bounds are stated as identified sets in it.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">pointIdentified_iff_exists_factor</span> [Nonempty Θ] :
+  PointIdentified S obs θ ↔ <span class="k"><span class="k">∃</span></span> f : O → Θ, <span class="k"><span class="k">∀</span></span> m ∈ S, θ m = f (obs m)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.pointIdentified_iff_exists_factor">CausalInference.pointIdentified_iff_exists_factor</a> in <a href="reference.html#mod-PartialIdentification.IdentifiedSet">CausalInference.PartialIdentification.IdentifiedSet</a></p>
+
+</main>
+</div>
+<footer class="site-footer"><div class="wrap">
+<p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
+<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+</div></footer>
+</body>
+</html>

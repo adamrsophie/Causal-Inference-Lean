@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Background and glossary: Causal Inference in Lean</title>
+<meta name="description" content="The causal inference terms used in the library, for readers with a first course in statistics: potential outcomes, identification versus estimation versus inference, randomization, instruments, parallel trends, interference, mediation, d-separation, interventions and latent projection, each with an example and a link to the Lean source.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+<nav class="navbar" aria-label="Main">
+<a class="brand" href="index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="11" r="2.6" fill="currentColor"/><circle cx="22" cy="11" r="2.6" fill="currentColor"/><circle cx="16" cy="22" r="2.6" fill="currentColor"/><path d="M11.5 13.2 14.6 19.4M20.5 13.2 17.4 19.4M12.8 11h6.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Causal Inference <small>in Lean</small></span></a>
+<ul class="tabs" id="site-tabs">
+<li><a href="map.html">Map</a></li>
+<li class="sec current"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-learn">Learn<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-learn"><li><a href="background.html" aria-current="page"><b>Background</b><span>The causal inference terms used in the library, each with an example.</span></a></li><li><a href="methods.html"><b>Methods</b><span>How results are stated here, each rule with an instance from the source.</span></a></li><li><a href="survey.html"><b>Survey</b><span>The published sources the modules formalize, in aggregate.</span></a></li><li><a href="register.html"><b>Source register</b><span>Every cited source with the Lean files that formalize it.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-library">Library<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-library"><li><a href="theorems.html"><b>Highlights</b><span>The flagship result of each area, in plain language, with its Lean statement.</span></a></li><li><a href="reference.html"><b>Reference</b><span>Every module and public declaration, grouped by area, with a filter.</span></a></li><li><a href="network.html"><b>Network</b><span>The areas of the library and how they depend on one another.</span></a></li><li><a href="milestones.html"><b>Milestones</b><span>The timeline of commits on the main branch.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-status">Status<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-status"><li><a href="roadmap.html"><b>Roadmap</b><span>One table with the status of every area: on the main branch, in progress, planned.</span></a></li><li><a href="obstacles.html"><b>Limits</b><span>What the library does not cover, and the counterexamples that mark its boundaries.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-take-part">Take part<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-take-part"><li><a href="procedure.html"><b>Procedure</b><span>What verified means here, the trust policy, and how to reproduce the check.</span></a></li><li><a href="join.html"><b>Contribute</b><span>How to propose a result and how it is checked.</span></a></li></ul></li>
+</ul>
+<div class="nav-end"><a class="source" href="https://github.com/adamrsophie/Causal-Inference-Lean">Source</a></div>
+</nav>
+</header>
+<div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
+<div class="page wrap with-toc">
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#po-framework">Potential outcomes</a></li><li class="l3"><a href="#potential-outcomes">Potential outcomes and consistency</a></li><li class="l3"><a href="#effects">Causal effects</a></li><li class="l3"><a href="#identification">Identification, estimation and inference</a></li><li class="l3"><a href="#identified-set">Identified set and point identification</a></li><li class="l3"><a href="#assumptions">Ignorability and positivity</a></li><li class="l2"><a href="#designs">Designs</a></li><li class="l3"><a href="#design-based">Design-based inference</a></li><li class="l3"><a href="#sharp-null">Sharp null and the randomization test</a></li><li class="l3"><a href="#instrument">Instrument, principal strata and compliers</a></li><li class="l3"><a href="#parallel-trends">Parallel trends</a></li><li class="l3"><a href="#rd">Regression discontinuity</a></li><li class="l3"><a href="#synthetic">Synthetic control</a></li><li class="l3"><a href="#interference">Interference</a></li><li class="l3"><a href="#mediation">Mediation and cross-world quantities</a></li><li class="l3"><a href="#missing">Missing data mechanisms</a></li><li class="l3"><a href="#sensitivity">Sensitivity analysis</a></li><li class="l2"><a href="#graphs">Causal graphs</a></li><li class="l3"><a href="#dag">Causal graph, parents and ancestors</a></li><li class="l3"><a href="#intervention">Intervention and graph surgery</a></li><li class="l3"><a href="#d-separation">d-separation</a></li><li class="l3"><a href="#admg">Mixed graphs and districts</a></li><li class="l3"><a href="#latent-projection">Latent projection</a></li><li class="l2"><a href="#estimation">Estimation</a></li><li class="l3"><a href="#asymptotics">Consistency, asymptotic linearity and coverage</a></li></ul></nav></details></aside>
+<main id="content" tabindex="-1">
+<h1>Background and glossary</h1>
+<p class="lead">The terms used across this site, each with a definition, a small example, and a link to where the library defines or uses it. Every numerical example on this page is recomputed with exact rational arithmetic by a script that ships with the site generator.</p>
+<p class="sub">Notation: Y(1) and Y(0) are potential outcomes, A or D a binary treatment, Z an instrument, E the mean, and P a probability. The library writes potential outcomes as functions: for example <code>Y z d</code> in the instrumental variable model, or the vectors <code>y1 y0 : ι → ℝ</code> of a finite population.</p>
+<nav aria-label="Glossary index" class="callout"><p><strong>Glossary:</strong>
+<a href="#potential-outcomes">potential outcomes</a> ·
+<a href="#effects">causal effects</a> ·
+<a href="#identification">identification, estimation, inference</a> ·
+<a href="#identified-set">identified set</a> ·
+<a href="#assumptions">ignorability and positivity</a> ·
+<a href="#design-based">design-based inference</a> ·
+<a href="#sharp-null">sharp null</a> ·
+<a href="#instrument">instrument and compliers</a> ·
+<a href="#parallel-trends">parallel trends</a> ·
+<a href="#rd">regression discontinuity</a> ·
+<a href="#synthetic">synthetic control</a> ·
+<a href="#interference">interference</a> ·
+<a href="#mediation">mediation</a> ·
+<a href="#missing">missing data</a> ·
+<a href="#sensitivity">sensitivity analysis</a> ·
+<a href="#dag">causal graph</a> ·
+<a href="#intervention">intervention and surgery</a> ·
+<a href="#d-separation">d-separation</a> ·
+<a href="#admg">mixed graphs and districts</a> ·
+<a href="#latent-projection">latent projection</a> ·
+<a href="#asymptotics">consistency and coverage</a>
+</p></nav>
+
+<h2 id="po-framework">Potential outcomes</h2>
+
+<h3 id="potential-outcomes">Potential outcomes and consistency</h3>
+<p><b>Definition.</b> Each unit has one potential outcome for each treatment value: Y(1) if treated and Y(0) if not. Only one of them is observed, the one for the treatment the unit received; the link between the observed outcome and the potential outcomes is called consistency. In this library the observed outcome is usually <em>defined</em> from the potential outcomes and the treatment, so consistency holds by construction; where it is a genuine assumption (as for no anticipation in difference in differences) it is a separate hypothesis.</p>
+<p><b>Example.</b> A unit with Y(1) = 5 and Y(0) = 2 that is treated shows the outcome 5; the value 2 is never seen.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Randomized.PotentialOutcomes"><code>Randomized.PotentialOutcomes</code></a> and <a href="reference.html#CausalInference.Randomized.PotentialOutcomes.observed"><code>PotentialOutcomes.observed</code></a> for a finite population; <a href="reference.html#CausalInference.TwoPeriod.Consistency"><code>TwoPeriod.Consistency</code></a> where consistency is assumed.</p>
+
+<h3 id="effects">Causal effects</h3>
+<p><b>Definition.</b> The average treatment effect is E[Y(1) − Y(0)]; the effect on the treated, E[Y(1) − Y(0) | treated]; the complier effect, the same mean among compliers. In a finite population the mean is an average over the units, in a superpopulation an integral against a probability measure.</p>
+<p><b>Example.</b> Four units with Y(1) = (3, 5, 4, 8) and Y(0) = (1, 2, 4, 5) have unit effects (2, 3, 0, 3) and average treatment effect 2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Randomized.PotentialOutcomes.ate"><code>PotentialOutcomes.ate</code></a>, <a href="reference.html#CausalInference.TwoPeriod.att"><code>TwoPeriod.att</code></a>, <a href="reference.html#CausalInference.IVModel.complierEffect"><code>IVModel.complierEffect</code></a>; the four units are <a href="reference.html#CausalInference.Randomized.fourUnitPO"><code>fourUnitPO</code></a>.</p>
+
+<h3 id="identification">Identification, estimation and inference</h3>
+<p><b>Definition.</b> <em>Identification</em> asks whether a causal quantity is determined by the distribution of the observed data, given the assumptions; an identification theorem writes it as a functional of that distribution. <em>Estimation</em> builds a function of a sample that approximates the functional. <em>Inference</em> quantifies the uncertainty: a test, a p-value, a confidence interval. The library keeps the three apart: identification theorems are statements about distributions, and estimation and inference theorems are about samples or about the randomization of a design.</p>
+<p><b>Example.</b> Under parallel trends the effect on the treated equals the difference in differences of four conditional means (identification). The same difference computed from sample means estimates it, and a confidence interval for it is inference.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.TwoPeriod.att_eq_did"><code>TwoPeriod.att_eq_did</code></a> (identification); <a href="reference.html#CausalInference.IsConsistent"><code>IsConsistent</code></a> and <a href="reference.html#CausalInference.waldInterval"><code>waldInterval</code></a> (estimation and inference).</p>
+
+<h3 id="identified-set">Identified set and point identification</h3>
+<p><b>Definition.</b> Given a class of models (those satisfying the assumptions), an observation map and a parameter, the identified set at an observation is the set of parameter values of all models in the class with that observation. The parameter is point identified when every identified set has at most one element, equivalently when it is a function of the observation on the class.</p>
+<p><b>Example.</b> With outcomes in [0, 1], half of the units treated and a treated mean of 0.6, the mean of Y(1) is only known to lie in [0.3, 0.8]: the observed half contributes 0.3, and the unobserved half contributes anything from 0 to 0.5.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.identifiedSet"><code>identifiedSet</code></a>, <a href="reference.html#CausalInference.PointIdentified"><code>PointIdentified</code></a>; the Manski bounds in <a href="reference.html#mod-PartialIdentification.Manski"><code>PartialIdentification.Manski</code></a>.</p>
+
+<h3 id="assumptions">Ignorability and positivity</h3>
+<p><b>Definition.</b> Ignorability (also called exchangeability or unconfoundedness) says that treatment is independent of the potential outcomes, possibly given covariates. Positivity says that every relevant treatment value has positive probability, so the conditional means used by an identification formula are defined. In the library each is stated with Mathlib's independence and measure notions, as a hypothesis of the theorem that needs it.</p>
+<p><b>Example.</b> The mediation formula needs treatment ignorability for both the outcome and the mediator, and positivity of every cell A = a, M = m that it averages over.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.IVModel.InstrumentIndependence"><code>IVModel.InstrumentIndependence</code></a>; the hypotheses of <a href="reference.html#CausalInference.Mediation.MediationModel.integral_nested_eq_mediationFormula"><code>integral_nested_eq_mediationFormula</code></a>.</p>
+
+<h2 id="designs">Designs</h2>
+
+<h3 id="design-based">Design-based inference</h3>
+<p><b>Definition.</b> In the design-based view the potential outcomes of a finite population are fixed numbers, and the only randomness is the assignment of treatment, drawn from a known design. Expectations and variances are taken over the assignments. Neyman's formula gives the variance of the difference in means under complete randomization.</p>
+<p><b>Example.</b> For the four units above with two treated, the six possible assignments are equally likely. The finite population variances are S<sub>1</sub>² = 14/3, S<sub>0</sub>² = 10/3 and S<sub>τ</sub>² = 2, so Neyman's formula gives (14/3)/2 + (10/3)/2 − 2/4 = 7/2, which is also the variance of the six differences in means around their mean 2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Randomized.Design"><code>Randomized.Design</code></a>, <a href="reference.html#CausalInference.Randomized.completeDesign"><code>completeDesign</code></a>, <a href="reference.html#CausalInference.Randomized.neyman_variance"><code>neyman_variance</code></a>, and the example <a href="reference.html#CausalInference.Randomized.fourUnit_variance"><code>fourUnit_variance</code></a>.</p>
+
+<h3 id="sharp-null">Sharp null and the randomization test</h3>
+<p><b>Definition.</b> Fisher's sharp null says that treatment affects no unit: Y(1) = Y(0) for every unit. Under it, the outcomes that would have been observed under any other assignment are known, so the randomization distribution of a test statistic is known exactly, and the p-value is the share of assignments whose statistic is at least the observed one.</p>
+<p><b>Example.</b> With six equally likely assignments, if only the observed assignment reaches the observed statistic, the p-value is 1/6.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Randomized.PotentialOutcomes.SharpNull"><code>PotentialOutcomes.SharpNull</code></a>, <a href="reference.html#CausalInference.Randomized.Design.fisherPValue"><code>Design.fisherPValue</code></a>, <a href="reference.html#CausalInference.Randomized.fisher_pValue_valid"><code>fisher_pValue_valid</code></a>.</p>
+
+<h3 id="instrument">Instrument, principal strata and compliers</h3>
+<p><b>Definition.</b> A binary instrument Z affects the treatment D, and affects the outcome only through D (the exclusion restriction). Units fall into four principal strata by their potential treatments (D under Z = 0, D under Z = 1): never-takers, always-takers, compliers and defiers. Monotonicity rules out defiers.</p>
+<p><b>Example.</b> In an encouragement trial, compliers take the treatment exactly when encouraged. The Wald ratio estimates their average effect, not the effect in the whole population.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.IVModel"><code>IVModel</code></a>, <a href="reference.html#CausalInference.IVModel.Exclusion"><code>IVModel.Exclusion</code></a>, <a href="reference.html#CausalInference.IVModel.Monotonicity"><code>IVModel.Monotonicity</code></a>, <a href="reference.html#CausalInference.IVModel.compliers"><code>IVModel.compliers</code></a>.</p>
+
+<h3 id="parallel-trends">Parallel trends</h3>
+<p><b>Definition.</b> In difference in differences, parallel trends says that the mean change of the untreated potential outcome from the pre period to the post period is the same in the treated group as in the control group. No anticipation says that treatment in the post period does not change outcomes in the pre period.</p>
+<p><b>Example.</b> Under staggered adoption the static two-way fixed effects coefficient is a weighted sum of group-time effects that can have negative weights. In the library's example with group-time effects 1, 4 and 1 its closed form gives 1 − 4/2 + 1/2 = −1/2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.TwoPeriod.ParallelTrends"><code>TwoPeriod.ParallelTrends</code></a>, <a href="reference.html#CausalInference.TwoPeriod.NoAnticipation"><code>TwoPeriod.NoAnticipation</code></a>, <a href="reference.html#CausalInference.EventStudy.twfeCoef"><code>EventStudy.twfeCoef</code></a>.</p>
+
+<h3 id="rd">Regression discontinuity</h3>
+<p><b>Definition.</b> Treatment is assigned, or encouraged, when a running variable X crosses a cutoff c. In the sharp design treatment is exactly 1{X ≥ c}; in the fuzzy design the probability of treatment jumps at c. Identification compares the limits of the observed regression of Y on X from the right and from the left of c.</p>
+<p><b>Example.</b> If the observed mean outcome tends to 7 just above the cutoff and to 5 just below, and the untreated and treated mean outcomes are continuous at c, the effect at the cutoff is 2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.RD.observedRegression"><code>RD.observedRegression</code></a>, <a href="reference.html#CausalInference.RD.sharp_rd_identification"><code>sharp_rd_identification</code></a>.</p>
+
+<h3 id="synthetic">Synthetic control</h3>
+<p><b>Definition.</b> A single treated unit is compared with a weighted average of untreated donor units, the synthetic control, with nonnegative weights summing to one chosen to fit the treated unit before treatment. The estimated effect is the gap after treatment.</p>
+<p><b>Example.</b> With two donors and weights 0.25 and 0.75, a donor outcome pair (8, 12) gives the synthetic outcome 0.25·8 + 0.75·12 = 11, which always lies between the smallest and largest donor outcome.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.SyntheticControl.synth"><code>SyntheticControl.synth</code></a>; the factor model in <a href="reference.html#mod-Designs.SyntheticControl.FactorModel"><code>Designs.SyntheticControl.FactorModel</code></a>.</p>
+
+<h3 id="interference">Interference</h3>
+<p><b>Definition.</b> There is interference when the outcome of a unit depends on the treatment of other units. No interference (part of SUTVA) says that it depends only on the unit's own treatment. Partial interference allows dependence within groups but not across groups. Hudgens and Halloran define direct, indirect, total and overall effects of an allocation strategy.</p>
+<p><b>Example.</b> Two units that respond only when both are treated: the effect of treating one unit is 0 or 1 depending on the other, so a unit level effect is not well defined.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Interference.NoInterference"><code>Interference.NoInterference</code></a>, <a href="reference.html#CausalInference.Interference.PartialInterference"><code>Interference.PartialInterference</code></a>, and the example in <a href="reference.html#mod-Interference.Counterexamples"><code>Interference.Counterexamples</code></a>.</p>
+
+<h3 id="mediation">Mediation and cross-world quantities</h3>
+<p><b>Definition.</b> A mediator M lies on a path from treatment to outcome. The nested potential outcome Y(a, M(a′)) sets treatment to a and the mediator to the value it would take under a′. When a ≠ a′ it combines two worlds that never coexist, so its mean is a cross-world quantity. The natural direct effect compares Y(1, M(0)) with Y(0, M(0)); the natural indirect effect compares Y(a, M(1)) with Y(a, M(0)); the controlled direct effect fixes M = m.</p>
+<p><b>Example.</b> The total effect is the sum of the pure natural direct effect and the total natural indirect effect: TE = NDE(0) + NIE(1).</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Mediation.MediationModel.nde"><code>MediationModel.nde</code></a>, <a href="reference.html#CausalInference.Mediation.MediationModel.nie"><code>MediationModel.nie</code></a>, <a href="reference.html#CausalInference.Mediation.MediationModel.cde"><code>MediationModel.cde</code></a>.</p>
+
+<h3 id="missing">Missing data mechanisms</h3>
+<p><b>Definition.</b> With a response indicator R, data are missing completely at random (MCAR) when R is independent of the data, missing at random (MAR) when R is independent of the outcome given observed covariates, and missing not at random (MNAR) otherwise. Under MAR and positivity, inverse probability weighting by the response propensity recovers full-data means.</p>
+<p><b>Example.</b> If half of the outcomes in a stratum of X are observed, each observed outcome in that stratum is weighted by 2.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.MissingData.MCAR"><code>MissingData.MCAR</code></a>, <a href="reference.html#CausalInference.MissingData.MAR"><code>MissingData.MAR</code></a>, <a href="reference.html#CausalInference.MissingData.MNAR"><code>MissingData.MNAR</code></a>, <a href="reference.html#CausalInference.MissingData.ipw_identity"><code>ipw_identity</code></a>.</p>
+
+<h3 id="sensitivity">Sensitivity analysis</h3>
+<p><b>Definition.</b> A sensitivity analysis asks how strong an unmeasured confounder would have to be to change a conclusion. In Rosenbaum's model for matched pairs, the odds of treatment of the two units of a pair may differ by at most a factor Γ ≥ 1; Γ = 1 is a randomized paired experiment.</p>
+<p><b>Example.</b> With Γ = 3 the probability that a given unit of a pair is the treated one lies between 1/4 and 3/4.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.Rosenbaum.InSensitivityModel"><code>Rosenbaum.InSensitivityModel</code></a>; bias formulas in <a href="reference.html#mod-Sensitivity.BiasFormulas"><code>Sensitivity.BiasFormulas</code></a>.</p>
+
+<h2 id="graphs">Causal graphs</h2>
+
+<h3 id="dag">Causal graph, parents and ancestors</h3>
+<p><b>Definition.</b> A causal graph is a directed graph whose edge u → v says that u is a direct cause of v. The parents of v are the vertices with an edge into v; u is an ancestor of v when a directed path leads from u to v. The graph is acyclic (a DAG) when no vertex is its own strict ancestor. On a finite vertex set this holds exactly when the vertices can be numbered so that every edge goes up.</p>
+<p><b>Example.</b> In Z → X → Y, X is the only parent of Y and both Z and X are ancestors of Y; numbering Z, X, Y as 0, 1, 2 is a topological order.</p>
+<p><b>In the library.</b> Mathlib's <code>Digraph</code>, with <a href="reference.html#Digraph.parents"><code>Digraph.parents</code></a>, <a href="reference.html#Digraph.ancestorsOf"><code>Digraph.ancestorsOf</code></a>, <a href="reference.html#Digraph.IsAcyclic"><code>Digraph.IsAcyclic</code></a> and <a href="reference.html#Digraph.isAcyclic_iff_exists_adj_lt"><code>isAcyclic_iff_exists_adj_lt</code></a>.</p>
+
+<h3 id="intervention">Intervention and graph surgery</h3>
+<p><b>Definition.</b> The intervention do(X = x) sets X by external action, which cuts every arrow into X. In the graph this is the surgery that deletes the incoming edges of X; deleting the outgoing edges is the other surgery used by the rules of the do-calculus.</p>
+<p><b>Example.</b> In Z → X → Y with X ← U → Y, the graph of do(X) keeps X → Y and U → Y and deletes Z → X and U → X.</p>
+<p><b>In the library.</b> <a href="reference.html#Digraph.deleteIncoming"><code>Digraph.deleteIncoming</code></a> and its properties in <a href="reference.html#mod-Graphical.Mutilation"><code>Graphical.Mutilation</code></a>.</p>
+
+<h3 id="d-separation">d-separation</h3>
+<p><b>Definition.</b> A path between two vertices is blocked by a set S when it has a chain or fork whose middle vertex is in S, or a collider (→ v ←) such that neither v nor any descendant of v is in S. Two sets are d-separated by S when every path between them is blocked. In a distribution that factorizes along the graph, d-separation implies conditional independence.</p>
+<p><b>Example.</b> In X → C ← Y, X and Y are d-separated by the empty set, because the collider C blocks the path; conditioning on C opens it.</p>
+<p><b>In the library.</b> <a href="reference.html#Digraph.DSep"><code>Digraph.DSep</code></a>, with the decision procedure and examples in the d-separation modules of the <a href="reference.html#graphs">Causal graphs</a> area. The link to conditional independence, the global Markov property, is <a href="reference.html#Digraph.Factorizes.condIndep_of_dSep"><code>Factorizes.condIndep_of_dSep</code></a>.</p>
+
+<h3 id="admg">Mixed graphs and districts</h3>
+<p><b>Definition.</b> An acyclic directed mixed graph (ADMG) adds bidirected edges u ↔ v to a DAG, standing for a hidden common cause. Its districts (also called c-components) are the classes of vertices connected by bidirected edges.</p>
+<p><b>Example.</b> In the front-door graph X → M → Y with X ↔ Y, the districts are {X, Y} and {M}.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.ADMG"><code>ADMG</code></a>, <a href="reference.html#CausalInference.ADMG.district"><code>ADMG.district</code></a>, and checked examples in <a href="reference.html#mod-Graphical.ADMGExamples"><code>Graphical.ADMGExamples</code></a>.</p>
+
+<h3 id="latent-projection">Latent projection</h3>
+<p><b>Definition.</b> The latent projection of a graph onto its observed vertices removes the latent vertices and records what they carried: a directed edge u → v for a directed path through latent vertices only, and a bidirected edge u ↔ v for a latent common cause of u and v.</p>
+<p><b>Example.</b> Projecting U out of X ← U → Y, X → Y gives X → Y with X ↔ Y, the bow graph.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.ADMG.project"><code>ADMG.project</code></a>, <a href="reference.html#CausalInference.latentProjection"><code>latentProjection</code></a>, and the composition law <a href="reference.html#CausalInference.ADMG.project_project"><code>ADMG.project_project</code></a>.</p>
+
+<h2 id="estimation">Estimation</h2>
+
+<h3 id="asymptotics">Consistency, asymptotic linearity and coverage</h3>
+<p><b>Definition.</b> A sequence of estimators is consistent when it converges in probability to the target. It is asymptotically linear with influence function φ when √n times its error is the scaled sample mean of φ plus a term that vanishes in probability. A confidence interval has asymptotic coverage 1 − α when the probability that it contains the target tends to 1 − α.</p>
+<p><b>Example.</b> With α = 0.05 the Wald interval uses z ≈ 1.96, the point where the standard normal distribution function equals 0.975.</p>
+<p><b>In the library.</b> <a href="reference.html#CausalInference.IsConsistent"><code>IsConsistent</code></a>, <a href="reference.html#CausalInference.IsAsymptoticallyLinear"><code>IsAsymptoticallyLinear</code></a>, <a href="reference.html#CausalInference.waldInterval"><code>waldInterval</code></a>.</p>
+
+</main>
+</div>
+<footer class="site-footer"><div class="wrap">
+<p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
+<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+</div></footer>
+</body>
+</html>

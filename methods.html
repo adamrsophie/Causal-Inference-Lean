@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methods: Causal Inference in Lean</title>
+<meta name="description" content="How results are stated in the library, each rule with an instance from the Lean source: explicit assumptions, observed data defined from potential outcomes, finite versus measurable settings, counterexamples paired with positive results, no totalized values carrying a result, and non-identification as a theorem.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+<nav class="navbar" aria-label="Main">
+<a class="brand" href="index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="11" r="2.6" fill="currentColor"/><circle cx="22" cy="11" r="2.6" fill="currentColor"/><circle cx="16" cy="22" r="2.6" fill="currentColor"/><path d="M11.5 13.2 14.6 19.4M20.5 13.2 17.4 19.4M12.8 11h6.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Causal Inference <small>in Lean</small></span></a>
+<ul class="tabs" id="site-tabs">
+<li><a href="map.html">Map</a></li>
+<li class="sec current"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-learn">Learn<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-learn"><li><a href="background.html"><b>Background</b><span>The causal inference terms used in the library, each with an example.</span></a></li><li><a href="methods.html" aria-current="page"><b>Methods</b><span>How results are stated here, each rule with an instance from the source.</span></a></li><li><a href="survey.html"><b>Survey</b><span>The published sources the modules formalize, in aggregate.</span></a></li><li><a href="register.html"><b>Source register</b><span>Every cited source with the Lean files that formalize it.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-library">Library<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-library"><li><a href="theorems.html"><b>Highlights</b><span>The flagship result of each area, in plain language, with its Lean statement.</span></a></li><li><a href="reference.html"><b>Reference</b><span>Every module and public declaration, grouped by area, with a filter.</span></a></li><li><a href="network.html"><b>Network</b><span>The areas of the library and how they depend on one another.</span></a></li><li><a href="milestones.html"><b>Milestones</b><span>The timeline of commits on the main branch.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-status">Status<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-status"><li><a href="roadmap.html"><b>Roadmap</b><span>One table with the status of every area: on the main branch, in progress, planned.</span></a></li><li><a href="obstacles.html"><b>Limits</b><span>What the library does not cover, and the counterexamples that mark its boundaries.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-take-part">Take part<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-take-part"><li><a href="procedure.html"><b>Procedure</b><span>What verified means here, the trust policy, and how to reproduce the check.</span></a></li><li><a href="join.html"><b>Contribute</b><span>How to propose a result and how it is checked.</span></a></li></ul></li>
+</ul>
+<div class="nav-end"><a class="source" href="https://github.com/adamrsophie/Causal-Inference-Lean">Source</a></div>
+</nav>
+</header>
+<div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
+<div class="page wrap with-toc">
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#assumptions">Every assumption is a hypothesis</a></li><li class="l2"><a href="#observed">Observed data are defined, not assumed</a></li><li class="l2"><a href="#finite">Finite and measurable settings are kept apart</a></li><li class="l2"><a href="#counterexamples">Positive results are paired with counterexamples</a></li><li class="l2"><a href="#totalized">No result rests on a totalized value</a></li><li class="l2"><a href="#non-identification">Non-identification is a theorem</a></li><li class="l2"><a href="#decide">Finite facts are checked by computation</a></li></ul></nav></details></aside>
+<main id="content" tabindex="-1">
+<h1>Methods</h1>
+<p class="lead">A formal statement is only as good as its hypotheses. The library follows a few rules that make every theorem say what it seems to say. Each section states one rule and gives an instance taken from the Lean source on the main branch. Terms are defined on the <a href="background.html">Background</a> page.</p>
+
+<h2 id="assumptions">Every assumption is a hypothesis</h2>
+<p><b>The rule.</b> A modeling assumption, such as the exclusion restriction, parallel trends or cross-world independence, is a named proposition, and a theorem that uses it takes it as an explicit hypothesis. Nothing is assumed globally, there is no axiom about the world, and the structures that describe a model carry its variables and their measurability, while the modeling assumptions are separate propositions. So the list of hypotheses of a theorem is the complete list of what it assumes, and a reader can check that each one is used for what it says.</p>
+<p><b>Instance.</b> In the instrumental variable model the exclusion restriction, instrument independence, relevance and monotonicity are four separate definitions. Monotonicity, for example:</p>
+<pre class="lean"><code><code><span class="k">def</span> <span class="n">Monotonicity</span> (μ : Measure Ω) : <span class="k"><span class="k">Prop</span></span> := <span class="k"><span class="k">∀</span></span>ᵐ ω ∂μ, M.D false ω ≤ M.D true ω</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/7f2b9d00897465c0aef20bdaba03f142a13c1401/CausalInference/InstrumentalVariables/Basic.lean">CausalInference/InstrumentalVariables/Basic.lean</a></p>
+<p>The local average treatment effect theorem then lists them as hypotheses <code>hE</code>, <code>hI</code>, <code>hM</code>, <code>hR</code>, next to the positivity and integrability conditions:</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">wald_eq_complierEffect</span> [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
+  (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ) (hR : M.Relevance μ)
+  (hY : <span class="k"><span class="k">∀</span></span> z, Integrable (M.YD z) μ) (z : Bool) :
+  M.wald μ = M.complierEffect μ z</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.IVModel.wald_eq_complierEffect">CausalInference.IVModel.wald_eq_complierEffect</a> in <a href="reference.html#mod-InstrumentalVariables.LATE">CausalInference.InstrumentalVariables.LATE</a></p>
+
+<h2 id="observed">Observed data are defined, not assumed</h2>
+<p><b>The rule.</b> Where possible, the observed variables are defined from the potential outcomes and the realized treatment, so consistency holds by construction and cannot be forgotten. Where the link between observed and potential outcomes is itself an assumption, it is a separate hypothesis.</p>
+<p><b>Instance.</b> In the instrumental variable model the observed outcome is the potential outcome at the realized instrument and treatment:</p>
+<pre class="lean"><code><code><span class="k">def</span> <span class="n">Yobs</span> (ω : Ω) : <span class="t"><span class="t">ℝ</span></span> := M.Y (M.Z ω) (M.Dobs ω) ω</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/7f2b9d00897465c0aef20bdaba03f142a13c1401/CausalInference/InstrumentalVariables/Basic.lean">CausalInference/InstrumentalVariables/Basic.lean</a></p>
+<p>In the two-period difference in differences design, by contrast, observed outcomes are separate functions linked to potential outcomes by <a href="reference.html#CausalInference.TwoPeriod.Consistency"><code>TwoPeriod.Consistency</code></a>, so that no anticipation is a genuine assumption about the pre period.</p>
+
+<h2 id="finite">Finite and measurable settings are kept apart</h2>
+<p><b>The rule.</b> A result about a finite population, or with finitely many values, is stated in a finite setting with finite sums; a result about a superpopulation is stated on a measure space with Mathlib's integrals, conditional measures and independence. The two are not mixed, and module docstrings describe their setting. A finite result is not presented as a general one.</p>
+<p><b>Instance.</b> Randomized designs are finite: a design is a finite set of assignments with nonnegative weights summing to one, and expectations are weighted sums.</p>
+<pre class="lean"><code><code><span class="k">structure</span> <span class="n">Design</span> (ι : <span class="k"><span class="k">Type</span></span>*) <span class="k"><span class="k">where</span></span>
+  /-- The summation set: every assignment that can be drawn lies in it. -/
+  support : Finset (ι → Bool)
+  /-- The probability of each assignment in `support`; meaningless outside `support`. -/
+  weight : (ι → Bool) → <span class="t"><span class="t">ℝ</span></span>
+  weight_nonneg : <span class="k"><span class="k">∀</span></span> a ∈ support, 0 ≤ weight a
+  sum_weight : <span class="k"><span class="k">∑</span></span> a ∈ support, weight a = 1</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/7f2b9d00897465c0aef20bdaba03f142a13c1401/CausalInference/Designs/Randomized/FinitePopulation.lean">CausalInference/Designs/Randomized/FinitePopulation.lean</a></p>
+<p>The instrumental variable model, the difference in differences designs and the Manski bounds live on a measurable space with a probability or finite measure instead, and the mediation formula is proved for a finite mediator on a general probability space. The <a href="obstacles.html#finite">Limits</a> page lists which results are finite only.</p>
+
+<h2 id="counterexamples">Positive results are paired with counterexamples</h2>
+<p><b>The rule.</b> Where it is meaningful, an identification theorem comes with a concrete model in which one hypothesis fails and the conclusion fails with it, or with two models that agree on the observed data and disagree on the causal quantity. Such a counterexample is a theorem about explicit objects, checked like any other.</p>
+<p><b>Instance.</b> Difference in differences identifies the effect on the treated under parallel trends; without parallel trends, a two-unit model has difference in differences 1 and effect on the treated 0.</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">att_eq_did</span> {μ : Measure Ω} [IsProbabilityMeasure μ] {G : Ω → Bool}
+  {Y : Period → Bool → Ω → <span class="t"><span class="t">ℝ</span></span>} {Yobs : Period → Ω → <span class="t"><span class="t">ℝ</span></span>} (hG : MeasurableSet (treated G))
+  (hcons : Consistency G Y Yobs) (hNA : NoAnticipation μ G Y) (hPT : ParallelTrends μ G Y)
+  (hpos : 0 &lt; μ (treated G)) (hlt : μ (treated G) &lt; 1)
+  (hY : <span class="k"><span class="k">∀</span></span> t d, Integrable (Y t d) μ) :
+  att μ G Y = did μ G Yobs</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.TwoPeriod.att_eq_did">CausalInference.TwoPeriod.att_eq_did</a> in <a href="reference.html#mod-Designs.DifferenceInDifferences.TwoPeriod">CausalInference.Designs.DifferenceInDifferences.TwoPeriod</a></p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">cex_did_ne_att</span> :
+  Consistency cexGroup cexY cexYobs ∧ NoAnticipation cexMeasure cexGroup cexY ∧
+    0 &lt; cexMeasure (treated cexGroup) ∧ cexMeasure (treated cexGroup) &lt; 1 ∧
+    ¬ ParallelTrends cexMeasure cexGroup cexY ∧
+    did cexMeasure cexGroup cexYobs = 1 ∧ att cexMeasure cexGroup cexY = 0</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.TwoPeriod.cex_did_ne_att">CausalInference.TwoPeriod.cex_did_ne_att</a> in <a href="reference.html#mod-Designs.DifferenceInDifferences.TwoPeriod">CausalInference.Designs.DifferenceInDifferences.TwoPeriod</a></p>
+<p>The <a href="obstacles.html#counterexamples">Limits</a> page lists every counterexample of this kind on the main branch.</p>
+
+<h2 id="totalized">No result rests on a totalized value</h2>
+<p><b>The rule.</b> Lean's division is total, with x / 0 = 0, and Mathlib's conditional measure given a null event is the zero measure. An equation between two such values can hold for a trivial reason: both sides are 0. Statements are therefore written so that their content does not depend on these conventions: a quotient appears only with a hypothesis that its denominator is nonzero, and a conditional mean only with a hypothesis that the conditioning event has positive probability, or the conditioning is replaced by conditional mean functions.</p>
+<p><b>Instance.</b> In the local average treatment effect theorem above, relevance (<code>hR</code>, a nonzero first stage) is what makes the Wald ratio a genuine quotient; its docstring explains that without it both sides would be 0. In regression discontinuity, every statement is made through conditional mean functions of the running variable, so that nothing conditions on the null event X = c:</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">sharp_rd_identification</span> {c : <span class="t"><span class="t">ℝ</span></span>} {m1 m0 : <span class="t"><span class="t">ℝ</span></span> → <span class="t"><span class="t">ℝ</span></span>}
+  (h1 : Tendsto m1 (𝓝[&gt;] c) (𝓝 (m1 c))) (h0 : Tendsto m0 (𝓝[&lt;] c) (𝓝 (m0 c)))
+  {yPlus yMinus : <span class="t"><span class="t">ℝ</span></span>}
+  (hPlus : Tendsto (observedRegression c m1 m0) (𝓝[&gt;] c) (𝓝 yPlus))
+  (hMinus : Tendsto (observedRegression c m1 m0) (𝓝[&lt;] c) (𝓝 yMinus)) :
+  yPlus - yMinus = m1 c - m0 c</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.RD.sharp_rd_identification">CausalInference.RD.sharp_rd_identification</a> in <a href="reference.html#mod-Designs.RegressionDiscontinuity.Sharp">CausalInference.Designs.RegressionDiscontinuity.Sharp</a></p>
+
+<h2 id="non-identification">Non-identification is a theorem</h2>
+<p><b>The rule.</b> A claim that a quantity is not identified is proved, not asserted: either by exhibiting two models that satisfy the assumptions, have the same observed law, and have different values of the quantity, or as the negation of <a href="reference.html#CausalInference.PointIdentified"><code>PointIdentified</code></a>.</p>
+<p><b>Instance.</b> With bounded outcomes alone, the mean of Y(1) is not point identified as soon as the control group has positive probability:</p>
+<pre class="lean"><code><code><span class="k">theorem</span> <span class="n">not_pointIdentified_meanY1</span> [IsFiniteMeasure μ] (hA : Measurable A) (hlh : lo &lt; hi)
+  (hpos : 0 &lt; μ.real (treated A)ᶜ) :
+  ¬ PointIdentified (boundedModels lo hi) (observed A) (meanY1 μ)</code></code></pre><p class="src-link"><a href="reference.html#CausalInference.Manski.not_pointIdentified_meanY1">CausalInference.Manski.not_pointIdentified_meanY1</a> in <a href="reference.html#mod-PartialIdentification.Manski">CausalInference.PartialIdentification.Manski</a></p>
+
+<h2 id="decide">Finite facts are checked by computation</h2>
+<p><b>The rule.</b> Facts about explicit finite graphs (acyclicity, ancestors, districts, d-separation) are decided by procedures proved correct in the library and evaluated by <code>decide</code>, so worked examples are checked rather than claimed.</p>
+<p><b>Instance.</b> The front-door graph X → M → Y with X ↔ Y:</p>
+<pre class="lean"><code><code><span class="k">abbrev</span> <span class="n">frontDoor</span> : ADMG (Fin 3) := ofLists [(0, 1), (1, 2)] [(0, 2)]</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/7f2b9d00897465c0aef20bdaba03f142a13c1401/CausalInference/Graphical/ADMGExamples.lean">CausalInference/Graphical/ADMGExamples.lean</a></p>
+<p>Its acyclicity, the ancestor relation from X to Y, and its districts {X, Y} and {M} are each closed by <code>decide</code> in <a href="reference.html#mod-Graphical.ADMGExamples"><code>Graphical.ADMGExamples</code></a>; d-separation on concrete graphs is checked the same way in the d-separation modules.</p>
+
+</main>
+</div>
+<footer class="site-footer"><div class="wrap">
+<p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
+<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+</div></footer>
+</body>
+</html>

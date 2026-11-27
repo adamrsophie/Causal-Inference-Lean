@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contribute: Causal Inference in Lean</title>
+<meta name="description" content="How to propose a result for the Lean library on causal inference: open an issue, write the statement with explicit hypotheses, pass the gate in scripts/check.sh, and send a pull request. The library is free software under the GNU General Public License, version 3.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+<nav class="navbar" aria-label="Main">
+<a class="brand" href="index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="11" r="2.6" fill="currentColor"/><circle cx="22" cy="11" r="2.6" fill="currentColor"/><circle cx="16" cy="22" r="2.6" fill="currentColor"/><path d="M11.5 13.2 14.6 19.4M20.5 13.2 17.4 19.4M12.8 11h6.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Causal Inference <small>in Lean</small></span></a>
+<ul class="tabs" id="site-tabs">
+<li><a href="map.html">Map</a></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-learn">Learn<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-learn"><li><a href="background.html"><b>Background</b><span>The causal inference terms used in the library, each with an example.</span></a></li><li><a href="methods.html"><b>Methods</b><span>How results are stated here, each rule with an instance from the source.</span></a></li><li><a href="survey.html"><b>Survey</b><span>The published sources the modules formalize, in aggregate.</span></a></li><li><a href="register.html"><b>Source register</b><span>Every cited source with the Lean files that formalize it.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-library">Library<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-library"><li><a href="theorems.html"><b>Highlights</b><span>The flagship result of each area, in plain language, with its Lean statement.</span></a></li><li><a href="reference.html"><b>Reference</b><span>Every module and public declaration, grouped by area, with a filter.</span></a></li><li><a href="network.html"><b>Network</b><span>The areas of the library and how they depend on one another.</span></a></li><li><a href="milestones.html"><b>Milestones</b><span>The timeline of commits on the main branch.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-status">Status<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-status"><li><a href="roadmap.html"><b>Roadmap</b><span>One table with the status of every area: on the main branch, in progress, planned.</span></a></li><li><a href="obstacles.html"><b>Limits</b><span>What the library does not cover, and the counterexamples that mark its boundaries.</span></a></li></ul></li>
+<li class="sec current"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-take-part">Take part<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-take-part"><li><a href="procedure.html"><b>Procedure</b><span>What verified means here, the trust policy, and how to reproduce the check.</span></a></li><li><a href="join.html" aria-current="page"><b>Contribute</b><span>How to propose a result and how it is checked.</span></a></li></ul></li>
+</ul>
+<div class="nav-end"><a class="source" href="https://github.com/adamrsophie/Causal-Inference-Lean">Source</a></div>
+</nav>
+</header>
+<div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
+<div class="page wrap with-toc">
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#propose">Propose a result</a></li><li class="l2"><a href="#good-first">Where to start</a></li><li class="l2"><a href="#license">License</a></li></ul></nav></details></aside>
+<main id="content" tabindex="-1">
+<h1>Contribute</h1>
+<p class="lead">Contributions are welcome: a new theorem in an existing area, a counterexample that marks the boundary of a result, a module for an area on the <a href="roadmap.html">roadmap</a>, or a correction. Everything goes through the public repository on GitHub.</p>
+<p class="sub">Repository: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a></p>
+
+<h2 id="propose">Propose a result</h2>
+<ol class="steps">
+<li><b>Open an issue.</b>State the result in mathematical language, cite the published source where it appears, and say which area it belongs to. An issue first avoids duplicate work and settles the statement before the proof.</li>
+<li><b>Write the statement.</b>Follow the <a href="methods.html">Methods</a> page: every modeling assumption is a named hypothesis, the setting (finite or measurable) is explicit, and no statement draws its content from a totalized value such as division by zero. Where it is meaningful, pair a positive result with a counterexample.</li>
+<li><b>Document the module.</b>Each file opens with a module docstring that says what it proves, in which setting, and from which published sources, and notes any departure from them. Public declarations carry docstrings.</li>
+<li><b>Pass the gate.</b>Run <code>scripts/check.sh</code> locally. It must end with "All checks passed.": no placeholder or trust escape, every file imported by <code>CausalInference.lean</code>, a build with no warning, and only <code>propext</code>, <code>Classical.choice</code>, <code>Quot.sound</code> as axioms. The <a href="procedure.html">procedure</a> page explains each step.</li>
+<li><b>Open a pull request.</b>Describe what the change proves, in plain language. Continuous integration runs the same gate on the pull request.</li>
+</ol>
+
+<h2 id="good-first">Where to start</h2>
+<p>The areas in progress and the planned areas of the roadmap, and the restricted settings listed on the <a href="obstacles.html#finite">Limits</a> page, are natural places to extend the library: for instance, a result that is proved here only for a finite covariate or a binary treatment.</p>
+
+<h2 id="license">License</h2>
+<p>The library is free software under the GNU General Public License, version 3. By contributing you agree that your contribution is distributed under the same license.</p>
+
+</main>
+</div>
+<footer class="site-footer"><div class="wrap">
+<p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
+<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Literature survey: Causal Inference in Lean</title>
+<meta name="description" content="The published sources that the modules of the Lean library formalize, collected from the module docstrings and summarized by area.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+<nav class="navbar" aria-label="Main">
+<a class="brand" href="index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="11" r="2.6" fill="currentColor"/><circle cx="22" cy="11" r="2.6" fill="currentColor"/><circle cx="16" cy="22" r="2.6" fill="currentColor"/><path d="M11.5 13.2 14.6 19.4M20.5 13.2 17.4 19.4M12.8 11h6.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Causal Inference <small>in Lean</small></span></a>
+<ul class="tabs" id="site-tabs">
+<li><a href="map.html">Map</a></li>
+<li class="sec current"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-learn">Learn<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-learn"><li><a href="background.html"><b>Background</b><span>The causal inference terms used in the library, each with an example.</span></a></li><li><a href="methods.html"><b>Methods</b><span>How results are stated here, each rule with an instance from the source.</span></a></li><li><a href="survey.html" aria-current="page"><b>Survey</b><span>The published sources the modules formalize, in aggregate.</span></a></li><li><a href="register.html"><b>Source register</b><span>Every cited source with the Lean files that formalize it.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-library">Library<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-library"><li><a href="theorems.html"><b>Highlights</b><span>The flagship result of each area, in plain language, with its Lean statement.</span></a></li><li><a href="reference.html"><b>Reference</b><span>Every module and public declaration, grouped by area, with a filter.</span></a></li><li><a href="network.html"><b>Network</b><span>The areas of the library and how they depend on one another.</span></a></li><li><a href="milestones.html"><b>Milestones</b><span>The timeline of commits on the main branch.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-status">Status<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-status"><li><a href="roadmap.html"><b>Roadmap</b><span>One table with the status of every area: on the main branch, in progress, planned.</span></a></li><li><a href="obstacles.html"><b>Limits</b><span>What the library does not cover, and the counterexamples that mark its boundaries.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-take-part">Take part<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-take-part"><li><a href="procedure.html"><b>Procedure</b><span>What verified means here, the trust policy, and how to reproduce the check.</span></a></li><li><a href="join.html"><b>Contribute</b><span>How to propose a result and how it is checked.</span></a></li></ul></li>
+</ul>
+<div class="nav-end"><a class="source" href="https://github.com/adamrsophie/Causal-Inference-Lean">Source</a></div>
+</nav>
+</header>
+<div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
+<div class="page wrap no-toc">
+
+<main id="content" tabindex="-1">
+<h1>Literature survey</h1>
+<p class="lead">Every module states in its docstring which published sources it formalizes. This page summarizes those citations; the full list, with the mapping from each source to its Lean files, is the <a href="register.html">source register</a>.</p>
+<div class="grid">
+<div class="card"><h3>Sources</h3><p>60 published sources are cited on the main branch: 15 books and 45 articles or essays.</p></div>
+<div class="card"><h3>Modules with a source</h3><p>80 of the 95 modules cite at least one published source.</p></div>
+<div class="card"><h3>Modules without a source</h3><p>15 modules cite none: <a href="reference.html#mod-Mediation.Counterexamples"><code>Mediation.Counterexamples</code></a>, <a href="reference.html#mod-Graphical.ADMGExamples"><code>Graphical.ADMGExamples</code></a>, <a href="reference.html#mod-Graphical.Induce"><code>Graphical.Induce</code></a>, <a href="reference.html#mod-MissingData.Counterexamples"><code>MissingData.Counterexamples</code></a>, <a href="reference.html#mod-Estimation.DeltaMethod"><code>Estimation.DeltaMethod</code></a>, <a href="reference.html#mod-Survival.Basic"><code>Survival.Basic</code></a>, <a href="reference.html#mod-Survival.Censoring"><code>Survival.Censoring</code></a>, <a href="reference.html#mod-Survival.Comparison"><code>Survival.Comparison</code></a>, <a href="reference.html#mod-Survival.KaplanMeier"><code>Survival.KaplanMeier</code></a>, <a href="reference.html#mod-SCM.Basic"><code>SCM.Basic</code></a>, <a href="reference.html#mod-SCM.Counterfactuals"><code>SCM.Counterfactuals</code></a>, <a href="reference.html#mod-SCM.Effects"><code>SCM.Effects</code></a>, <a href="reference.html#mod-SCM.Intervention"><code>SCM.Intervention</code></a>, <a href="reference.html#mod-SCM.Markov"><code>SCM.Markov</code></a>, <a href="reference.html#mod-MissingData.Identification"><code>MissingData.Identification</code></a>. The docstring of each says what it contains.</p></div>
+<div class="card"><h3>How the list is kept</h3><p>The site generator reads every module docstring, checks each register entry against it, and reports any year in a docstring that no entry covers, so a new citation cannot be missed silently.</p></div>
+</div>
+
+<h2 id="by-area">By area</h2>
+<div class="tablewrap"><table><thead><tr><th scope="col">Area</th><th scope="col">Modules</th><th scope="col">Modules citing a source</th><th scope="col">Distinct sources</th></tr></thead><tbody><tr><td><a href="reference.html#graphs">Causal graphs</a></td><td>19</td><td>17</td><td>10</td></tr><tr><td><a href="reference.html#probability">Finite probability</a></td><td>2</td><td>2</td><td>3</td></tr><tr><td><a href="reference.html#partial-identification">Partial identification</a></td><td>2</td><td>2</td><td>3</td></tr><tr><td><a href="reference.html#randomized">Randomized experiments</a></td><td>8</td><td>8</td><td>4</td></tr><tr><td><a href="reference.html#did">Difference in differences</a></td><td>3</td><td>3</td><td>3</td></tr><tr><td><a href="reference.html#rd">Regression discontinuity</a></td><td>2</td><td>2</td><td>2</td></tr><tr><td><a href="reference.html#synthetic-control">Synthetic control</a></td><td>2</td><td>2</td><td>2</td></tr><tr><td><a href="reference.html#iv">Instrumental variables</a></td><td>6</td><td>6</td><td>7</td></tr><tr><td><a href="reference.html#interference">Interference</a></td><td>5</td><td>5</td><td>3</td></tr><tr><td><a href="reference.html#mediation">Mediation</a></td><td>4</td><td>3</td><td>4</td></tr><tr><td><a href="reference.html#missing-data">Missing data</a></td><td>5</td><td>3</td><td>3</td></tr><tr><td><a href="reference.html#bias">Selection bias and measurement error</a></td><td>3</td><td>3</td><td>2</td></tr><tr><td><a href="reference.html#sensitivity">Sensitivity analysis</a></td><td>3</td><td>3</td><td>7</td></tr><tr><td><a href="reference.html#longitudinal">Longitudinal treatments</a></td><td>5</td><td>5</td><td>3</td></tr><tr><td><a href="reference.html#measures">Effect measures</a></td><td>4</td><td>4</td><td>3</td></tr><tr><td><a href="reference.html#attribution">Probabilities of causation</a></td><td>4</td><td>4</td><td>3</td></tr><tr><td><a href="reference.html#interaction">Interaction</a></td><td>4</td><td>4</td><td>7</td></tr><tr><td><a href="reference.html#estimation">Estimation</a></td><td>5</td><td>4</td><td>2</td></tr><tr><td><a href="reference.html#other">Other modules</a></td><td>9</td><td>0</td><td>0</td></tr></tbody></table></div>
+<p class="sub">Statements borrowed from a source are proved again in Lean; nothing is assumed because a paper states it. Where a module departs from its source, for example by working in a finite or noiseless setting, its docstring says so, and the <a href="obstacles.html">Limits</a> page collects these restrictions.</p>
+
+</main>
+</div>
+<footer class="site-footer"><div class="wrap">
+<p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
+<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+</div></footer>
+</body>
+</html>

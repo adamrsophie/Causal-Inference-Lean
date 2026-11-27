@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Procedure and trust policy: Causal Inference in Lean</title>
+<meta name="description" content="What verified means in this library: the gate in scripts/check.sh (source scan, root imports, build with no warning, axiom check allowing only propext, Classical.choice and Quot.sound), the pinned toolchain, and how to reproduce the check.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+<nav class="navbar" aria-label="Main">
+<a class="brand" href="index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="11" r="2.6" fill="currentColor"/><circle cx="22" cy="11" r="2.6" fill="currentColor"/><circle cx="16" cy="22" r="2.6" fill="currentColor"/><path d="M11.5 13.2 14.6 19.4M20.5 13.2 17.4 19.4M12.8 11h6.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Causal Inference <small>in Lean</small></span></a>
+<ul class="tabs" id="site-tabs">
+<li><a href="map.html">Map</a></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-learn">Learn<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-learn"><li><a href="background.html"><b>Background</b><span>The causal inference terms used in the library, each with an example.</span></a></li><li><a href="methods.html"><b>Methods</b><span>How results are stated here, each rule with an instance from the source.</span></a></li><li><a href="survey.html"><b>Survey</b><span>The published sources the modules formalize, in aggregate.</span></a></li><li><a href="register.html"><b>Source register</b><span>Every cited source with the Lean files that formalize it.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-library">Library<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-library"><li><a href="theorems.html"><b>Highlights</b><span>The flagship result of each area, in plain language, with its Lean statement.</span></a></li><li><a href="reference.html"><b>Reference</b><span>Every module and public declaration, grouped by area, with a filter.</span></a></li><li><a href="network.html"><b>Network</b><span>The areas of the library and how they depend on one another.</span></a></li><li><a href="milestones.html"><b>Milestones</b><span>The timeline of commits on the main branch.</span></a></li></ul></li>
+<li class="sec"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-status">Status<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-status"><li><a href="roadmap.html"><b>Roadmap</b><span>One table with the status of every area: on the main branch, in progress, planned.</span></a></li><li><a href="obstacles.html"><b>Limits</b><span>What the library does not cover, and the counterexamples that mark its boundaries.</span></a></li></ul></li>
+<li class="sec current"><button type="button" class="sec-btn" aria-expanded="false" aria-controls="nav-take-part">Take part<svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><ul class="sec-list" id="nav-take-part"><li><a href="procedure.html" aria-current="page"><b>Procedure</b><span>What verified means here, the trust policy, and how to reproduce the check.</span></a></li><li><a href="join.html"><b>Contribute</b><span>How to propose a result and how it is checked.</span></a></li></ul></li>
+</ul>
+<div class="nav-end"><a class="source" href="https://github.com/adamrsophie/Causal-Inference-Lean">Source</a></div>
+</nav>
+</header>
+<div class="status-strip" role="note"><div class="wrap"><strong>Scope.</strong> This library formalizes selected results of causal inference with explicit assumptions. It is not a complete formalization of the field; see <a href="obstacles.html">Limits</a>.</div></div>
+<div class="page wrap with-toc">
+<aside class="toc-col"><details class="toc" open><summary>On this page</summary><nav aria-label="On this page"><ul><li class="l2"><a href="#verified">What verified means</a></li><li class="l2"><a href="#gate">The gate</a></li><li class="l3"><a href="#ci">Continuous integration</a></li><li class="l2"><a href="#trust">Trust policy</a></li><li class="l2"><a href="#toolchain">Toolchain</a></li><li class="l2"><a href="#axioms">The three standard axioms</a></li><li class="l2"><a href="#forbidden">Forbidden constructs</a></li><li class="l2"><a href="#reproduce">Reproduce the check</a></li></ul></nav></details></aside>
+<main id="content" tabindex="-1">
+<h1>Procedure and trust policy</h1>
+<p class="lead">A result is verified here when it is on the main branch and the whole library passes the gate in <code>scripts/check.sh</code>: no placeholder or trust escape in the sources, every library file imported by the root file, a build with no warning, and an axiom check that allows only the three standard axioms of Lean and Mathlib. Trust comes from the Lean kernel; nothing else on this page asks to be believed.</p>
+
+<h2 id="verified">What verified means</h2>
+<p>A theorem on the main branch has been checked by the Lean kernel against its statement, and every constant of the library depends on no axiom beyond <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>. That says the proof is correct. It does not say that the statement is the right one: whether a Lean statement captures the intended causal claim is a matter of reading its hypotheses and its conclusion, which is why every statement is shown on the <a href="reference.html">Reference</a> page and the <a href="methods.html">Methods</a> page explains how statements are written.</p>
+
+<h2 id="gate">The gate</h2>
+<p>The gate script on the main branch runs these steps, in this order: <code>1. source scan</code>; <code>2. root imports every library file</code>; <code>3. lake build without project warnings</code>; <code>4. axiom check</code>. Each prints PASS or FAIL, and the script fails if any step fails.</p>
+<ol class="steps">
+<li><b>Source scan.</b>Every file under <code>CausalInference/</code>, the root file and <code>lakefile.toml</code> are scanned after comments, docstrings, strings and character literals are blanked out. Any of these identifiers is rejected: <code>sorry</code>, <code>admit</code>, <code>axiom</code>, <code>unsafe</code>, <code>native_decide</code>, <code>implemented_by</code>, <code>extern</code>, <code>ofReduceBool</code>, <code>skipKernelTC</code>. A <code>set_option</code> that turns a linter off is rejected as well, and the lakefile may turn off only the header linter (the file headers carry this project's license).</li>
+<li><b>Root imports.</b>Every file under <code>CausalInference/</code> must be imported directly by <code>CausalInference.lean</code>, so nothing escapes the build and the axiom check.</li>
+<li><b>Build with no warning.</b><code>lake build</code> must succeed, and its output must contain no warning from a file of this project, which keeps the linters of Mathlib's standard set clean.</li>
+<li><b>Axiom check.</b><code>lake env lean scripts/AxiomCheck.lean</code> walks every constant whose module lies under <code>CausalInference</code>, private ones included, computes the axioms it depends on with the mechanism behind <code>#print axioms</code>, and fails listing every constant that depends on an axiom outside <code>propext</code>, <code>Classical.choice</code>, <code>Quot.sound</code>. It is skipped, and counted as failed, when the build fails, so it never reads stale compiled files.</li>
+</ol>
+<p class="sub">For commit <code>7f2b9d0</code> the site generator runs the scanner of step 1, read from <code>scripts/check.sh</code> at the same commit, over 97 files and finds 0 hits. Steps 3 and 4 need a Lean installation and are not run by the site generator.</p>
+
+<h3 id="ci">Continuous integration</h3>
+<p>The main branch contains a continuous integration workflow (<code>.github/workflows/ci.yml</code>), which installs the pinned toolchain, fetches the prebuilt Mathlib files and runs <code>scripts/check.sh</code>.</p>
+
+<h2 id="trust">Trust policy</h2>
+<p class="sub">A reader should need to trust only the Lean kernel, Mathlib, and the statements themselves.</p>
+<div class="grid">
+<div class="card"><h3>No escape hatches</h3><p>No <code>sorry</code>, no <code>admit</code>, no added <code>axiom</code>, no <code>native_decide</code>, and no <code>unsafe</code>, <code>implemented_by</code> or <code>extern</code> in the sources; the source scan enforces it on every commit, and the axiom check would catch any of them that slipped through.</p></div>
+<div class="card"><h3>Three axioms only</h3><p>Every constant of the library depends on at most <code>propext</code>, <code>Classical.choice</code>, <code>Quot.sound</code>, checked for all of them at once by <code>scripts/AxiomCheck.lean</code>, not theorem by theorem.</p></div>
+<div class="card"><h3>Computation inside the kernel</h3><p>Finite checks, such as the acyclicity or the districts of an explicit graph, are closed by <code>decide</code> on decision procedures proved correct in the library; the kernel evaluates them, and no compiled code is trusted.</p></div>
+<div class="card"><h3>Pinned environment</h3><p><code>leanprover/lean4:v4.36.0</code> with Mathlib pinned to a fixed version. Continuous integration installs exactly these.</p></div>
+<div class="card"><h3>Untrusted sources</h3><p>Published papers and books are read for their statements. Nothing is assumed because a source states it: every borrowed result is proved again in Lean, and departures from a source are stated in the module docstring.</p></div>
+<div class="card"><h3>Honest statements</h3><p>Partial results carry their exact hypotheses in the statement. A theorem is never weakened silently to make a proof go through, and a statement never draws its content from a convention such as division by zero (see <a href="methods.html#totalized">Methods</a>).</p></div>
+</div>
+
+<h2 id="toolchain">Toolchain</h2>
+<p>Read from the files on the main branch by the site generator:</p>
+<dl class="terms">
+<dt>Lean</dt><dd><code>leanprover/lean4:v4.36.0</code>, from <code>lean-toolchain</code>. The elan tool installs exactly this version when the project is opened.</dd>
+<dt>Mathlib</dt><dd>Version <code>v4.36.0</code>, commit <code>fc4f59e577feb1a4956671bc04ac18aaaf8cd842</code>, pinned by <code>rev</code> in <code>lakefile.toml</code> and recorded in <code>lake-manifest.json</code>.</dd>
+<dt>Build tool</dt><dd>Lake, Lean's build system, with the single library target <code>CausalInference</code>.</dd>
+</dl>
+
+<h2 id="axioms">The three standard axioms</h2>
+<p>Lean's kernel checks proofs in a small type theory. A handful of axioms are added by the core library, and Mathlib uses three of them throughout. A theorem that depends only on these is proved in ordinary classical mathematics.</p>
+<dl class="terms">
+<dt><code>propext</code></dt><dd>Propositional extensionality: two propositions that imply each other are equal. It lets a proof rewrite a statement by an equivalent one.</dd>
+<dt><code>Classical.choice</code></dt><dd>The axiom of choice in type form: from a proof that a type is nonempty it produces an element of it. Together with the other two it implies the law of excluded middle, so proofs by contradiction and case splits on any proposition are allowed.</dd>
+<dt><code>Quot.sound</code></dt><dd>Soundness of quotients: elements related by a relation become equal in the quotient type. Function extensionality (functions that agree everywhere are equal) is derived from it.</dd>
+</dl>
+
+<h2 id="forbidden">Forbidden constructs</h2>
+<dl class="terms">
+<dt><code>sorry</code> and <code>admit</code></dt><dd>Placeholders that close any goal without a proof. They elaborate to the axiom <code>sorryAx</code>, which the axiom check rejects.</dd>
+<dt><code>axiom</code></dt><dd>A declaration that asserts a statement without proof. Any added axiom could be false, and then everything would follow from it.</dd>
+<dt><code>native_decide</code> and <code>ofReduceBool</code></dt><dd>Decide a computable proposition by compiling the decision procedure to native code and running it. The kernel then trusts the compiler and the runtime instead of checking the computation itself, and the proof depends on an extra axiom.</dd>
+<dt><code>unsafe</code>, <code>implemented_by</code>, <code>extern</code></dt><dd>Ways to give a definition code that the kernel does not check, or to replace its compiled behavior with other code. They are excluded so that what is evaluated is exactly what is proved about.</dd>
+<dt><code>debug.skipKernelTC</code></dt><dd>An option that skips the kernel's type check of declarations, which would remove the guarantee the whole policy rests on.</dd>
+</dl>
+
+<h2 id="reproduce">Reproduce the check</h2>
+<p>Install elan, the Lean version manager, then:</p>
+<pre><code>git clone https://github.com/adamrsophie/Causal-Inference-Lean.git
+cd Causal-Inference-Lean
+lake exe cache get
+scripts/check.sh</code></pre>
+<p><code>lake exe cache get</code> downloads the prebuilt Mathlib files for the pinned version, so that only this library is compiled. <code>scripts/check.sh</code> runs the four steps above, including the build, and ends with "All checks passed." or with the list of failed steps.</p>
+
+</main>
+</div>
+<footer class="site-footer"><div class="wrap">
+<p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
+<p>Last updated 26 November 2026, from commit <code>7f2b9d0</code> on the main branch.</p>
+</div></footer>
+</body>
+</html>
