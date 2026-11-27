@@ -8,12 +8,14 @@ module
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.LinearCombination
 public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.Ring
 
 /-!
-# Counterfactual response types and additive interaction
+# Counterfactual response types, additive and multiplicative interaction
 
 Deterministic counterfactual response types for two binary treatments `A`, `E` and a binary
 outcome `Y` (Hernán and Robins, *Causal Inference: What If*, 2020, Chapter 5, Sections 5.1
@@ -36,6 +38,7 @@ individuals to be the response types themselves gives a distribution over the 16
   Greenland and Poole (1988).
 * `Population`, `Population.risk`, `Population.interactionContrast`: counterfactual risks
   `p a e = Pr[Y^{a,e} = 1]` and `IC = p11 - p10 - p01 + p00`.
+* `Population.multInteraction`: the multiplicative contrast `p11 * p00 - p10 * p01`.
 
 ## Main results
 
@@ -49,6 +52,14 @@ individuals to be the response types themselves gives a distribution over the 16
   numbering is not.
 * `Population.additive_interaction_iff`, `Population.additive_interaction_iff'`: the
   equivalent forms of additive interaction (Section 5.1, Technical Point 5.1).
+* `ResponseType.existsUnique_bookNumber_eq`: the book numbering is a bijection onto
+  `1, ..., 16`.
+* `Population.multiplicative_interaction_iff`: for `p00 > 0`, the risk ratio form of
+  multiplicative interaction is equivalent to `p11 * p00 ≠ p10 * p01`, with the
+  supermultiplicative and submultiplicative cases (Technical Point 5.1).
+* `Population.no_effect_of_no_additive_no_multiplicative`: no interaction on both the additive
+  and the multiplicative scale forces `A` to have no effect at `E = 0` or `E` to have no effect
+  at `A = 0`.
 * `Population.interactionContrast_eq_sum`: `IC` is the mean individual contrast.
 * `Population.exists_interacting_of_interactionContrast_ne_zero`: a nonzero additive
   interaction contrast forces positive mass on an interacting type.
@@ -99,7 +110,7 @@ def bookNumber (r : ResponseType) : ℕ :=
   16 - (8 * (r true true).toNat + 4 * (r false true).toNat + 2 * (r true false).toNat +
     (r false false).toNat)
 
-/-- The book numbering is a bijection onto `1, ..., 16`: it takes values in that range. -/
+/-- The book numbering takes values in `1, ..., 16`. -/
 theorem bookNumber_mem (r : ResponseType) : bookNumber r ∈ Finset.Icc 1 16 := by
   revert r
   refine forall_iff.2 ?_
@@ -110,6 +121,15 @@ theorem bookNumber_injective : Function.Injective bookNumber := by
   refine forall_iff.2 fun a b c d => forall_iff.2 fun a' b' c' d' => ?_
   revert a b c d a' b' c' d'
   decide
+
+/-- The book numbering is a bijection from the 16 response types onto `1, ..., 16`: every
+number `n` in that range is the number of exactly one type, the type whose outcomes
+`Y^{11} Y^{01} Y^{10} Y^{00}` are the binary digits of `16 - n`. -/
+theorem existsUnique_bookNumber_eq : ∀ n ∈ Finset.Icc 1 16, ∃! r, bookNumber r = n := by
+  have hex : ∀ n ∈ Finset.Icc 1 16, bookNumber
+      (ofBits ((16 - n).testBit 3) ((16 - n).testBit 2) ((16 - n).testBit 1)
+        ((16 - n).testBit 0)) = n := by decide
+  exact fun n hn => ⟨_, hex n hn, fun r hr => bookNumber_injective (hr.trans (hex n hn).symm)⟩
 
 /-- The individual interaction contrast `Y^{11} - Y^{01} - Y^{10} + Y^{00}` of a response type,
 as an integer. -/
@@ -280,6 +300,55 @@ theorem additive_interaction_iff' :
       P.interactionContrast < 0) := by
   unfold interactionContrast
   constructor <;> constructor <;> intro h <;> linarith
+
+/-- The multiplicative interaction contrast `p11 * p00 - p10 * p01` (What If, Technical
+Point 5.1, cleared of denominators). -/
+def multInteraction : ℝ :=
+  P.risk true true * P.risk false false - P.risk true false * P.risk false true
+
+/-- For a positive reference risk `p00`, the risk ratio form of Technical Point 5.1 differs from
+the product form by the factor `1 / p00 ^ 2`:
+`p11 / p00 - (p10 / p00) * (p01 / p00) = (p11 * p00 - p10 * p01) / p00 ^ 2`. -/
+theorem ratio_sub_ratio_mul_ratio (h : 0 < P.risk false false) :
+    P.risk true true / P.risk false false -
+        P.risk true false / P.risk false false * (P.risk false true / P.risk false false) =
+      P.multInteraction / P.risk false false ^ 2 := by
+  unfold multInteraction
+  field_simp
+
+/-- Interaction on the multiplicative scale (What If, Technical Point 5.1): for a positive
+reference risk `p00`, the joint risk ratio `p11 / p00` differs from the product of the separate
+risk ratios `(p10 / p00) * (p01 / p00)` exactly when `p11 * p00 ≠ p10 * p01`; the interaction
+is supermultiplicative (`>`) exactly when the contrast is positive and submultiplicative (`<`)
+exactly when it is negative. -/
+theorem multiplicative_interaction_iff (h : 0 < P.risk false false) :
+    (P.risk true true / P.risk false false ≠
+        P.risk true false / P.risk false false * (P.risk false true / P.risk false false) ↔
+      P.multInteraction ≠ 0) ∧
+    (P.risk true true / P.risk false false >
+        P.risk true false / P.risk false false * (P.risk false true / P.risk false false) ↔
+      0 < P.multInteraction) ∧
+    (P.risk true true / P.risk false false <
+        P.risk true false / P.risk false false * (P.risk false true / P.risk false false) ↔
+      P.multInteraction < 0) := by
+  have key := P.ratio_sub_ratio_mul_ratio h
+  have h2 : 0 < P.risk false false ^ 2 := by positivity
+  refine ⟨?_, ?_, ?_⟩
+  · rw [Ne, ← sub_eq_zero, key, div_eq_zero_iff, not_or]
+    exact ⟨fun h' => h'.1, fun h' => ⟨h', h2.ne'⟩⟩
+  · rw [gt_iff_lt, ← sub_pos, key, div_pos_iff_of_pos_right h2]
+  · rw [← sub_neg, key, div_lt_iff₀ h2, zero_mul]
+
+/-- No interaction on both scales forces a null effect (What If, Technical Point 5.1): if there
+is no additive interaction (`IC = 0`) and no multiplicative interaction
+(`p11 * p00 = p10 * p01`), then `(p10 - p00) * (p01 - p00) = 0`, so `A` has no effect at
+`E = 0` or `E` has no effect at `A = 0`. Writing `p10 = c + x`, `p01 = c + y`, additivity gives
+`p11 = c + x + y` and multiplicativity then reads `x * y = 0`. No positivity is needed. -/
+theorem no_effect_of_no_additive_no_multiplicative (hA : P.interactionContrast = 0)
+    (hM : P.risk true true * P.risk false false = P.risk true false * P.risk false true) :
+    (P.risk true false - P.risk false false) * (P.risk false true - P.risk false false) = 0 := by
+  unfold interactionContrast at hA
+  linear_combination P.risk false false * hA - hM
 
 /-- The interaction contrast is the population mean of the individual contrasts. -/
 theorem interactionContrast_eq_sum :

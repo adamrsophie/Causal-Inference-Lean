@@ -28,8 +28,14 @@ to us), and no result depends on that choice of labels.
 
 * `OneSufficientCauses`, `OneSufficientCauses.response`: the one-treatment model.
 * `SufficientCauses`, `SufficientCauses.response`: the nine-cause two-treatment model.
-* `SufficientCauses.HasSynergism`: `A = 1` and `E = 1` occur together in a present sufficient
-  cause (`U5 = 1`), the sufficient cause interaction of Section 5.5.
+* `SufficientCauses.HasJointCause U a e`: `A = a` and `E = e` occur together in a present
+  sufficient cause (`U5`, `U6`, `U7`, `U8` for `(1, 1)`, `(1, 0)`, `(0, 1)`, `(0, 0)`).
+* `SufficientCauses.HasSufficientCauseInteraction`: some joint cause is present, the sufficient
+  cause interaction of Section 5.5 ("`A` and `E` occur together in a sufficient cause").
+* `SufficientCauses.HasSynergism`: the joint cause with `A = 1` and `E = 1` (`U5 = 1`);
+  `SufficientCauses.HasAntagonism`: a joint cause with `A = 1, E = 0` or `A = 0, E = 1`
+  (Section 5.5).
+* `Population.recode`: the population with the levels `A = a0`, `E = e0` relabeled `1`.
 * `SufficientCauses.NoNegativeComponent`: no present sufficient cause contains `A = 0` or
   `E = 0`.
 
@@ -45,8 +51,13 @@ to us), and no result depends on that choice of labels.
 * `Population.exists_synergism_of_risk_sub_pos`,
   `Population.exists_synergism_of_interactionContrast_pos`: the empirical tests of Fine
   Point 5.1 detect sufficient cause interaction in every representation of the population.
+* `Population.exists_jointCause_of_risk_sub_pos`,
+  `Population.exists_jointCause_of_interactionContrast_pos`: the same tests after recoding
+  detect a joint cause at any levels `(a, e)`; `Population.exists_antagonism_of_risk_sub_pos`:
+  `p10 - p00 - p11 > 0` forces `U6 = 1` for some individual (antagonism).
 * `SufficientCauses.isMonotone_iff`: a response type is monotone exactly when it has a
-  representation with no sufficient cause containing `A = 0` or `E = 0` (Technical Point 5.3).
+  representation with no sufficient cause containing `A = 0` or `E = 0`; this corrects
+  Technical Point 5.3, which says such causes cannot be present.
 * `SufficientCauses.monotone_with_negative_component`: Technical Point 5.3 cannot be read as
   "such causes are never present": a monotone individual can have a nonredundant present
   sufficient cause containing `E = 0`.
@@ -157,6 +168,40 @@ theorem not_injective : ¬ Function.Injective response := fun h =>
 `E = 1` are components of a common present sufficient cause. -/
 def HasSynergism (U : SufficientCauses) : Prop := U.u5 = true
 
+/-- `A = a` and `E = e` occur together in a present sufficient cause: the background factors
+completing the sufficient cause whose treatment components are exactly `A = a` and `E = e` are
+present. This is `u5` for `(1, 1)`, `u6` for `(1, 0)`, `u7` for `(0, 1)` and `u8` for
+`(0, 0)`. -/
+def HasJointCause (U : SufficientCauses) : Bool → Bool → Prop
+  | true, true => U.u5 = true
+  | true, false => U.u6 = true
+  | false, true => U.u7 = true
+  | false, false => U.u8 = true
+
+/-- Synergism is the joint cause at levels `A = 1`, `E = 1`. -/
+theorem hasSynergism_iff_hasJointCause (U : SufficientCauses) :
+    U.HasSynergism ↔ U.HasJointCause true true := Iff.rfl
+
+/-- Sufficient cause interaction (What If, Section 5.5): `A` and `E` occur together in a present
+sufficient cause, at some levels `a` and `e`. -/
+def HasSufficientCauseInteraction (U : SufficientCauses) : Prop :=
+  ∃ a e : Bool, U.HasJointCause a e
+
+/-- Antagonism (What If, Section 5.5): `A = 1` and `E = 0`, or `A = 0` and `E = 1`, are present
+in the same sufficient cause; that is, synergism between one treatment and the absence of the
+other. -/
+def HasAntagonism (U : SufficientCauses) : Prop :=
+  U.HasJointCause true false ∨ U.HasJointCause false true
+
+/-- Pointwise core of the recoded tests: if an individual has `Y^{a,e} = 1` and
+`Y^{¬a,e} = Y^{a,¬e} = 0`, then every sufficient-cause representation of that individual has a
+present sufficient cause with components `A = a` and `E = e`. -/
+theorem hasJointCause_of_response (U : SufficientCauses) (a e : Bool)
+    (h1 : U.response a e = true) (h2 : U.response (!a) e = false)
+    (h3 : U.response a (!e) = false) : U.HasJointCause a e := by
+  rcases U with ⟨u0, u1, u2, u3, u4, u5, u6, u7, u8⟩
+  cases a <;> cases e <;> simp [response] at h1 h2 h3 <;> simp_all [HasJointCause]
+
 /-- Section 5.5 of What If (VanderWeele and Robins, 2007): if an individual has `Y^{11} = 1`
 and `Y^{01} = Y^{10} = 0` (types 7 and 8), then every sufficient-cause representation of that
 individual contains a sufficient cause with both `A = 1` and `E = 1`. -/
@@ -176,9 +221,11 @@ def NoNegativeComponent (U : SufficientCauses) : Prop :=
 def monoOfResponse (r : ResponseType) : SufficientCauses :=
   { u0 := r false false, u1 := r true false, u3 := r false true, u5 := r true true }
 
-/-- Technical Point 5.3 of What If, in its exact form: a response type has monotone effects of
-`A` and `E` if and only if it is the response of some configuration in which no sufficient
-cause contains `A = 0` or `E = 0`. So such causes are never needed under monotonicity. -/
+/-- A corrected form of Technical Point 5.3 of What If: a response type has monotone effects
+of `A` and `E` if and only if it is the response of some configuration in which no sufficient
+cause contains `A = 0` or `E = 0`. So such causes are never needed under monotonicity. The book
+states the stronger claim that such causes cannot be present; that claim is false for
+individuals with redundant causes (`monotone_with_negative_component`). -/
 theorem isMonotone_iff (r : ResponseType) :
     ResponseType.IsMonotone r ↔ ∃ U : SufficientCauses, U.NoNegativeComponent ∧ U.response = r
     := by
@@ -211,6 +258,25 @@ namespace Population
 
 variable {ι : Type*} [Fintype ι] (P : Population ι)
 
+/-- The population recoded so that the levels `A = a0` and `E = e0` are labeled `1`: the same
+weights, and individual `i` has the response `(a, e) ↦ Y_i^{a == a0, e == e0}`. -/
+def recode (a0 e0 : Bool) : Population ι :=
+  { P with resp := fun i a e => P.resp i (a == a0) (e == e0) }
+
+/-- The counterfactual risks of the recoded population. -/
+theorem recode_risk (a0 e0 a e : Bool) :
+    (P.recode a0 e0).risk a e = P.risk (a == a0) (e == e0) := rfl
+
+/-- A synergistic individual of the population recoded at `(a, e)` has a present sufficient
+cause with components `A = a` and `E = e` in every representation. -/
+private theorem hasJointCause_of_recode (cfg : ι → SufficientCauses)
+    (hcfg : ∀ i, (cfg i).response = P.resp i) (a e : Bool) (i : ι)
+    (hs : ResponseType.IsSynergistic ((P.recode a e).resp i)) : (cfg i).HasJointCause a e := by
+  obtain ⟨h1, h2, h3⟩ := hs
+  simp only [recode, Bool.true_beq, Bool.false_beq] at h1 h2 h3
+  exact (cfg i).hasJointCause_of_response a e (by rw [hcfg i]; exact h1)
+    (by rw [hcfg i]; exact h2) (by rw [hcfg i]; exact h3)
+
 /-- The first test of Fine Point 5.1 detects sufficient cause interaction (What If,
 Section 5.5): if `p11 - p01 - p10 > 0`, then in every sufficient-cause representation
 `cfg` of the population some individual of positive mass has a present sufficient cause
@@ -233,6 +299,45 @@ theorem exists_synergism_of_interactionContrast_pos (cfg : ι → SufficientCaus
     ∃ i, 0 < P.weight i ∧ (cfg i).HasSynergism := by
   obtain ⟨i, hi, h8⟩ := P.exists_type8_of_interactionContrast_pos hm h
   exact ⟨i, hi, (cfg i).hasSynergism_of_isSynergistic (by rw [hcfg i]; exact h8.isSynergistic)⟩
+
+/-- The first test of Fine Point 5.1 after recoding, at any levels `a`, `e`: if
+`p_{a,e} - p_{¬a,e} - p_{a,¬e} > 0`, then in every sufficient-cause representation some
+individual of positive mass has a present sufficient cause with components `A = a` and `E = e`.
+For `(a, e) = (1, 1)` this is `exists_synergism_of_risk_sub_pos`; it follows from that test
+applied to `P.recode a e`. -/
+theorem exists_jointCause_of_risk_sub_pos (cfg : ι → SufficientCauses)
+    (hcfg : ∀ i, (cfg i).response = P.resp i) (a e : Bool)
+    (h : 0 < P.risk a e - P.risk (!a) e - P.risk a (!e)) :
+    ∃ i, 0 < P.weight i ∧ (cfg i).HasJointCause a e := by
+  have h' : 0 < (P.recode a e).risk true true - (P.recode a e).risk false true -
+      (P.recode a e).risk true false := by
+    simpa only [recode_risk, Bool.true_beq, Bool.false_beq] using h
+  obtain ⟨i, hi, hs⟩ := (P.recode a e).exists_synergistic_of_risk_sub_pos h'
+  exact ⟨i, hi, P.hasJointCause_of_recode cfg hcfg a e i hs⟩
+
+/-- A test for antagonism (What If, Section 5.5): if `p10 - p00 - p11 > 0`, then in every
+sufficient-cause representation some individual of positive mass has a present sufficient
+cause with components `A = 1` and `E = 0`. (An individual with `Y^{10} = 1` and
+`Y^{00} = Y^{11} = 0` has `u0 = u1 = u4 = 0`, hence `u6 = 1`.) -/
+theorem exists_antagonism_of_risk_sub_pos (cfg : ι → SufficientCauses)
+    (hcfg : ∀ i, (cfg i).response = P.resp i)
+    (h : 0 < P.risk true false - P.risk false false - P.risk true true) :
+    ∃ i, 0 < P.weight i ∧ (cfg i).u6 = true :=
+  P.exists_jointCause_of_risk_sub_pos cfg hcfg true false h
+
+/-- The second test of Fine Point 5.1 after recoding, at any levels `a`, `e`: if every
+individual of positive mass of the recoded population `P.recode a e` is monotone (the levels
+`A = a` and `E = e` never prevent the outcome) and its interaction contrast
+`p_{a,e} - p_{a,¬e} - p_{¬a,e} + p_{¬a,¬e}` is positive, then in every sufficient-cause
+representation some individual of positive mass has a present sufficient cause with
+components `A = a` and `E = e`. -/
+theorem exists_jointCause_of_interactionContrast_pos (cfg : ι → SufficientCauses)
+    (hcfg : ∀ i, (cfg i).response = P.resp i) (a e : Bool)
+    (hm : ∀ i, 0 < P.weight i → ResponseType.IsMonotone ((P.recode a e).resp i))
+    (h : 0 < (P.recode a e).interactionContrast) :
+    ∃ i, 0 < P.weight i ∧ (cfg i).HasJointCause a e := by
+  obtain ⟨i, hi, h8⟩ := (P.recode a e).exists_type8_of_interactionContrast_pos hm h
+  exact ⟨i, hi, P.hasJointCause_of_recode cfg hcfg a e i h8.isSynergistic⟩
 
 end Population
 
