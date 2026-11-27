@@ -8,6 +8,7 @@ module
 public import CausalInference.Estimation.Consistency
 public import CausalInference.InstrumentalVariables.LinearIV
 public import Mathlib.Probability.Independence.Integration
+public import Mathlib.MeasureTheory.Integral.Pi
 
 /-!
 # Consistency of instrumental variable estimators
@@ -60,9 +61,13 @@ probability (`CausalInference.IsConsistent`).
   (the sample first stage is nonzero with probability at least `1/4` at every even sample size,
   by a parity argument); `IVConsistencyExample.irrelevant_not_isConsistent` is a linear model
   with finite second moments and an exogenous instrument in which only relevance fails, and the
-  sample covariance ratio is not consistent for `β`. There the error equals the treatment; the
-  model with an error independent of the treatment, where the ratio has a Cauchy limit law, is
-  not formalized.
+  sample covariance ratio is not consistent for `β`; there the error equals the treatment.
+  `IVConsistencyExample.exists_relevance_only_countermodel` (built on
+  `IVConsistencyExample.threeCoins_not_isConsistent`) is a linear model on three independent
+  fair coins with an exogenous instrument, an error independent of instrument and treatment and
+  a zero first stage, in which the sample covariance ratio is not consistent for `β`: by an
+  exchange of treatment and error in every draw, it is at least `1` in absolute value with
+  probability at least `1/16` at every even sample size.
 
 The finite sample bias of the IV estimator, which the source also mentions, is not formalized:
 the ratio need not even have a finite mean.
@@ -323,7 +328,9 @@ makes the reduced form `Cov(Z, Y)` equal to `Cov(Z, U)`
 (`LinearIVModel.covariance_Z_Y_of_firstStage_eq_zero`), so the hypotheses describe an instrument
 that is both irrelevant and not exogenous; they never hold for an exogenous instrument. A model
 in which all the hypotheses hold is `IVConsistencyExample.sampleCovRatio_not_isConsistent_example`;
-the failure of relevance alone is `IVConsistencyExample.irrelevant_not_isConsistent`. -/
+the failure of relevance alone is `IVConsistencyExample.irrelevant_not_isConsistent` and, with
+an error independent of instrument and treatment,
+`IVConsistencyExample.exists_relevance_only_countermodel`. -/
 theorem sampleCovRatio_not_isConsistent {μ : Measure Ω} [IsProbabilityMeasure μ]
     {O : ℕ → Ω → 𝒪} (hO : IsIIDSample O μ) {z y d : 𝒪 → ℝ} (hz : Measurable z)
     (hy : Measurable y) (hd : Measurable d) (hz2 : MemLp (fun ω ↦ z (O 0 ω)) 2 μ)
@@ -532,8 +539,8 @@ exogenous instrument (`Cov(Z, U) = 0`), and only relevance fails (`Cov(Z, D) = 0
 observed outcome is `Y = D`. The sample covariance ratio is `1` whenever the sample first
 stage is nonzero, which happens with probability at least `1/4` at every even sample size, so
 it is not consistent for the structural slope `β = 0`. This countermodel has the error equal to the
-treatment; the version with an error independent of the treatment, in which the estimator has a
-Cauchy limit law, is not formalized. -/
+treatment; `IVConsistencyExample.threeCoins_not_isConsistent` is the version with an error
+independent of instrument and treatment. -/
 theorem irrelevant_not_isConsistent (hO : IsIIDSample O μ) (hm : ∀ i, Measurable (O i))
     (hlaw : ∀ i, HasLaw (O i) coins μ) :
     (irrelevant O).SecondMoments μ ∧ (irrelevant O).Exogeneity μ ∧
@@ -561,6 +568,306 @@ theorem exists_coins_sample :
       IsProbabilityMeasure P ∧ (∀ i, Measurable (O i)) ∧ IsIIDSample O P ∧
         ∀ i, HasLaw (O i) coins P :=
   exists_isIIDSample coins
+
+/-! ### Only relevance fails, with an independent error -/
+
+/-- Three independent fair coins: the uniform law on `(Bool × Bool) × Bool`, as the product of
+the law of two fair coins with that of a third. -/
+noncomputable def coins3 : Measure ((Bool × Bool) × Bool) :=
+  coins.prod (uniformOn (Set.univ : Set Bool))
+
+instance : IsProbabilityMeasure coins3 := by unfold coins3; infer_instance
+
+theorem coins3_singleton (x : (Bool × Bool) × Bool) : coins3 {x} = 8⁻¹ := by
+  obtain ⟨⟨a, b⟩, c⟩ := x
+  rw [coins3, ← Set.singleton_prod_singleton, Measure.prod_prod, coins, ←
+    Set.singleton_prod_singleton, uniformOn_univ, uniformOn_univ]
+  simp only [Set.singleton_prod_singleton, MeasurableSet.singleton, Measure.count_singleton',
+    Fintype.card_prod, Fintype.card_bool, Nat.reduceMul, Nat.cast_ofNat, one_div,
+    MeasurableSpace.measurableSet_top]
+  rw [← ENNReal.mul_inv (by simp) (by simp)]
+  norm_num
+
+theorem integral_coins3 (f : (Bool × Bool) × Bool → ℝ) :
+    ∫ x, f x ∂coins3 = (∑ x, f x) / 8 := by
+  rw [integral_fintype .of_finite]
+  simp only [measureReal_def, coins3_singleton, smul_eq_mul]
+  rw [← Finset.mul_sum, ENNReal.toReal_inv]
+  norm_num
+  ring
+
+/-- The instrument of the three-coin model: the first coin, coded `0`/`1`. -/
+def zc (o : (Bool × Bool) × Bool) : ℝ := boolToReal o.1.1
+
+/-- The treatment of the three-coin model: the second coin. -/
+def dc (o : (Bool × Bool) × Bool) : ℝ := boolToReal o.1.2
+
+/-- The structural error, and outcome, of the three-coin model: the third coin. -/
+def uc (o : (Bool × Bool) × Bool) : ℝ := boolToReal o.2
+
+/-- The plug-in covariance of `f` and `g` over a vector of `n` observations. -/
+noncomputable def vcov {𝒳 : Type*} {n : ℕ} (f g : 𝒳 → ℝ) (x : Fin n → 𝒳) : ℝ :=
+  (n : ℝ)⁻¹ * ∑ i, f (x i) * g (x i) - ((n : ℝ)⁻¹ * ∑ i, f (x i)) * ((n : ℝ)⁻¹ * ∑ i, g (x i))
+
+theorem sampleCov_eq_vcov {𝒳 : Type*} [MeasurableSpace 𝒳] (f g : 𝒳 → ℝ) (X : ℕ → Ω → 𝒳)
+    (n : ℕ) (ω : Ω) : sampleCov f g X n ω = vcov f g (fun i : Fin n ↦ X i ω) := by
+  simp [sampleCov, sampleMean, vcov, Finset.sum_range]
+
+/-- The exchange of treatment and error, `((z, d), u) ↦ ((z, u), d)`. -/
+def swapDU (o : (Bool × Bool) × Bool) : (Bool × Bool) × Bool := ((o.1.1, o.2), o.1.2)
+
+theorem measurePreserving_swapDU : MeasurePreserving swapDU coins3 coins3 := by
+  refine ⟨measurable_of_countable _, Measure.ext_of_singleton fun x ↦ ?_⟩
+  rw [Measure.map_apply (measurable_of_countable _) (measurableSet_singleton _)]
+  have h : swapDU ⁻¹' {x} = {swapDU x} := by
+    ext ⟨⟨a, b⟩, c⟩
+    simp only [Set.mem_preimage, Set.mem_singleton_iff, swapDU, Prod.ext_iff]
+    tauto
+  rw [h, coins3_singleton, coins3_singleton]
+
+/-- `n` independent draws of three fair coins. -/
+noncomputable abbrev piCoins3 (n : ℕ) : Measure (Fin n → (Bool × Bool) × Bool) :=
+  Measure.pi fun _ ↦ coins3
+
+/-- The parity event: the numbers of `1` values of the three coins are all odd. -/
+def oddEvent (n : ℕ) : Set (Fin n → (Bool × Bool) × Bool) :=
+  {x | Odd (∑ i, (x i).1.1.toNat) ∧ Odd (∑ i, (x i).1.2.toNat) ∧ Odd (∑ i, (x i).2.toNat)}
+
+theorem integral_prod_piCoins3 {n : ℕ} (hn : n ≠ 0) {g : (Bool × Bool) × Bool → ℝ}
+    (hg : ∫ x, g x ∂coins3 = 0) : ∫ x, ∏ i, g (x i) ∂piCoins3 n = 0 := by
+  rw [integral_fintype_prod_eq_prod (fun _ ↦ g), hg]
+  exact Finset.prod_eq_zero (Finset.mem_univ ⟨0, Nat.pos_of_ne_zero hn⟩) rfl
+
+theorem measureReal_oddEvent {n : ℕ} (hn : n ≠ 0) : (piCoins3 n).real (oddEvent n) = 1 / 8 := by
+  let P : ((Bool × Bool) × Bool → ℝ) → (Fin n → (Bool × Bool) × Bool) → ℝ :=
+    fun g x ↦ ∏ i, g (x i)
+  let ga : (Bool × Bool) × Bool → ℝ := fun o ↦ (-1) ^ o.1.1.toNat
+  let gb : (Bool × Bool) × Bool → ℝ := fun o ↦ (-1) ^ o.1.2.toNat
+  let gc : (Bool × Bool) × Bool → ℝ := fun o ↦ (-1) ^ o.2.toNat
+  have hF : MeasurableSet (oddEvent n) := (Set.to_countable _).measurableSet
+  have key : (oddEvent n).indicator (1 : (Fin n → (Bool × Bool) × Bool) → ℝ) = fun x ↦
+      (1 - P ga x - P gb x - P gc x + P (fun o ↦ ga o * gb o) x + P (fun o ↦ ga o * gc o) x +
+        P (fun o ↦ gb o * gc o) x - P (fun o ↦ ga o * gb o * gc o) x) / 8 := by
+    funext x
+    simp only [P, Finset.prod_mul_distrib, ga, gb, gc, Finset.prod_pow_eq_pow_sum]
+    rcases Nat.even_or_odd (∑ i, (x i).1.1.toNat) with ha | ha <;>
+      rcases Nat.even_or_odd (∑ i, (x i).1.2.toNat) with hb | hb <;>
+      rcases Nat.even_or_odd (∑ i, (x i).2.toNat) with hc | hc <;>
+      simp [oddEvent, ha, hb, hc, ha.neg_one_pow, hb.neg_one_pow, hc.neg_one_pow,
+        Nat.not_odd_iff_even.2]
+    norm_num
+  have h0 : ∀ g : (Bool × Bool) × Bool → ℝ, ∫ x, g x ∂coins3 = 0 →
+      ∫ x, P g x ∂piCoins3 n = 0 := fun g hg ↦ integral_prod_piCoins3 hn hg
+  have m : ∀ g : (Bool × Bool) × Bool → ℝ, (∑ x, g x = 0) → ∫ x, g x ∂coins3 = 0 :=
+    fun g hg ↦ by rw [integral_coins3, hg, zero_div]
+  rw [← integral_indicator_one hF, key, integral_div, integral_sub, integral_add, integral_add,
+    integral_add, integral_sub, integral_sub, integral_sub, integral_const,
+    h0 ga (m _ (by simp [ga, Fintype.sum_prod_type])),
+    h0 gb (m _ (by simp [gb, Fintype.sum_prod_type])),
+    h0 gc (m _ (by simp [gc, Fintype.sum_prod_type])),
+    h0 (fun o ↦ ga o * gb o) (m _ (by simp [ga, gb, Fintype.sum_prod_type])),
+    h0 (fun o ↦ ga o * gc o) (m _ (by simp [ga, gc, Fintype.sum_prod_type])),
+    h0 (fun o ↦ gb o * gc o) (m _ (by simp [gb, gc, Fintype.sum_prod_type])),
+    h0 (fun o ↦ ga o * gb o * gc o) (m _ (by simp [ga, gb, gc, Fintype.sum_prod_type]))]
+  · simp
+  all_goals exact .of_finite
+
+/-- The event that the sample IV estimate `Ĉov(Z, U) / Ĉov(Z, D)` of a vector of draws is at
+least `1` in absolute value. -/
+def bigRatio (n : ℕ) : Set (Fin n → (Bool × Bool) × Bool) :=
+  {x | 1 ≤ |vcov zc uc x / vcov zc dc x|}
+
+/-- The event `|Ĉov(Z, D)| ≤ |Ĉov(Z, U)|` on a vector of draws. -/
+def dLeU (n : ℕ) : Set (Fin n → (Bool × Bool) × Bool) := {x | |vcov zc dc x| ≤ |vcov zc uc x|}
+
+/-- The event `|Ĉov(Z, U)| ≤ |Ĉov(Z, D)|` on a vector of draws. -/
+def uLeD (n : ℕ) : Set (Fin n → (Bool × Bool) × Bool) := {x | |vcov zc uc x| ≤ |vcov zc dc x|}
+
+/-- The parity argument on a vector of draws: if `n` is even and positive and the numbers of
+instrument values `1` and of treatment values `1` among the `n` draws are odd, the plug-in
+covariance of instrument and treatment is not `0`. -/
+theorem vcov_zd_ne_zero {n : ℕ} (hn : Even n) (hn0 : n ≠ 0) {x : Fin n → (Bool × Bool) × Bool}
+    (hx : x ∈ oddEvent n) : vcov zc dc x ≠ 0 := by
+  obtain ⟨h1, h2, -⟩ := hx
+  intro h
+  have hz : ∀ o, zc o = (o.1.1.toNat : ℝ) := by rintro ⟨⟨a, b⟩, c⟩; cases a <;> simp [zc]
+  have hd : ∀ o, dc o = (o.1.2.toNat : ℝ) := by rintro ⟨⟨a, b⟩, c⟩; cases b <;> simp [dc]
+  have hn' : (n : ℝ) ≠ 0 := Nat.cast_ne_zero.2 hn0
+  set A := ∑ i, zc (x i) * dc (x i)
+  set B := ∑ i, zc (x i)
+  set C := ∑ i, dc (x i)
+  have h' : (n : ℝ)⁻¹ * A - (n : ℝ)⁻¹ * B * ((n : ℝ)⁻¹ * C) = 0 := h
+  have e : (n : ℝ) * A = B * C := by
+    have : (n : ℝ) * A = (n : ℝ) ^ 2 * ((n : ℝ)⁻¹ * A - (n : ℝ)⁻¹ * B * ((n : ℝ)⁻¹ * C)) +
+        B * C := by field_simp; ring
+    rw [this, h']; ring
+  simp only [A, B, C, hz, hd] at e
+  have e' : n * ∑ i, (x i).1.1.toNat * (x i).1.2.toNat =
+      (∑ i, (x i).1.1.toNat) * ∑ i, (x i).1.2.toNat := by
+    exact_mod_cast e
+  have hodd := h1.mul h2
+  rw [← e'] at hodd
+  exact (Nat.not_even_iff_odd.2 hodd) (hn.mul_right _)
+
+theorem preimage_swap_oddEvent_inter (n : ℕ) :
+    (fun x (i : Fin n) ↦ swapDU (x i)) ⁻¹' (oddEvent n ∩ dLeU n) = oddEvent n ∩ uLeD n := by
+  ext x
+  change (Odd (∑ i, (x i).1.1.toNat) ∧ Odd (∑ i, (x i).2.toNat) ∧
+      Odd (∑ i, (x i).1.2.toNat)) ∧ |vcov zc uc x| ≤ |vcov zc dc x| ↔
+    (Odd (∑ i, (x i).1.1.toNat) ∧ Odd (∑ i, (x i).1.2.toNat) ∧
+      Odd (∑ i, (x i).2.toNat)) ∧ |vcov zc uc x| ≤ |vcov zc dc x|
+  constructor
+  · rintro ⟨⟨a, b, c⟩, d⟩; exact ⟨⟨a, c, b⟩, d⟩
+  · rintro ⟨⟨a, b, c⟩, d⟩; exact ⟨⟨a, c, b⟩, d⟩
+
+/-- **The exchange argument.** For an even positive number `n` of draws of three fair coins, the
+sample covariance ratio `Ĉov(Z, U) / Ĉov(Z, D)` is at least `1` in absolute value with
+probability at least `1/16`. On the parity event (probability `1/8`) both sample covariances
+are nonzero; the exchange of treatment and error in every draw preserves the law and the parity
+event and exchanges the two covariances, so `|Ĉov(Z, D)| ≤ |Ĉov(Z, U)|` holds on at least half
+of the parity event. -/
+theorem measureReal_bigRatio {n : ℕ} (hn : Even n) (hn0 : n ≠ 0) :
+    1 / 16 ≤ (piCoins3 n).real (bigRatio n) := by
+  have hsw : MeasurePreserving (fun x (i : Fin n) ↦ swapDU (x i)) (piCoins3 n) (piCoins3 n) :=
+    measurePreserving_pi _ _ fun _ ↦ measurePreserving_swapDU
+  have heq : (piCoins3 n).real (oddEvent n ∩ dLeU n) = (piCoins3 n).real (oddEvent n ∩ uLeD n) := by
+    rw [measureReal_def, measureReal_def, ← preimage_swap_oddEvent_inter,
+      hsw.measure_preimage (Set.to_countable _).measurableSet.nullMeasurableSet]
+  have hcover : oddEvent n ⊆ (oddEvent n ∩ dLeU n) ∪ (oddEvent n ∩ uLeD n) := fun x hx ↦ by
+    rcases le_total |vcov zc dc x| |vcov zc uc x| with h | h
+    · exact Or.inl ⟨hx, h⟩
+    · exact Or.inr ⟨hx, h⟩
+  have hF := measureReal_oddEvent hn0
+  have h1 := (measureReal_mono (μ := piCoins3 n) hcover).trans
+    (measureReal_union_le (μ := piCoins3 n) (oddEvent n ∩ dLeU n) (oddEvent n ∩ uLeD n))
+  have hsub : oddEvent n ∩ dLeU n ⊆ bigRatio n := fun x hx ↦ by
+    have hb := vcov_zd_ne_zero hn hn0 hx.1
+    have h2 : |vcov zc dc x| ≤ |vcov zc uc x| := hx.2
+    change 1 ≤ |vcov zc uc x / vcov zc dc x|
+    rw [abs_div, le_div_iff₀ (abs_pos.2 hb), one_mul]
+    exact h2
+  have h3 := measureReal_mono (μ := piCoins3 n) hsub
+  linarith
+
+section Sample
+
+variable {X : ℕ → Ω → (Bool × Bool) × Bool}
+
+omit [IsProbabilityMeasure μ] in
+/-- The first `n` draws of an i.i.d. sample of three fair coins have the product law. -/
+theorem map_sample_eq_piCoins3 (hX : IsIIDSample X μ) (hm : ∀ i, Measurable (X i))
+    (hlaw : ∀ i, HasLaw (X i) coins3 μ) (n : ℕ) :
+    μ.map (fun ω (i : Fin n) ↦ X i ω) = piCoins3 n := by
+  have hI : iIndepFun (fun i : Fin n ↦ X i) μ :=
+    ProbabilityTheory.iIndepFun.precomp Fin.val_injective hX.indep
+  rw [ProbabilityTheory.iIndepFun.map_fun_eq_pi_map (fun i : Fin n ↦ (hm i).aemeasurable) hI]
+  simp_rw [(hlaw _).map_eq]
+
+/-- The linear model of the three-coin countermodel: the first observation has instrument `Z`
+(the first coin), treatment `D` (the second coin) and structural error `U` (the third coin),
+with `α = β = 0`, so that `Y = U`. -/
+noncomputable def threeCoins (X : ℕ → Ω → (Bool × Bool) × Bool) : LinearIVModel Ω where
+  α := 0
+  β := 0
+  Z ω := zc (X 0 ω)
+  D ω := dc (X 0 ω)
+  U ω := uc (X 0 ω)
+
+omit [IsProbabilityMeasure μ] in
+theorem covariance_comp3 (hm : ∀ i, Measurable (X i)) (hlaw : ∀ i, HasLaw (X i) coins3 μ)
+    (f g : (Bool × Bool) × Bool → ℝ) :
+    cov[fun ω ↦ f (X 0 ω), fun ω ↦ g (X 0 ω); μ] = cov[f, g; coins3] := by
+  rw [← (hlaw 0).map_eq, covariance_map_fun (measurable_of_countable f).aestronglyMeasurable
+    (measurable_of_countable g).aestronglyMeasurable (hm 0).aemeasurable]
+
+omit [IsProbabilityMeasure μ] in
+theorem memLp_comp3 (hlaw : ∀ i, HasLaw (X i) coins3 μ) (p : (Bool × Bool) × Bool → Bool) :
+    MemLp (fun ω ↦ boolToReal (p (X 0 ω))) 2 μ :=
+  (hlaw 0).memLp_comp (f := fun x ↦ boolToReal (p x))
+    (MemLp.of_bound (measurable_of_countable _).aestronglyMeasurable 1
+      (ae_of_all _ fun x ↦ by cases p x <;> simp))
+
+/-- **Without relevance the sample IV estimator is not consistent for `β`, with an independent
+error.** On an i.i.d. sample of three fair coins, `threeCoins X` is a linear model with finite
+second moments, an exogenous instrument (`Cov(Z, U) = 0`), an error independent of the pair of
+instrument and treatment, and a zero first stage `Cov(Z, D) = 0`; the outcome is `Y = U` and the
+structural slope is `β = 0`. The sample covariance ratio is not consistent for `β`: at every
+even sample size it is at least `1` in absolute value with probability at least `1/16`
+(`IVConsistencyExample.measureReal_bigRatio`). -/
+theorem threeCoins_not_isConsistent (hX : IsIIDSample X μ) (hm : ∀ i, Measurable (X i))
+    (hlaw : ∀ i, HasLaw (X i) coins3 μ) :
+    (threeCoins X).SecondMoments μ ∧ (threeCoins X).Exogeneity μ ∧
+      IndepFun (fun ω ↦ ((threeCoins X).Z ω, (threeCoins X).D ω)) (threeCoins X).U μ ∧
+      cov[(threeCoins X).Z, (threeCoins X).D; μ] = 0 ∧
+      (threeCoins X).Y = (fun ω ↦ uc (X 0 ω)) ∧ (threeCoins X).β = 0 ∧
+      ¬ IsConsistent (sampleCovRatio zc uc dc X) (threeCoins X).β μ := by
+  have hZU : cov[(threeCoins X).Z, (threeCoins X).U; μ] = 0 := by
+    change cov[fun ω ↦ zc (X 0 ω), fun ω ↦ uc (X 0 ω); μ] = 0
+    rw [covariance_comp3 hm hlaw]
+    simp only [covariance, integral_coins3, Fintype.sum_prod_type, Fintype.sum_bool, zc, uc]
+    norm_num
+  have hZD : cov[(threeCoins X).Z, (threeCoins X).D; μ] = 0 := by
+    change cov[fun ω ↦ zc (X 0 ω), fun ω ↦ dc (X 0 ω); μ] = 0
+    rw [covariance_comp3 hm hlaw]
+    simp only [covariance, integral_coins3, Fintype.sum_prod_type, Fintype.sum_bool, zc, dc]
+    norm_num
+  have hind : IndepFun (fun ω ↦ ((threeCoins X).Z ω, (threeCoins X).D ω)) (threeCoins X).U μ := by
+    have hν : IndepFun (fun x : (Bool × Bool) × Bool ↦ (zc x, dc x)) uc coins3 :=
+      indepFun_prod (μ := coins) (ν := uniformOn (Set.univ : Set Bool))
+        (X := fun p : Bool × Bool ↦ (boolToReal p.1, boolToReal p.2)) (Y := boolToReal)
+        (measurable_of_countable _) (measurable_of_countable _)
+    have hmap : ∀ {β : Type} [MeasurableSpace β] (h : (Bool × Bool) × Bool → β),
+        Measurable h → μ.map (fun ω ↦ h (X 0 ω)) = coins3.map h := fun h hh ↦ by
+      rw [← (hlaw 0).map_eq, Measure.map_map hh (hm 0)]; rfl
+    rw [indepFun_iff_map_prod_eq_prod_map_map (measurable_of_countable _).aemeasurable
+      (measurable_of_countable _).aemeasurable] at hν
+    refine (indepFun_iff_map_prod_eq_prod_map_map
+      (f := fun ω ↦ ((threeCoins X).Z ω, (threeCoins X).D ω)) (g := (threeCoins X).U)
+      ((measurable_of_countable (fun x : (Bool × Bool) × Bool ↦ (zc x, dc x))).comp
+        (hm 0)).aemeasurable ((measurable_of_countable uc).comp (hm 0)).aemeasurable).2 ?_
+    have e₁ : μ.map (fun ω ↦ (((threeCoins X).Z ω, (threeCoins X).D ω), (threeCoins X).U ω)) =
+        coins3.map (fun x ↦ ((zc x, dc x), uc x)) :=
+      hmap (fun x ↦ ((zc x, dc x), uc x)) (measurable_of_countable _)
+    have e₂ : μ.map (fun ω ↦ ((threeCoins X).Z ω, (threeCoins X).D ω)) =
+        coins3.map (fun x ↦ (zc x, dc x)) :=
+      hmap (fun x ↦ (zc x, dc x)) (measurable_of_countable _)
+    have e₃ : μ.map (threeCoins X).U = coins3.map uc := hmap uc (measurable_of_countable _)
+    rw [e₁, e₂, e₃]
+    exact hν
+  refine ⟨⟨memLp_comp3 hlaw (fun o ↦ o.1.2), memLp_comp3 hlaw (fun o ↦ o.1.1),
+    memLp_comp3 hlaw (fun o ↦ o.2)⟩, hZU, hind, hZD,
+    by funext ω; simp [threeCoins, LinearIVModel.Y], rfl, fun hc ↦ ?_⟩
+  rw [IsConsistent, tendstoInMeasure_iff_dist] at hc
+  obtain ⟨N, hN⟩ := eventually_atTop.1 ((tendsto_order.1 (hc 1 one_pos)).2
+    (ENNReal.ofReal (1 / 16)) (by norm_num))
+  have hlt := hN (2 * N + 2) (by omega)
+  refine (not_lt.2 ?_) hlt
+  have hset : {ω | (1 : ℝ) ≤ dist (sampleCovRatio zc uc dc X (2 * N + 2) ω) (threeCoins X).β} =
+      (fun ω (i : Fin (2 * N + 2)) ↦ X i ω) ⁻¹' bigRatio (2 * N + 2) := by
+    ext ω
+    simp [sampleCovRatio, sampleCov_eq_vcov, bigRatio, threeCoins, abs_div]
+  rw [hset, ← Measure.map_apply (Measurable.of_eval fun i : Fin (2 * N + 2) ↦ hm i)
+    (Set.to_countable _).measurableSet, map_sample_eq_piCoins3 hX hm hlaw,
+    ← ofReal_measureReal]
+  exact ENNReal.ofReal_le_ofReal (measureReal_bigRatio ⟨N + 1, by ring⟩ (by omega))
+
+end Sample
+
+/-- **A countermodel in which only relevance fails.** There is a linear instrumental variable
+model `Y = α + β D + U` with finite second moments, an exogenous instrument, an error independent
+of the treatment and of the instrument, and a zero first stage, together with an i.i.d. sample
+whose first observation carries it, such that the sample covariance ratio is not consistent for
+the true slope `β`. The model is `threeCoins` on an i.i.d. sample of three fair coins. -/
+theorem exists_relevance_only_countermodel :
+    ∃ Ω : Type, ∃ _ : MeasurableSpace Ω, ∃ μ : Measure Ω,
+      ∃ X : ℕ → Ω → (Bool × Bool) × Bool, ∃ L : LinearIVModel Ω,
+        IsProbabilityMeasure μ ∧ IsIIDSample X μ ∧ L.Z = (fun ω ↦ zc (X 0 ω)) ∧
+        L.D = (fun ω ↦ dc (X 0 ω)) ∧ L.Y = (fun ω ↦ uc (X 0 ω)) ∧ L.SecondMoments μ ∧
+        L.Exogeneity μ ∧ IndepFun (fun ω ↦ (L.Z ω, L.D ω)) L.U μ ∧ cov[L.Z, L.D; μ] = 0 ∧
+        ¬ IsConsistent (sampleCovRatio zc uc dc X) L.β μ := by
+  obtain ⟨Ω, _, μ, X, hμ, hm, hX, hlaw⟩ := exists_isIIDSample coins3
+  obtain ⟨h1, h2, h3, h4, h5, -, h7⟩ := threeCoins_not_isConsistent hX hm hlaw
+  exact ⟨Ω, _, μ, X, threeCoins X, hμ, hX, rfl, rfl, h5, h1, h2, h3, h4, h7⟩
 
 end IVConsistencyExample
 
