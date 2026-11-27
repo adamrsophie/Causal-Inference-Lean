@@ -74,7 +74,8 @@ the product-limit functional of `CausalInference.Survival.Censoring` applies.
 The first-stage factors are population targets without censoring: the roots of the
 mean-balancing and the log-time least-squares equations, and the Weibull maximum likelihood
 target with the shape taken as known. The Weibull fit with an estimated shape has no closed
-form and is not formalized.
+form; existence and uniqueness of the full fit are proved in
+`CausalInference.StructuralNested.TwoStageWeibullShape`.
 
 ## Sources
 
@@ -426,7 +427,8 @@ difference of mean log residual times of switchers and non-switchers. Equivalent
 ratio `ψ = exp β` makes the mean log residual time with the switch undone,
 `log (untreatedTime ψ)`, equal among switchers and non-switchers. For `ψ > 0` this holds
 exactly when `ψ = 2 / √3`, so the root is unique. A parametric fit such as the Weibull model of
-the documents solves a different score equation and is not formalized. -/
+the documents solves a different score equation; its target at a known shape is
+`weibullFactor` below. -/
 theorem tse_stage_one_log_root (ψ : ℝ) (hψ : 0 < ψ) :
     condMean p (fun ω => S ω = true) (fun ω => Real.log (untreatedTime ψ ω)) =
       condMean p (fun ω => S ω = false) (fun ω => Real.log (untreatedTime ψ ω)) ↔
@@ -471,7 +473,8 @@ The Weibull log likelihood of a group of residual times `t` with scale `λ` is
 `k (∑ t ^ k / λ ^ k - n) / λ`, which vanishes only at `λ ^ k = mean (t ^ k)`, a maximum. The
 accelerated failure time model with a binary covariate has one scale per group, so the fitted
 time ratio is `(E[Y ^ k | S = 1] / E[Y ^ k | S = 0]) ^ (1 / k)`: a ratio of power means. With an
-estimated shape the fit has no closed form and is not formalized. -/
+estimated shape the fit has no closed form; its existence and uniqueness are proved in
+`CausalInference.StructuralNested.TwoStageWeibullShape`. -/
 
 /-- The population target of the Weibull accelerated failure time fit of stage one with known
 shape `k`: the ratio of the power means of order `k` of the residual survival of switchers and

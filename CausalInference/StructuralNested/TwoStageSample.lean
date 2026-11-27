@@ -35,8 +35,8 @@ finite sample, and proves consistency under i.i.d. sampling.
   `TwoStageTrial.sampleRoot_isConsistent_true`: under the structural model, no unmeasured
   confounding, positivity and relevance for `q`, it is consistent for the true parameter.
 
-Stratification by covariates at the secondary baseline is not treated in the sample version: the
-estimator uses a single stratum.
+The estimator here uses a single stratum; `TwoStageSampleStrata` treats several strata, with
+fixed weights or with the stratum frequencies as weights.
 -/
 
 @[expose] public section

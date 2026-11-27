@@ -17,7 +17,8 @@ model, usually Weibull, to the time after the secondary baseline in the control 
 switch indicator as covariate, and use the fitted acceleration factor as the time ratio of
 switching. This file states that fit at the population level on a finite law and proves what it
 returns. The model has no covariate besides the switch indicator; the fit adjusts for covariates
-at the secondary baseline only through the choice of the population `P`.
+at the secondary baseline only through the choice of the population `P`. Stratum intercepts
+for covariates are in `TwoStageWeibullStrata`.
 
 ## Main results
 
@@ -41,8 +42,10 @@ at the secondary baseline only through the choice of the population `P`.
 
 A Weibull law of the untreated time is not needed for `weibull_coef_eq_neg`: at the population
 level the fit recovers the time ratio at every fixed shape, so at whatever shape is fitted. A
-Weibull law matters for the fitted shape itself (and for the fit with censored data), which is
-not formalized here; `SwitchingTrial.fittedShape` treats the fitted shape in the two-arm setting.
+Weibull law matters for the fitted shape itself (and for the fit with censored data). The fit
+with the shape estimated is in `TwoStageWeibullShape`; `SwitchingTrial.fittedShape` treats the
+fitted shape in the two-arm setting. `TwoStageWeibullBridge` identifies this fit with
+`SwitchingCounterexamples.TimeDependent.weibullFactor` on that countermodel.
 -/
 
 @[expose] public section
