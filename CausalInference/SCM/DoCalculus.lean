@@ -819,9 +819,11 @@ equation (3.33)), division-free form. Let `Z` be disjoint from `X` and `W`, and 
 `G.deleteIncoming X`. If `Y` and `Z` are d-separated by `X ∪ W` in
 `G.deleteIncoming (X ∪ Z(W))`, then
 `P(y, w | do(x, z)) * P(w | do(x)) = P(y, w | do(x)) * P(w | do(x, z))`, all values read off
-`v`; that is, `P(y | do(x), do(z), w) = P(y | do(x), w)`. No positivity is needed. The
-disjointness of `Y` and `Z` is not assumed: it follows from the d-separation and the
-disjointness of `Z` from `X ∪ W`.
+`v`. No positivity is needed for this product identity. The conditional form
+`P(y | do(x), do(z), w) = P(y | do(x), w)` is `SCM.rule3_div`, which needs the two masses
+`P(w | do(x)) > 0` and `P(w | do(x, z)) > 0`: without them the ratios can differ
+(`SCM.CopyChainExample.rule3_ratio_ne`). The disjointness of `Y` and `Z` is not assumed: it
+follows from the d-separation and the disjointness of `Z` from `X ∪ W`.
 
 Proof: write `A = Z(W)` and `B = Z \ A`. Under `do(X ∪ A)`, the d-separation of `Y` and `B` by
 `X ∪ A ∪ W` (`SCM.dSep_rule3_sdiff`) gives, through the switch model

@@ -19,6 +19,9 @@ Theorem 3.4.1, equation (3.33)).
   `SCM.rule3` and `SCM.rule3_div` hold while the joint mass `P(z', w | do(x))` of `Z \ Z(W)` and
   `W` is zero. The positivity of that mass (the hypothesis of `SCM.rule3_pos`) is therefore
   strictly stronger than the positivity of the two denominators of the ratio form.
+* `SCM.CopyChainExample.rule3_ratio_ne`: a deterministic model in which the hypotheses of
+  `SCM.rule3` hold but `P(w) = 0` and the two ratios of `SCM.rule3_div` differ (`1` against
+  Lean's `0 / 0 = 0`), so the ratio form needs its positivity hypotheses.
 -/
 
 @[expose] public section
@@ -101,5 +104,71 @@ theorem premises_hold_joint_mass_zero :
     simp [model_solve, allTrue] at h0
 
 end SCM.Rule3PositivityExample
+
+namespace SCM.CopyChainExample
+
+open Rule3PositivityExample (allTrue)
+
+/-- The deterministic model on the chain `0 → 1 → 2`: `V₀ := false`, `V₁ := V₀`, `V₂ := V₁`
+(the noise is not used). -/
+noncomputable def model : SCM chain (fun _ => Bool) (fun _ => Bool) where
+  acyclic := by decide
+  f v z _ := if h1 : v = 1 then z ⟨0, by subst h1; decide⟩ else
+    if h2 : v = 2 then z ⟨1, by subst h2; decide⟩ else false
+  noise _ := FiniteDist.uniform
+
+theorem model_solve (u : Fin 3 → Bool) : model.solve u = fun _ => false := by
+  refine (model.isSolution_iff.1 fun v => ?_).symm
+  fin_cases v <;> simp [model, Finset.restrict]
+
+theorem model_intervene_solve (u : Fin 3 → Bool) :
+    (model.intervene {0} allTrue).solve u = allTrue := by
+  refine ((model.intervene {0} allTrue).eq_solve_of_isSolution
+    (model.isSolution_intervene_iff.2 ⟨fun v _ => rfl, fun v hv => ?_⟩)).symm
+  fin_cases v
+  · exact absurd (mem_singleton_self 0) hv
+  · simp [model, allTrue, Finset.restrict]
+  · simp [model, allTrue, Finset.restrict]
+
+/-- Every nonempty marginal of the observational law of `SCM.CopyChainExample.model` has mass
+`0` at the all-`true` configuration. -/
+theorem margAt_allTrue {S : Finset (Fin 3)} (hS : S.Nonempty) :
+    model.dist.margAt S allTrue = 0 := by
+  rw [margAt_dist]
+  convert FiniteDist.probOf_eq_zero (p := model.noiseDist)
+    (P := fun u => ∀ v ∈ S, model.solve u v = allTrue v) ?_
+  intro u h
+  obtain ⟨v, hv⟩ := hS
+  simpa [model_solve, allTrue] using h v hv
+
+/-- Every marginal of the law of `SCM.CopyChainExample.model` under `do(V₀ := true)` has mass
+`1` at the all-`true` configuration. -/
+theorem intervene_margAt_allTrue (S : Finset (Fin 3)) :
+    (model.intervene {0} allTrue).dist.margAt S allTrue = 1 := by
+  rw [margAt_dist, FiniteDist.probOf]
+  simp only [model_intervene_solve]
+  rw [filter_true_of_mem fun _ _ _ _ => trivial, FiniteDist.prob_univ]
+
+/-- **The ratio form of Rule 3 needs its positivity hypotheses.** In
+`SCM.CopyChainExample.model` (the chain `Z = 0 → W = 1 → Y = 2` with `Z := false`, `W := Z`,
+`Y := W`), with `X = ∅`, `Z = {0}`, `W = {1}`, `Y = {2}` and all values `true`, the
+disjointness and graphical hypotheses of `SCM.rule3` hold, so the division-free identity holds
+(both sides are `0`), but `P(y, w | do(z)) / P(w | do(z)) = 1` while `P(y, w) / P(w) = 0 / 0`,
+which Lean evaluates to `0`. The hypothesis `P(w) > 0` of `SCM.rule3_div` fails here. -/
+theorem rule3_ratio_ne :
+    Disjoint (∅ : Finset (Fin 3)) {0} ∧ Disjoint ({1} : Finset (Fin 3)) {0} ∧
+      (chain.deleteIncoming ↑((∅ : Finset (Fin 3)) ∪ chain.rule3Set ∅ {0} {1})).DSep
+        ↑({2} : Finset (Fin 3)) ↑({0} : Finset (Fin 3)) ↑((∅ : Finset (Fin 3)) ∪ {1}) ∧
+      model.dist.margAt {1} allTrue = 0 ∧
+      (model.intervene (∅ ∪ {0}) allTrue).dist.margAt ({2} ∪ {1}) allTrue /
+          (model.intervene (∅ ∪ {0}) allTrue).dist.margAt {1} allTrue = 1 ∧
+      (model.intervene ∅ allTrue).dist.margAt ({2} ∪ {1}) allTrue /
+          (model.intervene ∅ allTrue).dist.margAt {1} allTrue = 0 := by
+  refine ⟨by decide, by decide, by rw [← Digraph.rule3SetFinset_eq]; decide,
+    margAt_allTrue (by decide), ?_, ?_⟩
+  · rw [empty_union, intervene_margAt_allTrue, intervene_margAt_allTrue, div_one]
+  · rw [dist_intervene_empty, margAt_allTrue (by decide), zero_div]
+
+end SCM.CopyChainExample
 
 end CausalInference

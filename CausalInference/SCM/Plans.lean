@@ -25,9 +25,18 @@ identified by the sequential back-door criterion (`Digraph.Admissible`).
   sequential back-door criterion of Pearl and Robins 1995): if the covariate sets `Zs` form an
   admissible sequence for the controls `x` and the outcome `y`, then
   `P(y | do(x_1), …, do(x_n)) = ∑_z P(y | z, x) ∏_k P(z_k | z_1, …, z_{k-1}, x_1, …, x_{k-1})`,
-  for any number `n` of controls, under positivity.
+  for any number `n` of controls, under positivity. The covariate sets may overlap.
+  `SCM.effect_plan_eq_gFormula_of_admissiblePlan` takes Pearl's admissible sequences
+  (`Digraph.AdmissiblePlan`), and `SCM.effect_plan_eq_gFormula_of_wSet` the sets `W_k` of
+  Theorem 4.4.6 (`Digraph.wSet`).
+* `SCM.planStage_mul`: the division-free step of the proof,
+  `P^k(y, H_k) P(H_k, x_k) = P^{k+1}(y, H_k, x_k) P(H_k)`, where `H_k` are the observations
+  before control `x_k` and `P^k` is the law under `do(x_k, …, x_n)`.
 * `SCM.effect_plan_pearlFig44`: equation (4.7) for Figure 4.4,
   `P(y | do(x_1), do(x_2)) = ∑_z P(y | z, x_1, x_2) P(z | x_1)`.
+* `SCM.PlanExamples.fig44Model_plan`: a concrete model on Figure 4.4 with full support on the
+  observed `(X₁, Z, X₂)`, in which the plan effect and the g-formula (4.7) are both `1/4` while
+  the unadjusted conditional probability is `1/10`.
 
 All values are read off configurations, as in `CausalInference.SCM.DoCalculus`.
 
@@ -241,6 +250,55 @@ theorem disjoint_covBefore (hZdisj : ∀ i j, i ≠ j → Disjoint (Zs i) (Zs j)
   obtain ⟨j, hj, hj'⟩ := mem_covBefore.1 hu
   exact disjoint_left.1 (hZdisj j k fun h => by rw [h] at hj; exact lt_irrefl _ hj) hj' hu'
 
+/-- Removing from each covariate set the covariates of the earlier steps does not change the
+cumulative covariate sets. -/
+theorem covBefore_sdiff (Zs : Fin n → Finset V) (k : ℕ) :
+    covBefore (fun j => Zs j \ covBefore Zs j) k = covBefore Zs k := by
+  ext u
+  simp only [mem_covBefore, mem_sdiff]
+  constructor
+  · rintro ⟨j, hj, hu, _⟩
+    exact ⟨j, hj, hu⟩
+  · rintro ⟨j, hj, hu⟩
+    have hne : (univ.filter fun i : Fin n => u ∈ Zs i).Nonempty := ⟨j, by simpa using hu⟩
+    set j₀ := (univ.filter fun i : Fin n => u ∈ Zs i).min' hne
+    have hj₀ : u ∈ Zs j₀ := by simpa using min'_mem _ hne
+    have hle : j₀ ≤ j := min'_le _ _ (by simpa using hu)
+    refine ⟨j₀, lt_of_le_of_lt (Fin.le_def.1 hle) hj, hj₀, ?_⟩
+    rintro ⟨i, hi, hui⟩
+    have := min'_le (univ.filter fun i : Fin n => u ∈ Zs i) i (mem_filter.2 ⟨mem_univ _, hui⟩)
+    exact absurd (Fin.le_def.1 this) (by omega)
+
+/-- Removing from each covariate set the covariates of the earlier steps does not change the
+union of the covariate sets. -/
+theorem biUnion_sdiff_covBefore (Zs : Fin n → Finset V) :
+    univ.biUnion (fun j => Zs j \ covBefore Zs j) = univ.biUnion Zs := by
+  rw [← covBefore_self, ← covBefore_self, covBefore_sdiff]
+
+/-- The covariate sets with the covariates of the earlier steps removed are pairwise
+disjoint. -/
+theorem disjoint_sdiff_covBefore (Zs : Fin n → Finset V) {i j : Fin n} (hij : i ≠ j) :
+    Disjoint (Zs i \ covBefore Zs i) (Zs j \ covBefore Zs j) := by
+  have key : ∀ {a b : Fin n}, a < b →
+      Disjoint (Zs a \ covBefore Zs a) (Zs b \ covBefore Zs b) := fun {a b} hab =>
+    disjoint_left.2 fun u hua hub =>
+      (mem_sdiff.1 hub).2 (mem_covBefore.2 ⟨a, Fin.lt_def.1 hab, (mem_sdiff.1 hua).1⟩)
+  rcases lt_or_gt_of_ne hij with h | h
+  · exact key h
+  · exact (key h).symm
+
+/-- An admissible sequence stays admissible when the covariates of the earlier steps are removed
+from each covariate set: condition (4.4) passes to subsets, and the conditioning set of every
+step test (4.5) is unchanged. -/
+theorem admissible_sdiff_covBefore {G : Digraph V} {C : Finset V} {y : V}
+    (h : G.Admissible C x y Zs) : G.Admissible C x y (fun j => Zs j \ covBefore Zs j) := by
+  intro k
+  refine ⟨fun v hv => (h k).1 v (mem_sdiff.1 hv).1, ?_⟩
+  have hstep := (h k).2
+  unfold Digraph.SeqBackDoorStep at hstep ⊢
+  rw [← coe_stepCond] at hstep ⊢
+  rwa [covBefore_sdiff, sdiff_union_self_eq_union]
+
 end Plan
 
 namespace SCM
@@ -288,41 +346,25 @@ theorem planWeight_succ (k : Fin n) (c : ∀ u, α u) :
     simp only [mem_filter, mem_univ, true_and, mem_insert, Fin.ext_iff]
     omega, prod_insert (by simp), mul_comm]
 
-/-- **One step of the proof of Theorem 4.4.1** (Pearl 2009, p. 123). The quantity of stage `k`
-is the sum over `z_k` of the quantity of stage `k + 1` times `P(z_k | z_1, …, x_{k-1})`. Step 1
-of Pearl's proof (deleting the later actions from `P(z_k | …)`) holds because the observations
-before stage `k + 1` are nondescendants of the remaining controls; Step 2 (exchanging `do(x_k)`
-for the observation `x_k`) is Rule 2, licensed by the step test (4.5), applied in the submodel
-of the later controls. -/
-theorem planStage_eq_sum (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdered x)
-    (hZdisj : ∀ i j, i ≠ j → Disjoint (Zs i) (Zs j)) (hZx : ∀ i j, x j ∉ Zs i)
-    (hZy : ∀ i, y ∉ Zs i) (k : Fin n) (c : ∀ u, α u)
-    (hpos : ∀ d ∈ FiniteDist.agreeOn (Zs k)ᶜ c,
-      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) d →
-      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1)) d) :
-    M.planStage x y Zs k c = ∑ d ∈ FiniteDist.agreeOn (Zs k)ᶜ c,
-      M.planStage x y Zs (k + 1) d *
-        (M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) d /
-          M.dist.margAt (covBefore Zs k ∪ ctrlBefore x k) d) := by
-  have hcovk := disjoint_covBefore hZdisj k
-  have hctrlk : Disjoint (ctrlBefore x k) (Zs k) := by
-    rw [disjoint_left]
-    intro u hu hu'
-    obtain ⟨j, _, rfl⟩ := mem_ctrlBefore.1 hu
-    exact hZx k j hu'
-  have hOk : Disjoint (covBefore Zs k ∪ ctrlBefore x k) (Zs k) :=
-    disjoint_union_left.2 ⟨hcovk, hctrlk⟩
-  have hO : Disjoint ({y} ∪ (covBefore Zs k ∪ ctrlBefore x k)) (Zs k) :=
-    disjoint_union_left.2 ⟨disjoint_singleton_left.2 (hZy k), hOk⟩
+/-- **The division-free step of the proof of Theorem 4.4.1** (Pearl 2009, p. 123). With
+`H_k = (z_1, …, z_k, x_1, …, x_{k-1})` (the observations before control `x_k`, Pearl's indexing
+from one) and `P^k` the law under `do(x_k, …, x_n)`, the step test (4.5) and the nondescendant
+condition (4.4) give `P^k(y, H_k) * P(H_k, x_k) = P^{k+1}(y, H_k, x_k) * P(H_k)`, all values
+read off `d`. No positivity and no disjointness of the covariate sets is needed. -/
+theorem planStage_mul (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdered x)
+    (hZx : ∀ i j, x j ∉ Zs i) (k : Fin n) (d : ∀ u, α u) :
+    (M.intervene (ctrlFrom x k) d).dist.margAt ({y} ∪ (covBefore Zs (k + 1) ∪ ctrlBefore x k)) d *
+        M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1)) d =
+      (M.intervene (ctrlFrom x (k + 1)) d).dist.margAt
+          ({y} ∪ (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1))) d *
+        M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) d := by
   have hxnot := ctrl_notMem_stepCond hord hZx k
-  -- the step test (4.5), in the form needed by Rule 2
   have hstep := (hadm k).2
   unfold Digraph.SeqBackDoorStep Digraph.stepGraph at hstep
   rw [← coe_ctrlFrom_succ, ← coe_stepCond] at hstep
   have hyx : y ≠ x k := by
     rintro rfl
     exact hxnot (hstep.inter_subset ⟨Set.mem_singleton _, Set.mem_singleton _⟩)
-  -- nondescendants of the remaining controls
   have hND1 : ∀ u ∈ covBefore Zs (k + 1) ∪ ctrlBefore x k,
       u ∉ G.descendantsOf ↑(ctrlFrom x k) := by
     intro u hu
@@ -339,16 +381,6 @@ theorem planStage_eq_sum (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdere
       exact notMem_descendantsOf_of_mem_Zs hadm (by omega) hu
     · obtain ⟨i, hi, rfl⟩ := mem_ctrlBefore.1 hu
       exact notMem_descendantsOf_ctrl hord hi
-  -- marginalize the numerator over `z_k`
-  rw [planStage, FiniteDist.margAt_eq_sum_margAt _ (subset_union_left (s₂ := Zs k)),
-    union_sdiff_cancel_left hO, sum_div]
-  refine sum_congr rfl fun d hd => ?_
-  have hdc : ∀ u ∉ Zs k, d u = c u := fun u hu => FiniteDist.mem_agreeOn.1 hd u (mem_compl.2 hu)
-  have hAk : ∀ u ∈ ctrlFrom x k, c u = d u := fun u hu => by
-    obtain ⟨j, _, rfl⟩ := mem_ctrlFrom.1 hu
-    exact (hdc _ (hZx k j)).symm
-  rw [M.intervene_congr hAk, M.dist.margAt_congr (covBefore Zs k ∪ ctrlBefore x k)
-    (fun u hu => (hdc u (disjoint_left.1 hOk hu)).symm)]
   -- Rule 2 in the submodel of the later controls
   have r := (M.intervene (ctrlFrom x (k + 1)) d).rule2 (X := ∅) (Y := {y}) (Z := {x k})
     (W := Zs k ∪ covBefore Zs k ∪ ctrlBefore x k) d (disjoint_empty_left _)
@@ -372,15 +404,65 @@ theorem planStage_eq_sum (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdere
     rw [union_assoc, e2]
   have e4 : Zs k ∪ covBefore Zs k ∪ ctrlBefore x k = covBefore Zs (k + 1) ∪ ctrlBefore x k := by
     rw [covBefore_succ, union_comm (covBefore Zs k)]
+  rw [hA, dist_intervene_empty, e2, e3, e4,
+    M.margAt_intervene_of_notMem_descendantsOf hND1 d,
+    M.margAt_intervene_of_notMem_descendantsOf hND2 d] at r
+  exact r
+
+/-- **One step of the proof of Theorem 4.4.1** (Pearl 2009, p. 123). The quantity of stage `k`
+is the sum over `z_k` of the quantity of stage `k + 1` times `P(z_k | z_1, …, x_{k-1})`. Step 1
+of Pearl's proof (deleting the later actions from `P(z_k | …)`) holds because the observations
+before stage `k + 1` are nondescendants of the remaining controls; Step 2 (exchanging `do(x_k)`
+for the observation `x_k`) is Rule 2, licensed by the step test (4.5), applied in the submodel
+of the later controls; its division-free form is `SCM.planStage_mul`. -/
+theorem planStage_eq_sum (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdered x)
+    (hZdisj : ∀ i j, i ≠ j → Disjoint (Zs i) (Zs j)) (hZx : ∀ i j, x j ∉ Zs i)
+    (hZy : ∀ i, y ∉ Zs i) (k : Fin n) (c : ∀ u, α u)
+    (hpos : ∀ d ∈ FiniteDist.agreeOn (Zs k)ᶜ c,
+      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) d →
+      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1)) d) :
+    M.planStage x y Zs k c = ∑ d ∈ FiniteDist.agreeOn (Zs k)ᶜ c,
+      M.planStage x y Zs (k + 1) d *
+        (M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) d /
+          M.dist.margAt (covBefore Zs k ∪ ctrlBefore x k) d) := by
+  have hcovk := disjoint_covBefore hZdisj k
+  have hctrlk : Disjoint (ctrlBefore x k) (Zs k) := by
+    rw [disjoint_left]
+    intro u hu hu'
+    obtain ⟨j, _, rfl⟩ := mem_ctrlBefore.1 hu
+    exact hZx k j hu'
+  have hOk : Disjoint (covBefore Zs k ∪ ctrlBefore x k) (Zs k) :=
+    disjoint_union_left.2 ⟨hcovk, hctrlk⟩
+  have hO : Disjoint ({y} ∪ (covBefore Zs k ∪ ctrlBefore x k)) (Zs k) :=
+    disjoint_union_left.2 ⟨disjoint_singleton_left.2 (hZy k), hOk⟩
+  -- nondescendants of the remaining controls
+  have hND1 : ∀ u ∈ covBefore Zs (k + 1) ∪ ctrlBefore x k,
+      u ∉ G.descendantsOf ↑(ctrlFrom x k) := by
+    intro u hu
+    rcases mem_union.1 hu with hu | hu
+    · obtain ⟨j, hj, hu⟩ := mem_covBefore.1 hu
+      exact notMem_descendantsOf_of_mem_Zs hadm (by omega) hu
+    · obtain ⟨i, hi, rfl⟩ := mem_ctrlBefore.1 hu
+      exact notMem_descendantsOf_ctrl hord hi
+  -- marginalize the numerator over `z_k`
+  rw [planStage, FiniteDist.margAt_eq_sum_margAt _ (subset_union_left (s₂ := Zs k)),
+    union_sdiff_cancel_left hO, sum_div]
+  refine sum_congr rfl fun d hd => ?_
+  have hdc : ∀ u ∉ Zs k, d u = c u := fun u hu => FiniteDist.mem_agreeOn.1 hd u (mem_compl.2 hu)
+  have hAk : ∀ u ∈ ctrlFrom x k, c u = d u := fun u hu => by
+    obtain ⟨j, _, rfl⟩ := mem_ctrlFrom.1 hu
+    exact (hdc _ (hZx k j)).symm
+  rw [M.intervene_congr hAk, M.dist.margAt_congr (covBefore Zs k ∪ ctrlBefore x k)
+    (fun u hu => (hdc u (disjoint_left.1 hOk hu)).symm)]
+  have r := M.planStage_mul hadm hord hZx k d
+  have e4 : Zs k ∪ covBefore Zs k ∪ ctrlBefore x k = covBefore Zs (k + 1) ∪ ctrlBefore x k := by
+    rw [covBefore_succ, union_comm (covBefore Zs k)]
   have e1 : {y} ∪ (covBefore Zs k ∪ ctrlBefore x k) ∪ Zs k =
       {y} ∪ (covBefore Zs (k + 1) ∪ ctrlBefore x k) := by
     rw [← e4]
     ext u
     simp only [mem_union]
     tauto
-  rw [hA, dist_intervene_empty, e2, e3, e4,
-    M.margAt_intervene_of_notMem_descendantsOf hND1 d,
-    M.margAt_intervene_of_notMem_descendantsOf hND2 d] at r
   rw [e1, planStage]
   rcases (M.dist.margAt_nonneg (covBefore Zs (k + 1) ∪ ctrlBefore x k) d).eq_or_lt with h0 | hp
   · -- a stratum of probability zero contributes nothing on either side
@@ -397,28 +479,18 @@ theorem planStage_eq_sum (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdere
     field_simp
     linear_combination r
 
-/-- **The effect of a plan** (Pearl 2009, Theorem 4.4.1 and equation (4.6); Pearl and Robins
-1995, the sequential back-door criterion). Let the controls `x 0, …, x (n - 1)` be listed in an
-order compatible with `G` (`Digraph.ControlsOrdered`) and let the covariate sets `Zs` form an
-admissible sequence for the outcome `y` (`Digraph.Admissible`, conditions (4.4) and (4.5)).
-Assume, as in Pearl's partition of the vertices into controls, covariates, latent variables and
-the outcome, that the sets `Zs k` are pairwise disjoint and contain neither a control nor `y`.
-Assume the positivity `P(z_1, …, z_k, x_1, …, x_{k-1}) > 0 → P(z_1, …, z_k, x_1, …, x_k) > 0` at
-every stage, at the planned values of the controls. Then
-`P(y | do(x_1), …, do(x_n)) = ∑_z P(y | z, x) ∏_k P(z_k | z_1, …, z_{k-1}, x_1, …, x_{k-1})`,
-written with ratios of marginals: `P(y | z, x) = P(y, z, x) / P(z, x)` and
-`P(z_k | z_{<k}, x_{<k}) = P(z_{≤k}, x_{<k}) / P(z_{<k}, x_{<k})`. The sum runs over the
-configurations that agree with `v` outside the covariates; only marginals on covariates,
-controls and `y` appear on the right, so every other vertex may be latent. Strata of probability
-zero contribute zero, so the convention `x / 0 = 0` carries nothing.
+/-- Theorem 4.4.1 of Pearl (2009) for covariate sets `Zs k` that are pairwise disjoint (the
+form proved by induction on the stages); `SCM.effect_plan_eq_gFormula` drops the disjointness.
+Under the hypotheses of `SCM.effect_plan_eq_gFormula` and the pairwise disjointness of the sets
+`Zs k`, the same g-formula (4.6) holds.
 
 The proof is Pearl's: by induction on the stages, Step 1 (deleting later actions from the
 covariate factors) by the nondescendant condition (4.4), Step 2 (exchanging an action for an
 observation) by Rule 2 and the test (4.5) (`SCM.planStage_eq_sum`). -/
-theorem effect_plan_eq_gFormula (x : Fin n → V) (y : V) (C : Finset V) (Zs : Fin n → Finset V)
-    (v : ∀ u, α u) (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdered x)
-    (hZdisj : ∀ i j, i ≠ j → Disjoint (Zs i) (Zs j)) (hZx : ∀ i j, x j ∉ Zs i)
-    (hZy : ∀ i, y ∉ Zs i)
+theorem effect_plan_eq_gFormula_of_disjoint (x : Fin n → V) (y : V) (C : Finset V)
+    (Zs : Fin n → Finset V) (v : ∀ u, α u) (hadm : G.Admissible C x y Zs)
+    (hord : G.ControlsOrdered x) (hZdisj : ∀ i j, i ≠ j → Disjoint (Zs i) (Zs j))
+    (hZx : ∀ i j, x j ∉ Zs i) (hZy : ∀ i, y ∉ Zs i)
     (hpos : ∀ (k : Fin n) (c : ∀ u, α u), (∀ j, c (x j) = v (x j)) →
       0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) c →
       0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1)) c) :
@@ -483,6 +555,80 @@ theorem effect_plan_eq_gFormula (x : Fin n → V) (y : V) (C : Finset V) (Zs : F
   rw [planStage, planWeight, ctrlFrom_self, covBefore_self, ctrlBefore_self, dist_intervene_empty,
     filter_true_of_mem fun j _ => j.2]
 
+/-- **The effect of a plan** (Pearl 2009, Theorem 4.4.1 and equation (4.6); Pearl and Robins
+1995, the sequential back-door criterion). Let the controls `x 0, …, x (n - 1)` be listed in an
+order compatible with `G` (`Digraph.ControlsOrdered`) and let the covariate sets `Zs` form an
+admissible sequence for the outcome `y` (`Digraph.Admissible`, conditions (4.4) and (4.5)).
+Assume, as in Pearl's partition of the vertices by role into controls, covariates, latent
+variables and the outcome, that the sets `Zs k` contain neither a control nor `y`; the sets
+`Zs k` may overlap (a covariate may be listed at several stages). Assume the positivity
+`P(z_1, …, z_k, x_1, …, x_{k-1}) > 0 → P(z_1, …, z_k, x_1, …, x_k) > 0` at every stage, at the
+planned values of the controls. Then
+`P(y | do(x_1), …, do(x_n)) = ∑_z P(y | z, x) ∏_k P(z_k | z_1, …, z_{k-1}, x_1, …, x_{k-1})`,
+written with ratios of marginals: `P(y | z, x) = P(y, z, x) / P(z, x)` and
+`P(z_k | z_{<k}, x_{<k}) = P(z_{≤k}, x_{<k}) / P(z_{<k}, x_{<k})`, where `z_{≤k}` is the value of
+the union `Z_1 ∪ … ∪ Z_k`. The sum runs over the configurations that agree with `v` outside the
+covariates; only marginals on covariates, controls and `y` appear on the right, so every other
+vertex may be latent. Strata of probability zero contribute zero, so the convention `x / 0 = 0`
+carries nothing.
+
+Proof: replacing `Z_k` by `Z_k \ (Z_1 ∪ … ∪ Z_{k-1})` keeps the sequence admissible
+(`Plan.admissible_sdiff_covBefore`) and leaves every cumulative union, and so both sides and the
+positivity hypothesis, unchanged (`Plan.covBefore_sdiff`); the new sets are pairwise disjoint,
+and `SCM.effect_plan_eq_gFormula_of_disjoint` applies. -/
+theorem effect_plan_eq_gFormula (x : Fin n → V) (y : V) (C : Finset V) (Zs : Fin n → Finset V)
+    (v : ∀ u, α u) (hadm : G.Admissible C x y Zs) (hord : G.ControlsOrdered x)
+    (hZx : ∀ i j, x j ∉ Zs i) (hZy : ∀ i, y ∉ Zs i)
+    (hpos : ∀ (k : Fin n) (c : ∀ u, α u), (∀ j, c (x j) = v (x j)) →
+      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) c →
+      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1)) c) :
+    M.effect (univ.image x) v {y} v = ∑ c ∈ FiniteDist.agreeOn (univ.biUnion Zs)ᶜ v,
+      M.dist.margAt ({y} ∪ (univ.biUnion Zs ∪ univ.image x)) c /
+          M.dist.margAt (univ.biUnion Zs ∪ univ.image x) c *
+        ∏ k : Fin n, M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) c /
+          M.dist.margAt (covBefore Zs k ∪ ctrlBefore x k) c := by
+  have h := M.effect_plan_eq_gFormula_of_disjoint x y C (fun j => Zs j \ covBefore Zs j) v
+    (admissible_sdiff_covBefore hadm) hord (fun _ _ hij => disjoint_sdiff_covBefore Zs hij)
+    (fun i j hj => hZx i j (mem_sdiff.1 hj).1) (fun i hi => hZy i (mem_sdiff.1 hi).1)
+    (by simpa only [covBefore_sdiff] using hpos)
+  simpa only [biUnion_sdiff_covBefore, covBefore_sdiff] using h
+
+/-- **The effect of a plan for Pearl's admissible sequences** (Pearl 2009, Theorem 4.4.1 with
+Definition 4.4.2): `SCM.effect_plan_eq_gFormula` for a sequence `Zs` satisfying
+`Digraph.AdmissiblePlan` (the step tests together with the standing assumptions
+`Digraph.PlanRoles`), which supply the order of the controls and keep the controls and the
+outcome out of the covariates. -/
+theorem effect_plan_eq_gFormula_of_admissiblePlan (x : Fin n → V) (y : V) (C : Finset V)
+    (Zs : Fin n → Finset V) (v : ∀ u, α u) (h : G.AdmissiblePlan C x y Zs)
+    (hpos : ∀ (k : Fin n) (c : ∀ u, α u), (∀ j, c (x j) = v (x j)) →
+      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) c →
+      0 < M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x (k + 1)) c) :
+    M.effect (univ.image x) v {y} v = ∑ c ∈ FiniteDist.agreeOn (univ.biUnion Zs)ᶜ v,
+      M.dist.margAt ({y} ∪ (univ.biUnion Zs ∪ univ.image x)) c /
+          M.dist.margAt (univ.biUnion Zs ∪ univ.image x) c *
+        ∏ k : Fin n, M.dist.margAt (covBefore Zs (k + 1) ∪ ctrlBefore x k) c /
+          M.dist.margAt (covBefore Zs k ∪ ctrlBefore x k) c :=
+  M.effect_plan_eq_gFormula x y C Zs v h.2 h.1.1
+    (fun i j hj => h.1.2.2.1 j ((h.2 i).1 _ hj).1)
+    (fun i hi => h.1.2.2.2.1 ((h.2 i).1 _ hi).1) hpos
+
+/-- **The effect of a plan with the covariate sets of Theorem 4.4.6** (Pearl 2009): under the
+standing assumptions `Digraph.PlanRoles`, if the explicit sets `W_k = Digraph.wSet G C x y k`
+pass the tests (4.5), they form an admissible sequence (`Digraph.admissible_wSet`) and the
+g-formula (4.6) holds with `Z_k = W_k`, under the stagewise positivity. -/
+theorem effect_plan_eq_gFormula_of_wSet (x : Fin n → V) (y : V) (C : Finset V) (v : ∀ u, α u)
+    (hroles : G.PlanRoles C x y) (hstep : ∀ k, G.SeqBackDoorStep x y (G.wSet C x y) k)
+    (hpos : ∀ (k : Fin n) (c : ∀ u, α u), (∀ j, c (x j) = v (x j)) →
+      0 < M.dist.margAt (covBefore (G.wSet C x y) (k + 1) ∪ ctrlBefore x k) c →
+      0 < M.dist.margAt (covBefore (G.wSet C x y) (k + 1) ∪ ctrlBefore x (k + 1)) c) :
+    M.effect (univ.image x) v {y} v = ∑ c ∈ FiniteDist.agreeOn (univ.biUnion (G.wSet C x y))ᶜ v,
+      M.dist.margAt ({y} ∪ (univ.biUnion (G.wSet C x y) ∪ univ.image x)) c /
+          M.dist.margAt (univ.biUnion (G.wSet C x y) ∪ univ.image x) c *
+        ∏ k : Fin n, M.dist.margAt (covBefore (G.wSet C x y) (k + 1) ∪ ctrlBefore x k) c /
+          M.dist.margAt (covBefore (G.wSet C x y) k ∪ ctrlBefore x k) c :=
+  M.effect_plan_eq_gFormula_of_admissiblePlan x y C _ v ⟨hroles, Digraph.admissible_wSet hstep⟩
+    hpos
+
 end Step
 
 end SCM
@@ -508,7 +654,7 @@ theorem effect_plan_pearlFig44 (M : SCM pearlFig44 α ε) (v : ∀ u, α u)
       M.dist.margAt {2, 3, 4, 5} c / M.dist.margAt {2, 3, 4} c *
         (M.dist.margAt {2, 3} c / M.dist.margAt {2} c) := by
   have h := M.effect_plan_eq_gFormula ![2, 4] 5 {3} ![∅, {3}] v (by decide +kernel)
-    (by decide +kernel) (by decide) (by decide) (by decide) fun k c _ _ =>
+    (by decide +kernel) (by decide) (by decide) fun k c _ _ =>
       (hpos c).trans_le (M.dist.margAt_anti (by fin_cases k <;> decide) c)
   simp only [Fin.prod_univ_two] at h
   have e1 : (univ.image ![(2 : Fin 6), 4]) = {2, 4} := by decide
@@ -525,6 +671,178 @@ theorem effect_plan_pearlFig44 (M : SCM pearlFig44 α ε) (v : ∀ u, α u)
       ctrlBefore ![(2 : Fin 6), 4] ((1 : Fin 2) : ℕ)) = {2} := by decide
   rw [e1, e2, e3, e4, e5, e6, e7, e8] at h
   simpa using h
+
+/-! ### A numerical model on Figure 4.4 -/
+
+/-- The noise laws of `fig44Model`: biased coins with `P(true) = 1/4` at `U₂ = 1` and
+`X₂ = 4`, fair bits elsewhere. -/
+noncomputable def fig44Noise (v : Fin 6) : FiniteDist Bool :=
+  if v = 1 ∨ v = 4 then BowExample.quarterCoin else FiniteDist.uniform
+
+/-- A model on the graph of Figure 4.4 with full support on `(X₁, Z, X₂)`: `U₁ := false`,
+`X₁ := ε₂` (a fair bit), `U₂ := X₁ xor ε₁`, `Z := U₂`, `X₂ := Z xor ε₄`, `Y := X₂ xor U₂`, with
+`ε₁`, `ε₄` biased coins of `P(true) = 1/4`. -/
+noncomputable def fig44Model : SCM pearlFig44 (fun _ => Bool) (fun _ => Bool) where
+  acyclic := by decide +kernel
+  f v z e :=
+    if h1 : v = 1 then xor (z ⟨2, by subst h1; decide⟩) e else
+    if v = 2 then e else
+    if h3 : v = 3 then z ⟨1, by subst h3; decide⟩ else
+    if h4 : v = 4 then xor (z ⟨3, by subst h4; decide⟩) e else
+    if h5 : v = 5 then xor (z ⟨4, by subst h5; decide⟩) (z ⟨1, by subst h5; decide⟩) else false
+  noise := fig44Noise
+
+/-- The observational solution of `fig44Model`. -/
+theorem fig44Model_solve (u : Fin 6 → Bool) :
+    fig44Model.solve u = ![false, xor (u 2) (u 1), u 2, xor (u 2) (u 1),
+      xor (xor (u 2) (u 1)) (u 4), xor (xor (xor (u 2) (u 1)) (u 4)) (xor (u 2) (u 1))] := by
+  refine (fig44Model.isSolution_iff.1 fun v => ?_).symm
+  fin_cases v <;> simp [fig44Model, Finset.restrict]
+
+/-- Each noise law has total mass one on the two values. -/
+theorem fig44Noise_add (i : Fin 6) : fig44Noise i true + fig44Noise i false = 1 := by
+  simpa [Fintype.sum_bool] using (fig44Noise i).sum_eq_one
+
+/-- The noise coordinates `ε₂`, `ε₁`, `ε₄` of `fig44Model` are independent with laws
+`fig44Noise 2`, `fig44Noise 1`, `fig44Noise 4`. -/
+theorem fig44_map_triple : (FiniteDist.pi fig44Noise).map (fun u => (u 2, u 1, u 4)) =
+    (fig44Noise 2).prod ((fig44Noise 1).prod (fig44Noise 4)) := by
+  ext ⟨a, b, c⟩
+  rw [FiniteDist.map_apply_eq_prob]
+  have h : (univ.filter fun u : Fin 6 → Bool => (u 2, u 1, u 4) = (a, b, c)) =
+      Fintype.piFinset ![univ, {b}, {a}, univ, {c}, univ] := by
+    ext u
+    simp only [mem_filter, mem_univ, true_and, Fintype.mem_piFinset, Prod.mk.injEq]
+    constructor
+    · rintro ⟨rfl, rfl, rfl⟩ i
+      fin_cases i <;> simp
+    · intro h
+      exact ⟨by simpa using h 2, by simpa using h 1, by simpa using h 4⟩
+  rw [h, FiniteDist.prob_piFinset, Fin.prod_univ_six]
+  simp only [FiniteDist.prob, Matrix.cons_val, sum_singleton, Fintype.sum_bool, fig44Noise_add,
+    FiniteDist.prod_apply]
+  ring
+
+/-- A noise event that depends only on `ε₁`, `ε₂`, `ε₄` has probability given by the sum over
+those three bits. -/
+theorem fig44_probOf (P : (Fin 6 → Bool) → Prop) {_ : DecidablePred P}
+    (hP : ∀ u u' : Fin 6 → Bool, u 1 = u' 1 → u 2 = u' 2 → u 4 = u' 4 → (P u ↔ P u')) :
+    fig44Model.noiseDist.probOf P = ∑ a : Bool, ∑ b : Bool, ∑ d : Bool,
+      if P ![false, b, a, false, d, false] then
+        fig44Noise 2 a * (fig44Noise 1 b * fig44Noise 4 d) else 0 := by
+  change (FiniteDist.pi fig44Noise).probOf P = _
+  rw [show (FiniteDist.pi fig44Noise).probOf P =
+      (FiniteDist.pi fig44Noise).probOf (fun u => P ![false, u 1, u 2, false, u 4, false]) from
+    FiniteDist.probOf_congr _ fun u => hP _ _ rfl rfl rfl,
+    show (FiniteDist.pi fig44Noise).probOf (fun u => P ![false, u 1, u 2, false, u 4, false]) =
+      ((FiniteDist.pi fig44Noise).map (fun u => (u 2, u 1, u 4))).probOf
+        (fun t => P ![false, t.2.1, t.1, false, t.2.2, false]) from
+    (FiniteDist.probOf_map (FiniteDist.pi fig44Noise) (fun u => (u 2, u 1, u 4))
+      (fun t => P ![false, t.2.1, t.1, false, t.2.2, false])).symm, fig44_map_triple]
+  simp only [FiniteDist.probOf, FiniteDist.prob, sum_filter, Fintype.sum_prod_type,
+    FiniteDist.prod_apply]
+
+/-- The all-`true` configuration: the plan `do(X₁ = true), do(X₂ = true)` and the outcome
+`Y = true`. -/
+def fig44Ones : Fin 6 → Bool := fun _ => true
+
+/-- The solution of `fig44Model` under the plan `do(X₁ = true), do(X₂ = true)`. -/
+theorem fig44Model_intervene_solve (u : Fin 6 → Bool) :
+    (fig44Model.intervene {2, 4} fig44Ones).solve u =
+      ![false, xor true (u 1), true, xor true (u 1), true, xor true (xor true (u 1))] := by
+  refine ((fig44Model.intervene {2, 4} fig44Ones).eq_solve_of_isSolution ?_).symm
+  refine fig44Model.isSolution_intervene_iff.2 ⟨fun v hv => ?_, fun v hv => ?_⟩
+  · fin_cases v <;> simp_all [fig44Ones]
+  · fin_cases v <;> simp_all [fig44Model, Finset.restrict]
+
+/-- The events `{V = c on S}` of `fig44Model` depend only on the noise bits `ε₁`, `ε₂`, `ε₄`. -/
+theorem fig44Model_hP (S : Finset (Fin 6)) (c : Fin 6 → Bool) (u u' : Fin 6 → Bool)
+    (h1 : u 1 = u' 1) (h2 : u 2 = u' 2) (h4 : u 4 = u' 4) :
+    (∀ v ∈ S, fig44Model.solve u v = c v) ↔ ∀ v ∈ S, fig44Model.solve u' v = c v := by
+  rw [fig44Model_solve, fig44Model_solve, h1, h2, h4]
+
+/-- The events `{V = c on S}` of `fig44Model` under the plan depend only on the noise bit
+`ε₁`. -/
+theorem fig44Model_intervene_hP (S : Finset (Fin 6)) (c : Fin 6 → Bool) (u u' : Fin 6 → Bool)
+    (h1 : u 1 = u' 1) (_ : u 2 = u' 2) (_ : u 4 = u' 4) :
+    (∀ v ∈ S, (fig44Model.intervene {2, 4} fig44Ones).solve u v = c v) ↔
+      ∀ v ∈ S, (fig44Model.intervene {2, 4} fig44Ones).solve u' v = c v := by
+  rw [fig44Model_intervene_solve, fig44Model_intervene_solve, h1]
+
+/-- The observational marginals of `fig44Model` as sums over the noise bits `ε₂`, `ε₁`, `ε₄`. -/
+theorem fig44Model_margAt (S : Finset (Fin 6)) (c : Fin 6 → Bool) :
+    fig44Model.dist.margAt S c = ∑ a : Bool, ∑ b : Bool, ∑ d : Bool,
+      if (∀ v ∈ S, fig44Model.solve ![false, b, a, false, d, false] v = c v) then
+        fig44Noise 2 a * (fig44Noise 1 b * fig44Noise 4 d) else 0 := by
+  rw [margAt_dist, fig44_probOf _ (fig44Model_hP S c)]
+  congr!
+
+/-- The two configurations that agree with `fig44Ones` outside `Z = 3`. -/
+theorem fig44_agreeOn : FiniteDist.agreeOn ({3} : Finset (Fin 6))ᶜ fig44Ones =
+    {fig44Ones, Function.update fig44Ones 3 false} := by
+  ext c
+  simp only [FiniteDist.mem_agreeOn, mem_compl, mem_singleton, mem_insert]
+  constructor
+  · intro h
+    cases h3 : c 3
+    · right
+      funext i
+      by_cases hi : i = 3
+      · subst hi; simpa using h3
+      · rw [Function.update_of_ne hi]; exact h i hi
+    · left
+      funext i
+      by_cases hi : i = 3
+      · subst hi; simpa [fig44Ones] using h3
+      · exact h i hi
+  · rintro (rfl | rfl) i hi
+    · rfl
+    · exact Function.update_of_ne hi _ _
+
+/-- **A numerical instance of equation (4.7)** (Pearl 2009, Figure 4.4). In `fig44Model` the
+observed law of `(X₁, Z, X₂)` has full support; the plan `do(X₁ = true), do(X₂ = true)` gives
+`P(Y = true | do(x₁), do(x₂)) = 1/4`; the g-formula (4.7),
+`∑_z P(y | z, x₁, x₂) P(z | x₁)`, evaluated on the observational law, is also `1/4`; and the
+unadjusted conditional probability `P(Y = true | X₁ = true, X₂ = true)` is `1/10`, which differs
+from the effect. -/
+theorem fig44Model_plan :
+    (∀ c, 0 < fig44Model.dist.margAt {2, 3, 4} c) ∧
+      fig44Model.effect {2, 4} fig44Ones {5} fig44Ones = 1 / 4 ∧
+      (∑ c ∈ FiniteDist.agreeOn ({3} : Finset (Fin 6))ᶜ fig44Ones,
+        fig44Model.dist.margAt {2, 3, 4, 5} c / fig44Model.dist.margAt {2, 3, 4} c *
+          (fig44Model.dist.margAt {2, 3} c / fig44Model.dist.margAt {2} c)) = 1 / 4 ∧
+      fig44Model.dist.margAt {2, 4, 5} fig44Ones / fig44Model.dist.margAt {2, 4} fig44Ones =
+        1 / 10 := by
+  have hnn : ∀ a b d, 0 ≤ fig44Noise 2 a * (fig44Noise 1 b * fig44Noise 4 d) := fun a b d =>
+    mul_nonneg ((fig44Noise 2).nonneg _) (mul_nonneg ((fig44Noise 1).nonneg _)
+      ((fig44Noise 4).nonneg _))
+  refine ⟨fun c => ?_, ?_, ?_, ?_⟩
+  · have h : ∀ i b, 0 < fig44Noise i b := fun i b => by
+      unfold fig44Noise
+      split_ifs <;> cases b <;> norm_num [BowExample.quarterCoin]
+    rw [fig44Model_margAt]
+    refine sum_pos' (fun a _ => sum_nonneg fun b _ => sum_nonneg fun d _ =>
+      ite_nonneg (hnn a b d) le_rfl) ⟨c 2, mem_univ _, sum_pos' (fun b _ => sum_nonneg
+      fun d _ => ite_nonneg (hnn _ b d) le_rfl) ⟨xor (c 2) (c 3), mem_univ _, sum_pos'
+      (fun d _ => ite_nonneg (hnn _ _ d) le_rfl) ⟨xor (c 3) (c 4), mem_univ _, ?_⟩⟩⟩
+    have hc : ∀ v ∈ ({2, 3, 4} : Finset (Fin 6)), fig44Model.solve
+        ![false, xor (c 2) (c 3), c 2, false, xor (c 3) (c 4), false] v = c v := by
+      intro v hv
+      simp only [mem_insert, mem_singleton] at hv
+      rcases hv with rfl | rfl | rfl <;> simp [fig44Model_solve]
+    split_ifs
+    exact mul_pos (h 2 _) (mul_pos (h 1 _) (h 4 _))
+  · rw [effect, margAt_dist, noiseDist_intervene,
+      fig44_probOf _ (fig44Model_intervene_hP {5} fig44Ones)]
+    simp [fig44Model_intervene_solve, fig44Noise, BowExample.quarterCoin, fig44Ones]
+    norm_num
+  · rw [fig44_agreeOn, sum_pair (fun h => by simpa [fig44Ones] using congrFun h 3)]
+    simp only [fig44Model_margAt]
+    simp [fig44Model_solve, fig44Noise, BowExample.quarterCoin, fig44Ones]
+    norm_num
+  · simp only [fig44Model_margAt]
+    simp [fig44Model_solve, fig44Noise, BowExample.quarterCoin, fig44Ones]
+    norm_num
 
 end SCM.PlanExamples
 

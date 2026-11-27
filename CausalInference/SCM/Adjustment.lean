@@ -8,6 +8,7 @@ module
 public import CausalInference.SCM.DoCalculusExamples
 public import CausalInference.Graphical.Criteria.FrontDoor
 public import CausalInference.SCM.Counterfactuals
+public import CausalInference.SCM.DoCalculusRule3
 
 /-!
 # Back-door and front-door adjustment
@@ -29,19 +30,24 @@ sets; they are marginalized, so the statements cover semi-Markovian models.
   `P(y | do(x)) = P(y | x)`.
 * `SCM.identifiableFrom_effect_of_backDoor`: the effect is identifiable from any observed set
   containing `X ∪ Y ∪ Z`, within the class of models satisfying the positivity.
-* `SCM.adjustment_eq_of_backDoor` (Pearl 2009, section 11.3.4, c-equivalence of admissible
-  sets): two admissible sets give the same adjustment value.
-* `SCM.ett_joint_eq_sum_of_backDoor`, `SCM.ett_eq_sum_of_backDoor` (Pearl 2009, section 11.3.2,
-  p. 344): for a single treatment and a back-door admissible `Z`, the effect of treatment on the
-  treated is `P(Y_x = y | X = x') = ∑_z P(y | x, z) P(z | x')`.
+* `SCM.adjustment_eq_of_backDoor` (Pearl 2009, section 11.3.3, equation (11.8), p. 345:
+  c-equivalence of admissible sets): two admissible sets give the same adjustment value.
+* `SCM.ett_stratum`, `SCM.ett_joint_eq_sum_of_backDoor_of_overlap`,
+  `SCM.ett_eq_sum_of_backDoor_of_overlap` (Pearl 2009, section 11.3.2, p. 344): for a single
+  treatment and a back-door admissible `Z`, the division-free stratum identity
+  `P(Y_x = y, x', z) P(x, z) = P(y, x, z) P(x', z)`, and the effect of treatment on the treated
+  `P(Y_x = y | X = x') = ∑_z P(y | x, z) P(z | x')` under the overlap `P(x', z) > 0 → P(x, z) > 0`
+  on the support of the treated group. `SCM.ett_joint_eq_sum_of_backDoor` and
+  `SCM.ett_eq_sum_of_backDoor` are the corollaries under `P(z) > 0 → P(x, z) > 0`.
 * `SCM.BowExample.adjustment_empty_ne_effect`: adjustment for an inadmissible set (the empty set
   in the bow graph) gives `3/4` while the effect is `1/2`.
 * `SCM.effect_eq_sum_of_frontDoor` (**front-door adjustment**, Pearl 2009, Theorem 3.3.4,
   equation (3.29)): if `Z` satisfies the front-door criterion relative to `(X, Y)` and the law of
   `(X, Z)` is strictly positive, then `P(y | do(x)) = ∑_z P(z | x) ∑_x' P(y | x', z) P(x')`, for
   arbitrary sets `X`, `Y`, `Z` and any graph. `SCM.frontdoor_stratum` is the division-free
-  identity behind it, and `SCM.identifiableFrom_effect_of_frontDoor` the identifiability
-  statement.
+  identity behind it, `SCM.frontdoor_stratum_div` its divided form under `P(x) > 0` (which
+  `SCM.CopyChainExample.frontdoor_stratum_div_ne` shows is needed), and
+  `SCM.identifiableFrom_effect_of_frontDoor` the identifiability statement.
 
 All values are read off configurations: `P(s)` at a configuration `c` is the marginal mass
 `M.dist.margAt S c`, and sums over `z` run over the configurations that agree with a given one
@@ -193,10 +199,10 @@ theorem identifiableFrom_effect_of_backDoor {X Y Z O : Finset V} (v : ∀ u, α 
     hsub (fun u hu => by simp only [mem_union] at hu ⊢; tauto) c,
     hsub (fun u hu => by simp only [mem_union] at hu ⊢; tauto) c]
 
-/-- **Two admissible sets give the same adjustment value** (Pearl 2009, section 11.3.4: two
-sets that both satisfy the back-door criterion are c-equivalent, equation (11.8)). If `Z₁` and
-`Z₂` both satisfy the back-door criterion relative to `(X, Y)`, are disjoint from `Y`, and each
-satisfies the positivity of the back-door adjustment, then
+/-- **Two admissible sets give the same adjustment value** (Pearl 2009, section 11.3.3,
+equation (11.8), p. 345: two sets that both satisfy the back-door criterion are c-equivalent).
+If `Z₁` and `Z₂` both satisfy the back-door criterion relative to `(X, Y)`, are disjoint from
+`Y`, and each satisfies the positivity of the back-door adjustment, then
 `∑_{z₁} P(y | x, z₁) P(z₁) = ∑_{z₂} P(y | x, z₂) P(z₂)`: both equal `P(y | do(x))`. -/
 theorem adjustment_eq_of_backDoor {X Y Z₁ Z₂ : Finset V} (v : ∀ u, α u)
     (h₁ : G.BackDoor ↑X ↑Y ↑Z₁) (h₂ : G.BackDoor ↑X ↑Y ↑Z₂) (hY₁ : Disjoint Y Z₁)
@@ -324,36 +330,54 @@ theorem solve_rule2Model_singleton_self (t : V) (v : ∀ u, α u) (e : ∀ u, ε
   subst hs
   exact M.acyclic s (Relation.TransGen.tail' hsp hpt)
 
-/-- **The effect of treatment on the treated by back-door adjustment**, joint form (Pearl 2009,
-section 11.3.2, p. 344). Let `Z` satisfy the back-door criterion relative to a single treatment
-`t` and the outcomes `Y`, with `Y` disjoint from `Z`, and assume the positivity
-`P(z) > 0 → P(x, z) > 0` at the treatment value `x = v t`. Then the probability that the factual
-treatment is `x' = c₀ t` and the counterfactual outcome `Y_x` is `y` (the values of `c₀` on `Y`)
-is `P(x', Y_x = y) = ∑_z P(y | x, z) P(x', z)`, where `P(y | x, z)` is read off the configuration
-`c` with `t` set to `x`. The sum runs over the configurations that agree with `c₀` outside `Z`.
+/-- For a single treatment `t`, the auxiliary model of Rule 2, `M.rule2Model ∅ {t} v`, carries
+the factual treatment, the counterfactual outcomes `Y_{t := v t}` and the factual covariates `Z`
+(nondescendants of `t`): its marginal on `Y ∪ {t} ∪ Z` at `c` is the probability that
+`X = c t`, `Y_x = c` on `Y` and `Z = c` on `Z`. -/
+theorem margAt_rule2Model_ett (t : V) {Y Z : Finset V} (v c : ∀ u, α u) (htY : t ∉ Y)
+    (htZ : t ∉ Z) (hZ : ∀ w ∈ Z, w ∉ G.descendantsOf ↑({t} : Finset V)) :
+    (M.rule2Model ∅ {t} v).dist.margAt (Y ∪ {t} ∪ Z) c =
+      M.noiseDist.probOf (fun e => M.solve e t = c t ∧
+        (∀ w ∈ Y, (M.intervene {t} v).solve e w = c w) ∧ ∀ w ∈ Z, M.solve e w = c w) := by
+  rw [margAt_dist]
+  refine FiniteDist.probOf_congr _ fun e => ?_
+  have hY : ∀ w ∈ Y, (M.rule2Model ∅ {t} v).solve e w = (M.intervene {t} v).solve e w :=
+    fun w hw => M.solve_rule2Model_singleton_of_ne v e (fun h : w = t => htY (h ▸ hw))
+  have hZ' : ∀ w ∈ Z, (M.rule2Model ∅ {t} v).solve e w = M.solve e w := fun w hw => by
+    rw [M.solve_rule2Model_singleton_of_ne v e (fun h : w = t => htZ (h ▸ hw))]
+    exact M.solve_intervene_of_notMem_descendantsOf e (hZ w hw)
+  simp only [forall_mem_union, mem_singleton, forall_eq, M.solve_rule2Model_singleton_self]
+  constructor
+  · rintro ⟨⟨h1, h2⟩, h3⟩
+    exact ⟨h2, fun w hw => (hY w hw).symm.trans (h1 w hw),
+      fun w hw => (hZ' w hw).symm.trans (h3 w hw)⟩
+  · rintro ⟨h2, h1, h3⟩
+    exact ⟨⟨fun w hw => (hY w hw).trans (h1 w hw), h2⟩,
+      fun w hw => (hZ' w hw).trans (h3 w hw)⟩
 
-The proof uses the auxiliary model of Rule 2 for the treatment (`SCM.solve_rule2Model_singleton`):
-it carries the factual treatment and the counterfactual outcome, it is a model on the graph with
-the edges out of `t` removed, and there the back-door criterion is the d-separation
-`Y ⫫ t | Z`; its global Markov property gives `Y_x ⫫ X | Z`. -/
-theorem ett_joint_eq_sum_of_backDoor (t : V) {Y Z : Finset V} (v c₀ : ∀ u, α u)
-    (hbd : G.BackDoor ↑({t} : Finset V) ↑Y ↑Z) (hYZ : Disjoint Y Z)
-    (hpos : ∀ c : ∀ u, α u, 0 < M.dist.margAt Z c →
-      0 < M.dist.margAt ({t} ∪ Z) (Function.update c t (v t))) :
-    M.noiseDist.probOf (fun e => M.solve e t = c₀ t ∧
-        ∀ w ∈ Y, (M.intervene {t} v).solve e w = c₀ w) =
-      ∑ c ∈ FiniteDist.agreeOn Zᶜ c₀,
-        M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) /
-          M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) * M.dist.margAt ({t} ∪ Z) c := by
+/-- **The per-stratum identity for the effect of treatment on the treated**, division-free
+(Pearl 2009, section 11.3.2, p. 344). Let `Z` satisfy the back-door criterion relative to a single
+treatment `t` and the outcomes `Y`. Then at every configuration `c`,
+with `x = v t`, `x' = c t`, and `y`, `z` the values of `c` on `Y` and `Z`,
+`P(Y_x = y, x', z) * P(x, z) = P(y, x, z) * P(x', z)`, where `P(x, z)` and `P(y, x, z)` are
+read off `c` with `t` set to `x`. No positivity is needed. -/
+theorem ett_stratum (t : V) {Y Z : Finset V} (v c : ∀ u, α u)
+    (hbd : G.BackDoor ↑({t} : Finset V) ↑Y ↑Z) :
+    M.noiseDist.probOf (fun e => M.solve e t = c t ∧
+        (∀ w ∈ Y, (M.intervene {t} v).solve e w = c w) ∧ ∀ w ∈ Z, M.solve e w = c w) *
+        M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) =
+      M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) * M.dist.margAt ({t} ∪ Z) c := by
   have htZ : t ∉ Z := disjoint_left.1 (disjoint_of_backDoor hbd) (mem_singleton_self t)
   have htY : t ∉ Y := disjoint_left.1 (disjoint_left_of_backDoor hbd) (mem_singleton_self t)
+  have hZd : ∀ w ∈ Z, w ∉ G.descendantsOf ↑({t} : Finset V) := fun w hw => hbd.1 w (mem_coe.2 hw)
   have hZnd : ∀ e, ∀ w ∈ Z, (M.intervene {t} v).solve e w = M.solve e w := fun e w hw =>
-    M.solve_intervene_of_notMem_descendantsOf e (hbd.1 w (mem_coe.2 hw))
+    M.solve_intervene_of_notMem_descendantsOf e (hZd w hw)
   have hne : ∀ {w}, w ∈ Y ∪ Z → w ≠ t := fun hw h => by
     subst h
     rcases mem_union.1 hw with h | h
     · exact htY h
     · exact htZ h
+  rw [← M.margAt_rule2Model_ett t v c htY htZ hZd]
   -- the global Markov property of the auxiliary model
   have hsep : ((G.deleteIncoming ↑(∅ : Finset V)).deleteOutgoing ↑({t} : Finset V)).DSep
       ↑Y ↑({t} : Finset V) ↑Z := by
@@ -379,21 +403,6 @@ theorem ett_joint_eq_sum_of_backDoor (t : V) {Y Z : Finset V} (v c₀ : ∀ u, �
       rw [M.solve_rule2Model_singleton_self]
     · rw [M.solve_rule2Model_singleton_of_ne v e h,
         hZnd e w ((mem_union.1 hw).resolve_left fun h' => h (mem_singleton.1 h'))]
-  -- the left side is a marginal of the auxiliary model
-  have hL : M.noiseDist.probOf (fun e => M.solve e t = c₀ t ∧
-      ∀ w ∈ Y, (M.intervene {t} v).solve e w = c₀ w) =
-      (M.rule2Model ∅ {t} v).dist.margAt (Y ∪ {t}) c₀ := by
-    rw [margAt_dist]
-    refine FiniteDist.probOf_congr _ fun e => ?_
-    rw [forall_mem_union, and_comm]
-    simp only [mem_singleton, forall_eq]
-    rw [ M.solve_rule2Model_singleton_self]
-    refine and_congr_left fun _ => forall₂_congr fun w hw => ?_
-    rw [M.solve_rule2Model_singleton_of_ne v e (hne (mem_union_left _ hw))]
-  have hdisj : Disjoint (Y ∪ {t}) Z := disjoint_union_left.2 ⟨hYZ, disjoint_singleton_left.2 htZ⟩
-  rw [hL, FiniteDist.margAt_eq_sum_margAt _ (subset_union_left (s₂ := Z)),
-    union_sdiff_cancel_left hdisj]
-  refine sum_congr rfl fun c _ => ?_
   have hm := hci.margAt_mul c
   rw [hRZ, hRYZ, hRtZ] at hm
   -- the per-stratum back-door identity at the treatment value
@@ -408,21 +417,100 @@ theorem ett_joint_eq_sum_of_backDoor (t : V) {Y Z : Finset V} (v c₀ : ∀ u, �
     have h2 : M.dist.margAt ({t} ∪ Z) c = 0 :=
       le_antisymm ((FiniteDist.margAt_anti _ subset_union_right c).trans h0.ge)
         (FiniteDist.margAt_nonneg _ _ _)
-    rw [h1, h2, mul_zero]
-  · have hp := hpos c hz
-    have key : (M.rule2Model ∅ {t} v).dist.margAt (Y ∪ {t} ∪ Z) c *
-        M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) =
-        M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) * M.dist.margAt ({t} ∪ Z) c :=
-      mul_right_cancel₀ hz.ne' (by
-        linear_combination M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) * hm +
-          M.dist.margAt ({t} ∪ Z) c * st)
-    rw [div_mul_eq_mul_div, eq_div_iff hp.ne', key]
+    rw [h1, h2, mul_zero, zero_mul]
+  · exact mul_right_cancel₀ hz.ne' (by
+      linear_combination M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) * hm +
+        M.dist.margAt ({t} ∪ Z) c * st)
+
+/-- **The effect of treatment on the treated by back-door adjustment**, joint form, with overlap
+on the support of the treated group only (Pearl 2009, section 11.3.2, p. 344). Let `Z` satisfy
+the back-door criterion relative to a single treatment `t` and the outcomes `Y`, with `Y`
+disjoint from `Z`, and assume the overlap `P(x', z) > 0 → P(x, z) > 0` for the factual
+treatment value `x' = c₀ t` and the treatment value `x = v t`. Then the probability that the
+factual treatment is `x'` and the counterfactual outcome `Y_x` is `y` (the values of `c₀` on `Y`)
+is `P(x', Y_x = y) = ∑_z P(y | x, z) P(x', z)`, where `P(y | x, z)` is read off the configuration
+`c` with `t` set to `x`. The sum runs over the configurations that agree with `c₀` outside `Z`;
+strata with `P(x', z) = 0` contribute zero on both sides. The per-stratum identity is
+`SCM.ett_stratum`. -/
+theorem ett_joint_eq_sum_of_backDoor_of_overlap (t : V) {Y Z : Finset V} (v c₀ : ∀ u, α u)
+    (hbd : G.BackDoor ↑({t} : Finset V) ↑Y ↑Z) (hYZ : Disjoint Y Z)
+    (hpos : ∀ c : ∀ u, α u, c t = c₀ t → 0 < M.dist.margAt ({t} ∪ Z) c →
+      0 < M.dist.margAt ({t} ∪ Z) (Function.update c t (v t))) :
+    M.noiseDist.probOf (fun e => M.solve e t = c₀ t ∧
+        ∀ w ∈ Y, (M.intervene {t} v).solve e w = c₀ w) =
+      ∑ c ∈ FiniteDist.agreeOn Zᶜ c₀,
+        M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) /
+          M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) * M.dist.margAt ({t} ∪ Z) c := by
+  have htZ : t ∉ Z := disjoint_left.1 (disjoint_of_backDoor hbd) (mem_singleton_self t)
+  have htY : t ∉ Y := disjoint_left.1 (disjoint_left_of_backDoor hbd) (mem_singleton_self t)
+  have hZd : ∀ w ∈ Z, w ∉ G.descendantsOf ↑({t} : Finset V) := fun w hw => hbd.1 w (mem_coe.2 hw)
+  have hL := M.margAt_rule2Model_ett t v c₀ htY (notMem_empty t) (Z := ∅)
+    (fun w hw => absurd hw (notMem_empty w))
+  simp only [union_empty, notMem_empty, IsEmpty.forall_iff, implies_true, and_true] at hL
+  have hdisj : Disjoint (Y ∪ {t}) Z := disjoint_union_left.2 ⟨hYZ, disjoint_singleton_left.2 htZ⟩
+  rw [← hL, FiniteDist.margAt_eq_sum_margAt _ (subset_union_left (s₂ := Z)),
+    union_sdiff_cancel_left hdisj]
+  refine sum_congr rfl fun c hc => ?_
+  rw [M.margAt_rule2Model_ett t v c htY htZ hZd]
+  have hct : c t = c₀ t := FiniteDist.mem_agreeOn.1 hc t (mem_compl.2 htZ)
+  rcases (M.dist.margAt_nonneg ({t} ∪ Z) c).eq_or_lt with h0 | hp
+  · have h1 : M.noiseDist.probOf (fun e => M.solve e t = c t ∧
+        (∀ w ∈ Y, (M.intervene {t} v).solve e w = c w) ∧ ∀ w ∈ Z, M.solve e w = c w) = 0 := by
+      refine le_antisymm ((FiniteDist.probOf_mono _ fun e h => ?_).trans_eq
+        ((margAt_dist M ({t} ∪ Z) c).symm.trans h0.symm)) (FiniteDist.probOf_nonneg _)
+      rw [forall_mem_union]
+      simpa using ⟨h.1, h.2.2⟩
+    rw [h1, ← h0, mul_zero]
+  · have hx := hpos c hct hp
+    rw [div_mul_eq_mul_div, eq_div_iff hx.ne', M.ett_stratum t v c hbd]
+
+/-- **The effect of treatment on the treated by back-door adjustment**, joint form under the
+stronger positivity `P(z) > 0 → P(x, z) > 0` at the treatment value `x = v t` (Pearl 2009,
+section 11.3.2, p. 344): a corollary of `SCM.ett_joint_eq_sum_of_backDoor_of_overlap`, whose
+overlap hypothesis `P(x', z) > 0 → P(x, z) > 0` it implies. Then
+`P(x', Y_x = y) = ∑_z P(y | x, z) P(x', z)` for `x' = c₀ t`.
+
+The proof of the underlying stratum identity (`SCM.ett_stratum`) uses the auxiliary model of
+Rule 2 for the treatment (`SCM.margAt_rule2Model_ett`): it carries the factual treatment and the
+counterfactual outcome, it is a model on the graph with the edges out of `t` removed, and there
+the back-door criterion is the d-separation `Y ⫫ t | Z`; its global Markov property gives
+`Y_x ⫫ X | Z`. -/
+theorem ett_joint_eq_sum_of_backDoor (t : V) {Y Z : Finset V} (v c₀ : ∀ u, α u)
+    (hbd : G.BackDoor ↑({t} : Finset V) ↑Y ↑Z) (hYZ : Disjoint Y Z)
+    (hpos : ∀ c : ∀ u, α u, 0 < M.dist.margAt Z c →
+      0 < M.dist.margAt ({t} ∪ Z) (Function.update c t (v t))) :
+    M.noiseDist.probOf (fun e => M.solve e t = c₀ t ∧
+        ∀ w ∈ Y, (M.intervene {t} v).solve e w = c₀ w) =
+      ∑ c ∈ FiniteDist.agreeOn Zᶜ c₀,
+        M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) /
+          M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) * M.dist.margAt ({t} ∪ Z) c :=
+  M.ett_joint_eq_sum_of_backDoor_of_overlap t v c₀ hbd hYZ fun c _ hc =>
+    hpos c (hc.trans_le (M.dist.margAt_anti subset_union_right c))
 
 /-- **The effect of treatment on the treated by back-door adjustment** (Pearl 2009,
-section 11.3.2, p. 344): under the hypotheses of `SCM.ett_joint_eq_sum_of_backDoor` and
+section 11.3.2, p. 344): under the hypotheses of `SCM.ett_joint_eq_sum_of_backDoor_of_overlap`
+(overlap `P(x', z) > 0 → P(x, z) > 0` on the support of the treated group `x' = c₀ t` only) and
 `P(x') > 0`, the counterfactual probability `P(Y_x = y | X = x')` (abduction, action and
 prediction, `SCM.counterfactualProb`) is `∑_z P(y | x, z) P(z | x')`, with
 `P(z | x') = P(x', z) / P(x')`. -/
+theorem ett_eq_sum_of_backDoor_of_overlap (t : V) {Y Z : Finset V} (v c₀ : ∀ u, α u)
+    (hbd : G.BackDoor ↑({t} : Finset V) ↑Y ↑Z) (hYZ : Disjoint Y Z)
+    (hpos : ∀ c : ∀ u, α u, c t = c₀ t → 0 < M.dist.margAt ({t} ∪ Z) c →
+      0 < M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)))
+    (hx' : 0 < M.dist.probOf (fun w => w t = c₀ t)) :
+    M.counterfactualProb (fun w => w t = c₀ t) hx' {t} v (fun w => ∀ u ∈ Y, w u = c₀ u) =
+      ∑ c ∈ FiniteDist.agreeOn Zᶜ c₀,
+        M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) /
+          M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) *
+            (M.dist.margAt ({t} ∪ Z) c / M.dist.probOf (fun w => w t = c₀ t)) := by
+  rw [counterfactualProb_eq, M.ett_joint_eq_sum_of_backDoor_of_overlap t v c₀ hbd hYZ hpos,
+    sum_div]
+  refine sum_congr rfl fun c _ => ?_
+  rw [mul_div_assoc]
+
+/-- **The effect of treatment on the treated by back-door adjustment**, under the stronger
+positivity `P(z) > 0 → P(x, z) > 0` and `P(x') > 0`: a corollary of
+`SCM.ett_eq_sum_of_backDoor_of_overlap`. -/
 theorem ett_eq_sum_of_backDoor (t : V) {Y Z : Finset V} (v c₀ : ∀ u, α u)
     (hbd : G.BackDoor ↑({t} : Finset V) ↑Y ↑Z) (hYZ : Disjoint Y Z)
     (hpos : ∀ c : ∀ u, α u, 0 < M.dist.margAt Z c →
@@ -432,17 +520,18 @@ theorem ett_eq_sum_of_backDoor (t : V) {Y Z : Finset V} (v c₀ : ∀ u, α u)
       ∑ c ∈ FiniteDist.agreeOn Zᶜ c₀,
         M.dist.margAt (Y ∪ {t} ∪ Z) (Function.update c t (v t)) /
           M.dist.margAt ({t} ∪ Z) (Function.update c t (v t)) *
-            (M.dist.margAt ({t} ∪ Z) c / M.dist.probOf (fun w => w t = c₀ t)) := by
-  rw [counterfactualProb_eq, M.ett_joint_eq_sum_of_backDoor t v c₀ hbd hYZ hpos, sum_div]
-  refine sum_congr rfl fun c _ => ?_
-  rw [mul_div_assoc]
+            (M.dist.margAt ({t} ∪ Z) c / M.dist.probOf (fun w => w t = c₀ t)) :=
+  M.ett_eq_sum_of_backDoor_of_overlap t v c₀ hbd hYZ
+    (fun c _ hc => hpos c (hc.trans_le (M.dist.margAt_anti subset_union_right c))) hx'
 
 /-! ### Front-door adjustment -/
 
 /-- The division-free identity behind the front-door formula. If `Z` satisfies the front-door
 criterion relative to `(X, Y)`, then at every configuration `c`,
-`P(y, z | do(x)) * P(x) = P(y | do(z)) * P(z, x)`, all values read off `c`; that is,
-`P(y, z | do(x)) = P(z | x) P(y | do(z))`. No positivity is needed.
+`P(y, z | do(x)) * P(x) = P(y | do(z)) * P(z, x)`, all values read off `c`. No positivity is
+needed for this product identity. The divided form `P(y, z | do(x)) = P(z | x) P(y | do(z))`
+is `SCM.frontdoor_stratum_div`, which needs `P(x) > 0`: without it the two sides can differ
+(`SCM.CopyChainExample.frontdoor_stratum_div_ne`).
 
 The proof follows Pearl (2009), section 3.4.3: Rule 2 gives `P(z | do(x)) = P(z | x)` (Task 1)
 and `P(y | do(x), z) = P(y | do(x), do(z))`; the intervention on `X` is then removed because no
@@ -471,6 +560,15 @@ theorem frontdoor_stratum {X Y Z : Finset V} (hfd : G.FrontDoor ↑X ↑Y ↑Z) 
     simp only [ite_self]
   rw [← t2, ← t1, t3]
   ring
+
+/-- The divided form of `SCM.frontdoor_stratum`: if `Z` satisfies the front-door criterion
+relative to `(X, Y)` and `P(x) > 0`, then `P(y, z | do(x)) = P(z | x) P(y | do(z))`, with
+`P(z | x) = P(z, x) / P(x)`, all values read off `c`. -/
+theorem frontdoor_stratum_div {X Y Z : Finset V} (hfd : G.FrontDoor ↑X ↑Y ↑Z) (c : ∀ u, α u)
+    (hx : 0 < M.dist.margAt X c) :
+    (M.intervene X c).dist.margAt (Y ∪ Z) c =
+      M.dist.margAt (Z ∪ X) c / M.dist.margAt X c * (M.intervene Z c).dist.margAt Y c := by
+  rw [div_mul_eq_mul_div, eq_div_iff hx.ne', M.frontdoor_stratum hfd c, mul_comm]
 
 /-- **Front-door adjustment** (Pearl 2009, Theorem 3.3.4, equation (3.29)), for any graph and
 any sets `X`, `Y`, `Z` such that `Z` satisfies the front-door criterion relative to `(X, Y)`
@@ -504,7 +602,7 @@ theorem effect_eq_sum_of_frontDoor {X Y Z : Finset V} (v : ∀ u, α u)
       exact hpos d
   rw [effect] at bd
   have hx : 0 < M.dist.margAt X c := (hpos c).trans_le (M.dist.margAt_anti subset_union_left c)
-  rw [← bd, div_mul_eq_mul_div, eq_div_iff hx.ne', M.frontdoor_stratum hfd c, mul_comm]
+  rw [← bd, M.frontdoor_stratum_div hfd c hx]
 
 /-- **Identifiability by front-door adjustment** (Pearl 2009, Theorem 3.3.4): if `Z` satisfies
 the front-door criterion relative to `(X, Y)`, the effect `P(y | do(x))` is identifiable from the
@@ -529,5 +627,30 @@ theorem identifiableFrom_effect_of_frontDoor {X Y Z O : Finset V} (v : ∀ u, α
   simp only [h1, h2, h3]
 
 end SCM
+
+/-! ### The divided front-door stratum needs `P(x) > 0` -/
+
+namespace SCM.CopyChainExample
+
+open GraphExamples
+
+open Rule3PositivityExample (allTrue)
+
+/-- **The divided form of the front-door stratum needs `P(x) > 0`.** In
+`SCM.CopyChainExample.model` (the chain `X = 0 → Z = 1 → Y = 2` with `X := false`, `Z := X`,
+`Y := Z`), `Z = {1}` satisfies the front-door criterion relative to `(X, Y) = ({0}, {2})`. At
+the all-`true` configuration, `P(y, z | do(x)) = 1` while `P(x) = 0`, so the right side
+`P(z, x) / P(x) * P(y | do(z))` of `SCM.frontdoor_stratum_div` is `0 / 0 * P(y | do(z)) = 0`
+in Lean. The product identity `SCM.frontdoor_stratum` holds (both sides are `0`). -/
+theorem frontdoor_stratum_div_ne :
+    chain.FrontDoor ↑({0} : Finset (Fin 3)) ↑({2} : Finset (Fin 3)) ↑({1} : Finset (Fin 3)) ∧
+      model.dist.margAt {0} allTrue = 0 ∧
+      (model.intervene {0} allTrue).dist.margAt ({2} ∪ {1}) allTrue = 1 ∧
+      model.dist.margAt ({1} ∪ {0}) allTrue / model.dist.margAt {0} allTrue *
+        (model.intervene {1} allTrue).dist.margAt {2} allTrue = 0 := by
+  refine ⟨by decide, margAt_allTrue (by decide), intervene_margAt_allTrue _, ?_⟩
+  rw [margAt_allTrue (by decide), zero_div, zero_mul]
+
+end SCM.CopyChainExample
 
 end CausalInference
