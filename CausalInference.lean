@@ -211,3 +211,11 @@ public import CausalInference.StructuralNested.TwoStageWeibullShape
 public import CausalInference.StructuralNested.TwoStageWeibullStrata
 public import CausalInference.StructuralNested.TwoStageWeibullBridge
 public import CausalInference.StructuralNested.TwoStageLogisticConcave
+public import CausalInference.Discovery.MarkovEquivalence
+public import CausalInference.Discovery.CoveredEdge
+public import CausalInference.Discovery.MarkovEquivalenceCharacterization
+public import CausalInference.Discovery.Faithfulness
+public import CausalInference.Discovery.Pattern
+public import CausalInference.Discovery.PatternExamples
+public import CausalInference.Discovery.PC
+public import CausalInference.Discovery.PCExamples
