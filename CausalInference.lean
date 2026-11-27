@@ -123,3 +123,6 @@ public import CausalInference.InstrumentalVariables.ResponseTypes
 public import CausalInference.InstrumentalVariables.BalkePearl
 public import CausalInference.InstrumentalVariables.InstrumentalInequality
 public import CausalInference.InstrumentalVariables.Treated
+public import CausalInference.SCM.TwinNetwork
+public import CausalInference.SCM.CounterfactualExamples
+public import CausalInference.SCM.ActualCause
