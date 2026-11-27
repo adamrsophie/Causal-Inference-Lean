@@ -9,6 +9,8 @@ public import CausalInference.Bias.Misclassification
 public import Mathlib.Probability.Distributions.Beta
 public import Mathlib.Probability.Distributions.Binomial
 public import Mathlib.Algebra.Polynomial.Coeff
+public import Mathlib.Analysis.Calculus.Deriv.MeanValue
+public import Mathlib.Analysis.Calculus.Deriv.Pow
 
 /-!
 # Bayesian bias analysis
@@ -40,6 +42,12 @@ Misclassification") and Chapter 9 (record level reclassification, Tables 9.5 to 
   `caseControl_not_identified_example`: with one classification shared by cases and controls
   (Equation 11.13) the prevalences, and the odds ratio, are not identified either. Builds on
   `Bias.observedPrevalence` and strengthens `Bias.prevalence_not_identified`.
+* Maximum likelihood (Equations 11.2 and 11.4): `binomKernel_strictMonoOn_strictAntiOn` (the
+  binomial likelihood increases strictly up to `k/n` and decreases strictly after it, boundary
+  counts included), `binomPMF_lt_of_ne_proj` and `binomPMF_lt_of_ne` (the unique maximizer on an
+  interval `[lo, hi] ⊆ [0, 1]` is the projection of `k/n`; on `[0, 1]` it is `k/n`), and
+  `misclassLikelihood_lt_of_ne` (for `se + sp > 1` the unique maximizer in the true prevalence is
+  the image of the projection of `x/N` onto the attainable interval `[1 - sp, se]`).
 * Beta and binomial conjugacy (the beta prior of Equation 11.5, binomial likelihood of Equation
   11.2, Bayes' theorem of Equation 11.7): `betaPDFReal_mul_binomPMF`,
   `betaMeasure_withDensity_binomPMF`, `betaBinomial_posterior`.
@@ -56,8 +64,9 @@ Misclassification") and Chapter 9 (record level reclassification, Tables 9.5 to 
   binomial law `binomial_thinning_binomial`.
 * Record level versus summary level reclassification (Chapter 9): `integral_reclassified_count`
   and `integral_reclassified_binomial`.
-* `Examples`: the depression screening example of Chapter 11, Tables 9.7 and 9.8, and the first
-  Gibbs iteration of the Chapter 11 appendix.
+* `Examples`: the depression screening example of Chapter 11 with its maximum likelihood
+  estimates (`depression_mle`), Tables 9.7 and 9.8, and the first Gibbs iteration of the
+  Chapter 11 appendix.
 
 The thinning and Gibbs results are stated for mass functions and densities (the joint law
 written as a function of the parameters and latent counts, and its slices as measures on `ℝ` or
@@ -447,6 +456,176 @@ theorem misclassLikelihood_example (N x : ℕ) :
   norm_num
 
 end Likelihood
+
+section MaximumLikelihood
+
+/-! ### Maximum likelihood for the binomial and misclassified binomial models -/
+
+/-- The derivative of the binomial kernel `p ↦ p^(a + 1) (1 - p)^(b + 1)` is
+`p^a (1 - p)^b ((a + 1) - (a + b + 2) p)`. -/
+theorem hasDerivAt_binomKernel (a b : ℕ) (x : ℝ) :
+    HasDerivAt (fun p : ℝ => p ^ (a + 1) * (1 - p) ^ (b + 1))
+      (x ^ a * (1 - x) ^ b * ((a + 1) - (a + b + 2) * x)) x := by
+  have h := (hasDerivAt_pow (a + 1) x).mul
+    ((hasDerivAt_pow (b + 1) (1 - x)).comp x ((hasDerivAt_id x).const_sub 1))
+  refine HasDerivAt.congr_deriv (f := fun p : ℝ => p ^ (a + 1) * (1 - p) ^ (b + 1)) h ?_
+  simp only [Nat.add_sub_cancel, Function.comp_apply]
+  push_cast
+  ring
+
+/-- **Monotonicity of the binomial likelihood.** For counts `k ≤ n` with `0 < n`, the binomial
+likelihood kernel `p ↦ p^k (1 - p)^(n - k)` is strictly increasing on `[0, k/n]` and strictly
+decreasing on `[k/n, 1]`. The boundary counts are included: for `k = 0` the first interval is
+the point `0` and the kernel `(1 - p)^n` decreases on `[0, 1]`; for `k = n` the second interval is
+the point `1` and the kernel `p^n` increases on `[0, 1]`. -/
+theorem binomKernel_strictMonoOn_strictAntiOn {n k : ℕ} (hk : k ≤ n) (hn : 0 < n) :
+    StrictMonoOn (fun p : ℝ => p ^ k * (1 - p) ^ (n - k)) (Set.Icc 0 ((k : ℝ) / n)) ∧
+      StrictAntiOn (fun p : ℝ => p ^ k * (1 - p) ^ (n - k)) (Set.Icc ((k : ℝ) / n) 1) := by
+  have hn' : (0 : ℝ) < n := by exact_mod_cast hn
+  rcases Nat.eq_zero_or_pos k with rfl | hk0
+  · refine ⟨by simp, ?_⟩
+    intro x hx y hy hxy
+    simp only [pow_zero, one_mul, Nat.sub_zero]
+    exact pow_lt_pow_left₀ (by linarith) (by linarith [hy.2]) hn.ne'
+  rcases (Nat.lt_or_ge k n) with hkn | hkn
+  swap
+  · have hkn' : k = n := le_antisymm hk hkn
+    subst hkn'
+    rw [div_self hn'.ne']
+    refine ⟨?_, by simp⟩
+    intro x hx y hy hxy
+    simp only [Nat.sub_self, pow_zero, mul_one]
+    exact pow_lt_pow_left₀ hxy hx.1 hn.ne'
+  obtain ⟨a, rfl⟩ : ∃ a, k = a + 1 := ⟨k - 1, by omega⟩
+  obtain ⟨b, hb⟩ : ∃ b, n - (a + 1) = b + 1 := ⟨n - (a + 1) - 1, by omega⟩
+  have hnab : (n : ℝ) = a + b + 2 := by
+    have : n = a + b + 2 := by omega
+    rw [this]; push_cast; ring
+  rw [hb]
+  have hcont : Continuous fun p : ℝ => p ^ (a + 1) * (1 - p) ^ (b + 1) := by fun_prop
+  have hderiv : ∀ x, deriv (fun p : ℝ => p ^ (a + 1) * (1 - p) ^ (b + 1)) x =
+      x ^ a * (1 - x) ^ b * ((a + 1) - (a + b + 2) * x) := fun x =>
+    (hasDerivAt_binomKernel a b x).deriv
+  have hm : ((a + 1 : ℕ) : ℝ) / n * (a + b + 2) = a + 1 := by
+    rw [← hnab]; push_cast; field_simp
+  constructor
+  · refine strictMonoOn_of_deriv_pos (convex_Icc _ _) hcont.continuousOn fun x hx => ?_
+    rw [interior_Icc] at hx
+    rw [hderiv]
+    have h1 : 0 < 1 - x := by
+      have : ((a + 1 : ℕ) : ℝ) / n < 1 := by
+        rw [div_lt_one hn', hnab]; push_cast; linarith [(b.cast_nonneg : (0 : ℝ) ≤ b)]
+      linarith [hx.2]
+    have h2 : 0 < (a + 1 : ℝ) - (a + b + 2) * x := by
+      have := mul_lt_mul_of_pos_right hx.2 (by positivity : (0 : ℝ) < a + b + 2)
+      linarith
+    have := hx.1
+    positivity
+  · refine strictAntiOn_of_deriv_neg (convex_Icc _ _) hcont.continuousOn fun x hx => ?_
+    rw [interior_Icc] at hx
+    rw [hderiv]
+    have h0 : 0 < x := lt_of_le_of_lt (by positivity) hx.1
+    have h1 : 0 < 1 - x := by linarith [hx.2]
+    have h2 : (a + 1 : ℝ) - (a + b + 2) * x < 0 := by
+      have := mul_lt_mul_of_pos_right hx.1 (by positivity : (0 : ℝ) < a + b + 2)
+      linarith
+    exact mul_neg_of_pos_of_neg (by positivity) h2
+
+/-- **The constrained maximum likelihood estimate of a binomial proportion.** For counts
+`k ≤ n` with `0 < n` and an interval `[lo, hi] ⊆ [0, 1]`, the likelihood `p ↦ Bin(n, p) {k}`
+restricted to `[lo, hi]` has a unique maximizer, the projection `max lo (min hi (k/n))` of `k/n`
+onto the interval. -/
+theorem binomPMF_lt_of_ne_proj {n k : ℕ} (hk : k ≤ n) (hn : 0 < n) {lo hi : ℝ} (hlo : 0 ≤ lo)
+    (hle : lo ≤ hi) (hhi : hi ≤ 1) :
+    max lo (min hi ((k : ℝ) / n)) ∈ Set.Icc lo hi ∧
+      ∀ p ∈ Set.Icc lo hi, p ≠ max lo (min hi ((k : ℝ) / n)) →
+        binomPMF n p k < binomPMF n (max lo (min hi ((k : ℝ) / n))) k := by
+  obtain ⟨hmono, hanti⟩ := binomKernel_strictMonoOn_strictAntiOn hk hn
+  have hn' : (0 : ℝ) < n := by exact_mod_cast hn
+  have hc0 : 0 ≤ (k : ℝ) / n := by positivity
+  have hc1 : (k : ℝ) / n ≤ 1 := (div_le_one hn').2 (by exact_mod_cast hk)
+  have hch : (0 : ℝ) < n.choose k := by exact_mod_cast Nat.choose_pos hk
+  set c := (k : ℝ) / n
+  set f := fun p : ℝ => p ^ k * (1 - p) ^ (n - k)
+  have hb : ∀ p, binomPMF n p k = n.choose k * f p := fun p => by simp only [binomPMF, f]; ring
+  refine ⟨⟨le_max_left _ _, max_le hle (min_le_left _ _)⟩, fun p hp hne => ?_⟩
+  rw [hb, hb]
+  refine mul_lt_mul_of_pos_left ?_ hch
+  rcases le_or_gt c lo with hclo | hclo
+  · have hstar : max lo (min hi c) = lo := max_eq_left (le_trans (min_le_right _ _) hclo)
+    rw [hstar] at hne ⊢
+    exact hanti ⟨hclo, by linarith⟩ ⟨by linarith [hp.1], by linarith [hp.2]⟩
+      (lt_of_le_of_ne hp.1 (Ne.symm hne))
+  rcases le_or_gt hi c with hchi | hchi
+  · have hstar : max lo (min hi c) = hi := by
+      rw [min_eq_left hchi, max_eq_right hle]
+    rw [hstar] at hne ⊢
+    exact hmono ⟨by linarith [hp.1], by linarith [hp.2]⟩ ⟨by linarith, hchi⟩
+      (lt_of_le_of_ne hp.2 hne)
+  · have hstar : max lo (min hi c) = c := by
+      rw [min_eq_right hchi.le, max_eq_right hclo.le]
+    rw [hstar] at hne ⊢
+    rcases lt_or_gt_of_ne hne with hlt | hgt
+    · exact hmono ⟨by linarith [hp.1], hlt.le⟩ ⟨hc0, le_rfl⟩ hlt
+    · exact hanti ⟨le_rfl, hc1⟩ ⟨hgt.le, by linarith [hp.2]⟩ hgt
+
+/-- **The unconstrained maximum likelihood estimate**: for `k ≤ n` and `0 < n`, `k/n` is the unique
+maximizer of `p ↦ Bin(n, p) {k}` on `[0, 1]`. -/
+theorem binomPMF_lt_of_ne {n k : ℕ} (hk : k ≤ n) (hn : 0 < n) :
+    ∀ p ∈ Set.Icc (0 : ℝ) 1, p ≠ (k : ℝ) / n → binomPMF n p k < binomPMF n ((k : ℝ) / n) k := by
+  have hn' : (0 : ℝ) < n := by exact_mod_cast hn
+  have hc : max 0 (min 1 ((k : ℝ) / n)) = (k : ℝ) / n := by
+    rw [min_eq_right ((div_le_one hn').2 (by exact_mod_cast hk)), max_eq_right (by positivity)]
+  have h := (binomPMF_lt_of_ne_proj hk hn le_rfl zero_le_one le_rfl).2
+  rw [hc] at h
+  exact h
+
+/-- **Maximum likelihood estimate of the true prevalence** (Equation 11.4 with known
+classification). Let `x ≤ N`, `0 < N`, and let `se ≤ 1`, `sp ≤ 1` with `se + sp > 1`, so the
+apparent prevalence `p = (1 - sp) + (se + sp - 1) π` maps `[0, 1]` increasingly onto the attainable
+interval `[1 - sp, se]`. Let `p* = max (1 - sp) (min se (x/N))` be the projection of `x/N` onto that
+interval and `π* = (p* - (1 - sp)) / (se + sp - 1)`. Then `π*` lies in `[0, 1]`, has apparent
+prevalence `p*`, and is the unique maximizer of the likelihood `π ↦ L(N, x | π)` on `[0, 1]`. It is
+`(x/N - (1 - sp)) / (se + sp - 1)` when `x/N` is attainable, `0` when `x/N ≤ 1 - sp` and `1` when
+`se ≤ x/N`. The mirrored case `se + sp < 1` (a decreasing reparameterization) and the
+uninformative case `se + sp = 1` (a constant likelihood) are excluded by the hypothesis. -/
+theorem misclassLikelihood_lt_of_ne {N x : ℕ} (hx : x ≤ N) (hN : 0 < N) {se sp : ℝ}
+    (hse : se ≤ 1) (hsp : sp ≤ 1) (hk : 1 < se + sp) :
+    let pstar := max (1 - sp) (min se ((x : ℝ) / N))
+    let πstar := (pstar - (1 - sp)) / (se + sp - 1)
+    πstar ∈ Set.Icc (0 : ℝ) 1 ∧ Bias.observedPrevalence se sp πstar = pstar ∧
+      (∀ π ∈ Set.Icc (0 : ℝ) 1, π ≠ πstar →
+        misclassLikelihood N x se sp π < misclassLikelihood N x se sp πstar) ∧
+      ((x : ℝ) / N ∈ Set.Icc (1 - sp) se → πstar = ((x : ℝ) / N - (1 - sp)) / (se + sp - 1)) ∧
+      ((x : ℝ) / N ≤ 1 - sp → πstar = 0) ∧ (se ≤ (x : ℝ) / N → πstar = 1) := by
+  intro pstar πstar
+  have hk' : 0 < se + sp - 1 := by linarith
+  obtain ⟨hmem, hlt⟩ := binomPMF_lt_of_ne_proj hx hN (lo := 1 - sp) (hi := se) (by linarith)
+    (by linarith) hse
+  have hobs : ∀ π, Bias.observedPrevalence se sp π = (1 - sp) + (se + sp - 1) * π := fun π => by
+    rw [Bias.observedPrevalence_eq]
+  have hstar : Bias.observedPrevalence se sp πstar = pstar := by
+    rw [hobs]; simp only [πstar]; field_simp; ring
+  refine ⟨⟨div_nonneg (by linarith [hmem.1]) hk'.le, (div_le_one hk').2 (by linarith [hmem.2])⟩,
+    hstar, fun π hπ hne => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
+  · unfold misclassLikelihood
+    rw [hstar]
+    refine hlt _ ⟨?_, ?_⟩ ?_
+    · rw [hobs]; nlinarith [hπ.1]
+    · rw [hobs]; nlinarith [hπ.2]
+    · intro heq
+      apply hne
+      have heq' := heq.trans hstar.symm
+      rw [hobs, hobs] at heq'
+      exact mul_left_cancel₀ hk'.ne' (add_left_cancel heq')
+  · simp only [πstar, pstar, min_eq_right h.2, max_eq_right h.1]
+  · simp only [πstar, pstar]
+    rw [max_eq_left (le_trans (min_le_right _ _) h), sub_self, zero_div]
+  · simp only [πstar, pstar]
+    rw [min_eq_left h, max_eq_right (by linarith), div_eq_one_iff_eq hk'.ne']
+    ring
+
+end MaximumLikelihood
 
 section Conjugacy
 
@@ -1007,14 +1186,46 @@ section Examples
 
 /-- Chapter 11, depression screening example (Equations 11.2 to 11.4): `x = 372` of `N = 774`
 screen positive, so `p̂ = 372/774 ≈ 0.48`. With `Se = 0.95` and `Sp = 0.70` the true prevalence
-with apparent prevalence `p̂` is `π̂ = (p̂ - 0.3)/0.65 ≈ 0.28`, the printed estimate. (The claim
-that `π̂` maximizes the likelihood is not proved here.) -/
+with apparent prevalence `p̂` is `π̂ = (p̂ - 0.3)/0.65 ≈ 0.28`, the printed estimate. That these
+are the maximum likelihood estimates is `depression_mle`. -/
 theorem depression_example :
     (372 : ℕ) + 402 = 774 ∧ (0.48 : ℝ) < 372 / 774 ∧ (372 / 774 : ℝ) < 0.49 ∧
       Bias.observedPrevalence 0.95 0.70 ((372 / 774 - 0.3) / 0.65) = 372 / 774 ∧
       (0.27 : ℝ) < (372 / 774 - 0.3) / 0.65 ∧ (372 / 774 - 0.3) / 0.65 < (0.285 : ℝ) := by
   rw [Bias.observedPrevalence_eq]
   norm_num
+
+/-- **The maximum likelihood estimates of the depression example** (Equations 11.2 and 11.4).
+With `x = 372`, `N = 774`, `Se = 0.95`, `Sp = 0.70`: the observed proportion `372/774` lies in the
+attainable interval `[0.30, 0.95]`; it is the unique maximizer of the likelihood of Equation 11.2
+on `[0, 1]` and on the attainable interval; and the unique maximizer of the likelihood of
+Equation 11.4 in the true prevalence on `[0, 1]` is `π̂ = 466/1677 ≈ 0.2779`, printed `0.28`. -/
+theorem depression_mle :
+    (372 / 774 : ℝ) ∈ Set.Icc (1 - 0.70) 0.95 ∧
+      (∀ p ∈ Set.Icc (0 : ℝ) 1, p ≠ 372 / 774 →
+        binomPMF 774 p 372 < binomPMF 774 (372 / 774) 372) ∧
+      (∀ p ∈ Set.Icc (1 - 0.70 : ℝ) 0.95, p ≠ 372 / 774 →
+        binomPMF 774 p 372 < binomPMF 774 (372 / 774) 372) ∧
+      Bias.observedPrevalence 0.95 0.70 (466 / 1677) = 372 / 774 ∧
+      (∀ π ∈ Set.Icc (0 : ℝ) 1, π ≠ 466 / 1677 →
+        misclassLikelihood 774 372 0.95 0.70 π <
+          misclassLikelihood 774 372 0.95 0.70 (466 / 1677)) ∧
+      (0.2775 : ℝ) < 466 / 1677 ∧ (466 / 1677 : ℝ) < 0.2785 := by
+  have hmem : (372 / 774 : ℝ) ∈ Set.Icc (1 - 0.70) 0.95 := by norm_num
+  have hc : ((372 : ℕ) : ℝ) / (774 : ℕ) = 372 / 774 := by norm_num
+  have hproj : max (1 - 0.70) (min 0.95 (372 / 774)) = (372 / 774 : ℝ) := by
+    rw [min_eq_right hmem.2, max_eq_right hmem.1]
+  obtain ⟨_, hobs, hlt, _⟩ := misclassLikelihood_lt_of_ne (N := 774) (x := 372)
+    (by norm_num) (by norm_num) (se := 0.95) (sp := 0.70) (by norm_num) (by norm_num)
+    (by norm_num)
+  have hπ : ((372 / 774 : ℝ) - (1 - 0.70)) / (0.95 + 0.70 - 1) = 466 / 1677 := by norm_num
+  simp only [hc, hproj, hπ] at hobs hlt
+  have hunc := binomPMF_lt_of_ne (n := 774) (k := 372) (by norm_num) (by norm_num)
+  have hcon := (binomPMF_lt_of_ne_proj (n := 774) (k := 372) (by norm_num) (by norm_num)
+    (lo := 1 - 0.70) (hi := 0.95) (by norm_num) (by norm_num) (by norm_num)).2
+  rw [hc] at hunc
+  simp only [hc, hproj] at hcon
+  exact ⟨hmem, hunc, hcon, hobs, hlt, by norm_num, by norm_num⟩
 
 /-- Chapter 9, Tables 9.7 and 9.8: one record level reclassification of the smoking and breast
 cancer data. The retained proportions are `163/215 ≈ 75.81%`, `1389/1449 ≈ 95.86%`,
