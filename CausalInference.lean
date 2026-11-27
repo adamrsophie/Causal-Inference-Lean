@@ -149,3 +149,6 @@ public import CausalInference.Survival.PostProgression
 public import CausalInference.Survival.IPCW
 public import CausalInference.LinearSEM.DSeparation
 public import CausalInference.Survival.RMST
+public import CausalInference.Measures.Aggregation
+public import CausalInference.Measures.NumberNeededToTreat
+public import CausalInference.BiasAnalysis.EcologicalBias
