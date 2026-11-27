@@ -66,11 +66,15 @@ law and the distribution function `cdf`; this file adds what the chapter uses on
   `logNormal_sd_example` (`sd = 0.21`), `logitNormal_parameters_example` (`2.94` and `0.48`) and
   `logitNormal_quantiles_example` (the quantiles `0.88`, `0.95`, `0.98` at the levels `Φ(-1.96)`,
   `Φ(0)`, `Φ(1.96)`).
+* Beta mode at boundary counts: `betaContPDF` (continuous representative of the density on
+  `[0, 1]`), `betaContPDF_le_mode` (mode `A/(A + B)` for `A, B ≥ 0`, `A + B > 0`),
+  `tendsto_betaPDFReal_betaContPDF`, `betaPDFReal_lt_betaContPDF_zero`,
+  `betaPDFReal_lt_betaContPDF_one` (at a boundary mode the supremum of Mathlib's density is
+  approached at the endpoint, not attained) and `betaContPDF_zero_zero` (uniform case).
 
-The size of the correlation induced by the NORTA construction is not formalized, and the
-bivariate normal law is not defined here: the Gaussian copula enters only through the joint law
-of `(Φ(Z₁), Φ(Z₂))`. The book's simulated quantiles are checked at the levels `Φ(±1.96)`, not at
-exactly `0.025` and `0.975`. The beta mode for zero validation counts is not treated.
+The size of the correlation induced by the NORTA construction is not formalized. The bivariate
+normal law, the Gaussian copula, certified values of `Φ` and the percentiles at the exact levels
+`0.025`, `0.5`, `0.975` are in `BiasAnalysis/DistributionsExamples.lean`.
 -/
 
 @[expose] public section
@@ -262,6 +266,136 @@ theorem betaPDFReal_le_mode_add_one {A B : ℝ} (hA : 0 < A) (hB : 0 < B) (x : �
     betaPDFReal (A + 1) (B + 1) x ≤ betaPDFReal (A + 1) (B + 1) (A / (A + B)) := by
   have h := betaPDFReal_le_mode (by linarith : 1 < A + 1) (by linarith : 1 < B + 1) x
   rwa [show A + 1 - 1 = A by ring, show A + 1 + (B + 1) - 2 = A + B by ring] at h
+
+/-- The continuous representative of the `Beta(A + 1, B + 1)` density on the closed interval:
+`x^A (1 - x)^B / B(A + 1, B + 1)` for `x ∈ [0, 1]` (with `0^0 = 1`), and `0` off `[0, 1]`.
+Mathlib's `betaPDFReal` is `0` at the endpoints `0` and `1`; the two agree on `(0, 1)`
+(`betaPDFReal_eq_betaContPDF`). -/
+noncomputable def betaContPDF (A B x : ℝ) : ℝ :=
+  if x ∈ Icc (0 : ℝ) 1 then 1 / beta (A + 1) (B + 1) * x ^ A * (1 - x) ^ B else 0
+
+lemma betaPDFReal_eq_betaContPDF (A B : ℝ) {x : ℝ} (hx : x ∈ Ioo (0 : ℝ) 1) :
+    betaPDFReal (A + 1) (B + 1) x = betaContPDF A B x := by
+  rw [betaPDFReal, ite_eq_left (show 0 < x ∧ x < 1 from hx), betaContPDF,
+    ite_eq_left (Ioo_subset_Icc_self hx), add_sub_cancel_right, add_sub_cancel_right]
+
+lemma betaContPDF_nonneg {A B : ℝ} (hA : 0 ≤ A) (hB : 0 ≤ B) (x : ℝ) :
+    0 ≤ betaContPDF A B x := by
+  have hK := beta_pos (by linarith : 0 < A + 1) (by linarith : 0 < B + 1)
+  unfold betaContPDF
+  split_ifs with hx
+  · have := Real.rpow_nonneg hx.1 A
+    have := Real.rpow_nonneg (by linarith [hx.2] : 0 ≤ 1 - x) B
+    positivity
+  · exact le_rfl
+
+/-- Mode of `Beta(A + 1, B + 1)` for validation counts `A, B ≥ 0` with `A + B > 0`, including
+the boundary counts (Chapter 7: adding one to each count centers the mode at the observed
+proportion `A / (A + B)`). The continuous representative attains its maximum at `A / (A + B)`:
+at `0` when `A = 0`, at `1` when `B = 0`. The uniform case `A = B = 0` is excluded here; there
+every point of `[0, 1]` is a mode (`betaContPDF_zero_zero`). -/
+theorem betaContPDF_le_mode {A B : ℝ} (hA : 0 ≤ A) (hB : 0 ≤ B) (hAB : 0 < A + B) (x : ℝ) :
+    betaContPDF A B x ≤ betaContPDF A B (A / (A + B)) := by
+  have hK := beta_pos (by linarith : 0 < A + 1) (by linarith : 0 < B + 1)
+  have hm : A / (A + B) ∈ Icc (0 : ℝ) 1 :=
+    ⟨div_nonneg hA hAB.le, (div_le_one hAB).2 (by linarith)⟩
+  by_cases hx : x ∈ Icc (0 : ℝ) 1
+  swap
+  · rw [betaContPDF, ite_eq_right hx]; exact betaContPDF_nonneg hA hB _
+  rcases hA.lt_or_eq with hA0 | hA0
+  · rcases hB.lt_or_eq with hB0 | hB0
+    · -- Both counts positive: the interior mode, and the density vanishes at `0` and `1`.
+      have hmI : A / (A + B) ∈ Ioo (0 : ℝ) 1 :=
+        ⟨div_pos hA0 hAB, (div_lt_one hAB).2 (by linarith)⟩
+      rw [← betaPDFReal_eq_betaContPDF A B hmI]
+      by_cases hxI : x ∈ Ioo (0 : ℝ) 1
+      · rw [← betaPDFReal_eq_betaContPDF A B hxI]
+        exact betaPDFReal_le_mode_add_one hA0 hB0 x
+      · have h0 : betaContPDF A B x = 0 := by
+          rw [betaContPDF, ite_eq_left hx]
+          rcases eq_or_lt_of_le hx.1 with h | h
+          · rw [← h, Real.zero_rpow hA0.ne']; ring
+          · have : x = 1 := by
+              by_contra hne
+              exact hxI ⟨h, lt_of_le_of_ne hx.2 hne⟩
+            rw [this, sub_self, Real.zero_rpow hB0.ne']; ring
+        rw [h0]
+        exact betaPDFReal_nonneg (by linarith) (by linarith) _
+    · -- `B = 0`: mode at `1`.
+      subst hB0
+      rw [add_zero, div_self hA0.ne', betaContPDF, ite_eq_left hx, betaContPDF,
+        ite_eq_left ⟨zero_le_one, le_rfl⟩, Real.one_rpow, sub_self, Real.rpow_zero, Real.rpow_zero]
+      simp only [mul_one]
+      exact mul_le_of_le_one_right (by positivity) (Real.rpow_le_one hx.1 hx.2 hA)
+  · -- `A = 0`: mode at `0`.
+    subst hA0
+    rw [zero_div, betaContPDF, ite_eq_left hx, betaContPDF, ite_eq_left ⟨le_rfl, zero_le_one⟩,
+      Real.rpow_zero, Real.rpow_zero, sub_zero, Real.one_rpow]
+    simp only [mul_one]
+    exact mul_le_of_le_one_right (by positivity)
+      (Real.rpow_le_one (by linarith [hx.2]) (by linarith [hx.1]) hB)
+
+/-- The mode value bounds Mathlib's beta density everywhere: for `A, B ≥ 0` with `A + B > 0`,
+`betaPDFReal (A + 1) (B + 1) x ≤ g(A / (A + B))`, where `g` is the continuous representative. -/
+theorem betaPDFReal_le_betaContPDF_mode {A B : ℝ} (hA : 0 ≤ A) (hB : 0 ≤ B) (hAB : 0 < A + B)
+    (x : ℝ) : betaPDFReal (A + 1) (B + 1) x ≤ betaContPDF A B (A / (A + B)) := by
+  by_cases hx : x ∈ Ioo (0 : ℝ) 1
+  · rw [betaPDFReal_eq_betaContPDF A B hx]; exact betaContPDF_le_mode hA hB hAB x
+  · rw [betaPDFReal, ite_eq_right (show ¬(0 < x ∧ x < 1) from hx)]; exact betaContPDF_nonneg hA hB _
+
+/-- Mathlib's beta density converges to the continuous representative at every point of
+`[0, 1]` from inside `(0, 1)`. At a boundary mode (`A = 0` or `B = 0`) the supremum of the density
+on `(0, 1)` is therefore approached at the endpoint. -/
+theorem tendsto_betaPDFReal_betaContPDF {A B : ℝ} (hA : 0 ≤ A) (hB : 0 ≤ B) {m : ℝ}
+    (hm : m ∈ Icc (0 : ℝ) 1) :
+    Filter.Tendsto (betaPDFReal (A + 1) (B + 1)) (nhdsWithin m (Ioo 0 1))
+      (nhds (betaContPDF A B m)) := by
+  set g : ℝ → ℝ := fun x => 1 / beta (A + 1) (B + 1) * x ^ A * (1 - x) ^ B with hg
+  have hgc : Continuous g := by
+    have h1 := Real.continuous_rpow_const hA
+    have h2 := (Real.continuous_rpow_const hB).comp
+      (continuous_const.sub continuous_id : Continuous fun x : ℝ => 1 - x)
+    exact (continuous_const.mul h1).mul h2
+  have hgm : betaContPDF A B m = g m := by rw [betaContPDF, ite_eq_left hm]
+  rw [hgm]
+  refine ((hgc.tendsto m).mono_left nhdsWithin_le_nhds).congr' ?_
+  filter_upwards [self_mem_nhdsWithin] with x hx
+  rw [betaPDFReal_eq_betaContPDF A B hx, betaContPDF, ite_eq_left (Ioo_subset_Icc_self hx)]
+
+/-- With `A = 0` and `B > 0` (no false negatives, say), Mathlib's density `Beta(1, B + 1)` stays
+strictly below its supremum `g(0)`: the mode `0` is a supremum approached as `x → 0⁺`
+(`tendsto_betaPDFReal_betaContPDF`) and attained only by the continuous representative. -/
+theorem betaPDFReal_lt_betaContPDF_zero {B : ℝ} (hB : 0 < B) (x : ℝ) :
+    betaPDFReal (0 + 1) (B + 1) x < betaContPDF 0 B 0 := by
+  have hK := beta_pos (by norm_num : (0 : ℝ) < 0 + 1) (by linarith : 0 < B + 1)
+  rw [betaContPDF, ite_eq_left ⟨le_rfl, zero_le_one⟩, Real.rpow_zero, sub_zero, Real.one_rpow]
+  simp only [mul_one]
+  by_cases hx : x ∈ Ioo (0 : ℝ) 1
+  · rw [betaPDFReal_eq_betaContPDF 0 B hx, betaContPDF, ite_eq_left (Ioo_subset_Icc_self hx),
+      Real.rpow_zero, mul_one]
+    exact mul_lt_of_lt_one_right (by positivity)
+      (Real.rpow_lt_one (by linarith [hx.2]) (by linarith [hx.1]) hB)
+  · rw [betaPDFReal, ite_eq_right (show ¬(0 < x ∧ x < 1) from hx)]; positivity
+
+/-- The mirror case `B = 0`, `A > 0`: Mathlib's density `Beta(A + 1, 1)` stays strictly below its
+supremum `g(1)`, approached as `x → 1⁻`. -/
+theorem betaPDFReal_lt_betaContPDF_one {A : ℝ} (hA : 0 < A) (x : ℝ) :
+    betaPDFReal (A + 1) (0 + 1) x < betaContPDF A 0 1 := by
+  have hK := beta_pos (by linarith : 0 < A + 1) (by norm_num : (0 : ℝ) < 0 + 1)
+  rw [betaContPDF, ite_eq_left ⟨zero_le_one, le_rfl⟩, Real.one_rpow, sub_self, Real.rpow_zero]
+  simp only [mul_one]
+  by_cases hx : x ∈ Ioo (0 : ℝ) 1
+  · rw [betaPDFReal_eq_betaContPDF A 0 hx, betaContPDF, ite_eq_left (Ioo_subset_Icc_self hx),
+      Real.rpow_zero, mul_one]
+    exact mul_lt_of_lt_one_right (by positivity) (Real.rpow_lt_one hx.1.le hx.2 hA)
+  · rw [betaPDFReal, ite_eq_right (show ¬(0 < x ∧ x < 1) from hx)]; positivity
+
+/-- The uniform case `A = B = 0`: `Beta(1, 1)` has continuous representative equal to `1` on
+`[0, 1]`, so every point of `[0, 1]` is a mode. -/
+theorem betaContPDF_zero_zero {x : ℝ} (hx : x ∈ Icc (0 : ℝ) 1) : betaContPDF 0 0 x = 1 := by
+  have hB : beta (0 + 1) (0 + 1) = 1 := by simp [beta, show (1 : ℝ) + 1 = 2 by norm_num]
+  rw [betaContPDF, ite_eq_left hx, hB, Real.rpow_zero, Real.rpow_zero]
+  norm_num
 
 /-- `Beta(1, 1)` is the uniform distribution on `(0, 1)` (Chapter 7 and Equation 11.5). -/
 theorem betaMeasure_one_one : betaMeasure 1 1 = volume.restrict (Ioo 0 1) := by
@@ -612,7 +746,8 @@ lemma continuous_cdf_gaussianReal_zero_one : Continuous (cdf (gaussianReal 0 1))
 /-- The NORTA pair with standard normal coordinates: if `Z₁, Z₂ ~ N(0, 1)` (any joint law) then
 `P(Q₁(Φ(Z₁)) ≤ x, Q₂(Φ(Z₂)) ≤ y) = P(Φ(Z₁) ≤ F₁(x), Φ(Z₂) ≤ F₂(y))`. When `(Z₁, Z₂)` is
 standard bivariate normal with correlation `ρ`, the right side is by definition the Gaussian
-copula `C_ρ(F₁(x), F₂(y))`; the bivariate normal law itself is not formalized here. -/
+copula `C_ρ(F₁(x), F₂(y))` (`measureReal_norta_eq_gaussianCopula` in
+`BiasAnalysis/DistributionsExamples.lean`). -/
 theorem measure_quantile_cdf_gaussian_pair_le {Ω : Type*} [MeasurableSpace Ω] {P : Measure Ω}
     {Z₁ Z₂ : Ω → ℝ} (hZ₁ : HasLaw Z₁ (gaussianReal 0 1) P) (hZ₂ : HasLaw Z₂ (gaussianReal 0 1) P)
     (μ₁ μ₂ : Measure ℝ) (x y : ℝ) :
