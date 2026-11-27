@@ -234,3 +234,8 @@ public import CausalInference.SCM.SWIGTwin
 public import CausalInference.Discovery.FaithfulExistence
 public import CausalInference.Discovery.MeekCompleteness
 public import CausalInference.Discovery.FactorizationExamples
+public import CausalInference.Identification.QModels
+public import CausalInference.Identification.IDConcrete
+public import CausalInference.Identification.IDFailure
+public import CausalInference.Identification.IDFailureExamples
+public import CausalInference.Identification.IDNonIdent
