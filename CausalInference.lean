@@ -185,3 +185,5 @@ public import CausalInference.LinearSEM.SingleDoorConverse
 public import CausalInference.StructuralNested.TwoStage
 public import CausalInference.StructuralNested.TwoStageGEstimation
 public import CausalInference.StructuralNested.TwoStageCounterexamples
+public import CausalInference.LinearSEM.InstrumentCriterion
+public import CausalInference.SCM.InstrumentCounterfactual

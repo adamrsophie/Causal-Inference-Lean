@@ -51,8 +51,11 @@ and `S_x = S`. The covariates are nondescendants of `X` by definition; the instr
 required to be. With `U → X → Z` and `U → Y` the graphical test passes, while the factual `Z`
 depends on `Y_x` through `U` (the example `descendantInstrument`). The predicate
 `Digraph.IsPretreatmentInstrument` adds the requirement that no member of `Z` is a descendant
-of `X`. This file proves only graphical statements; the counterfactual implication is not
-proved here.
+of `X`. This file proves only graphical statements. The counterfactual implication for a
+pretreatment instrument in a structural causal model is
+`CausalInference.SCM.condIndepFun_potentialResponse_of_isPretreatmentInstrument`, and the
+linear moment condition is
+`CausalInference.LinearSEM.cov_eq_T_mul_cov_of_isPretreatmentInstrument`.
 
 Condition (ii) is d-connection in `G`. That `Z` and `X` are dependent in a particular law, and
 the nonzero first stage that an instrumental ratio needs, are separate hypotheses: a law that

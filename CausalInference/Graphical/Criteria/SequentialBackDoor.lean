@@ -6,6 +6,7 @@ Authors: Adam R Sophie
 module
 
 public import CausalInference.Graphical.Criteria.BackDoor
+public import CausalInference.Graphical.Criteria.Moralization
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Tactic.FinCases
 
@@ -42,13 +43,31 @@ nonexistence in Pearl's examples would change.
 ## Main results
 
 * `Digraph.admissible_wSet`: if the sets `W_k` pass the tests (4.5), they form an admissible
-  sequence, so the plan is G-identifiable. This is the "if" direction of Theorem 4.4.6; the
-  converse, whose proof Pearl defers to Pearl and Robins (1995), is not formalized.
+  sequence, so the plan is G-identifiable. This is the "if" direction of Theorem 4.4.6.
+* `Digraph.seqBackDoorStep_wSet_of_admissible`, `Digraph.gIdentifiable_iff_wSet`,
+  `Digraph.gIdentifiablePlan_iff_wSet`: the "only if" direction of Theorem 4.4.6 (whose proof
+  Pearl defers to Pearl and Robins 1995): in an acyclic graph with the controls listed in an
+  order compatible with the graph and outside the covariates, if some sequence passes the step
+  tests then the sets `W_k` pass them. `Digraph.decidableGIdentifiablePlan`: the resulting
+  decision procedure for G-identifiability of a plan in an acyclic graph.
 * Decidability of each step test and of admissibility, and the examples of Figures 4.4, 4.6,
   4.7 and 4.8 checked by `decide`.
 * Countermodels showing that the raw tests accept plans outside Pearl's setting: controls listed
   against the order of `G` (`controlsAgainstOrder`, `reversedChain`) and a repeated control
   (`repeatedControl`).
+
+## Proof of the converse of Theorem 4.4.6
+
+The argument is step by step; no induction over the steps is needed. Fix a step `k` and write
+`H` for its graph. By the moral-graph criterion (`Digraph.dSep_iff_moralSep`), the test of step
+`k` with the conditioning set `Z` of an admissible sequence is a separation in the moral graph
+of the ancestral set of `{y, x k} ∪ Z` in `H`. Replacing `Z` by the conditioning set `Z'` built
+from the sets `W_j` keeps the separation (`Digraph.MoralSep.of_subset`) as long as the new
+ancestral set is contained in the old one and every vertex of `Z` in the new ancestral set lies
+in `Z'`. Both hold: a set `W_j` with `j < k` consists of ancestors of `y` or of `x j` in `H`
+(`Digraph.reflTransGen_of_mem_wSet_of_lt`), and a covariate that is an ancestor in `H` of `y`
+or of `x k` is in `W_k`, while one that is an ancestor of an earlier control `x i` is in `W_i`
+(`Digraph.mem_wSet_of_reflTransGen`, which uses acyclicity and the order of the controls).
 
 ## Notes on the source
 
@@ -147,6 +166,95 @@ standing assumptions and some sequence of covariate sets passes the raw step tes
 def GIdentifiablePlan (G : Digraph V) (C : Finset V) (x : Fin n → V) (y : V) : Prop :=
   G.PlanRoles C x y ∧ G.GIdentifiable C x y
 
+/-! ### Path lemmas for the converse of Theorem 4.4.6 -/
+
+open Relation in
+/-- Transfer of separation in the ancestral moral graph: if `Z` separates `X` from `Y`, then so
+does `Z'`, provided the ancestral closure of `X ∪ Y ∪ Z'` is contained in that of `X ∪ Y ∪ Z`
+and every member of `Z` in the former closure belongs to `Z'`. -/
+theorem MoralSep.of_subset {G : Digraph V} {X Y Z Z' : Set V} (h : G.MoralSep X Y Z)
+    (hA : G.ancestorsOf (X ∪ Y ∪ Z') ⊆ G.ancestorsOf (X ∪ Y ∪ Z))
+    (hZ : ∀ v ∈ G.ancestorsOf (X ∪ Y ∪ Z'), v ∈ Z → v ∈ Z') : G.MoralSep X Y Z' := by
+  intro a ha b hb haZ hpath
+  have hle : G.restrict (G.ancestorsOf (X ∪ Y ∪ Z')) ≤
+      G.restrict (G.ancestorsOf (X ∪ Y ∪ Z)) := restrict_mono hA
+  have haA : a ∈ G.ancestorsOf (X ∪ Y ∪ Z') := subset_ancestorsOf _ (Or.inl (Or.inl ha))
+  refine h a ha b hb (fun h' => haZ (hZ a haA h'))
+    (ReflTransGen.mono (fun u w huw => ?_) _ _ hpath)
+  obtain ⟨huw, huZ, hwZ⟩ := huw
+  rw [moralGraph_adj] at huw
+  obtain ⟨hne, h1⟩ := huw
+  have hmem : u ∈ G.ancestorsOf (X ∪ Y ∪ Z') ∧ w ∈ G.ancestorsOf (X ∪ Y ∪ Z') := by
+    rcases h1 with (h1 | ⟨c, h1, h2⟩) | (h1 | ⟨c, h1, h2⟩)
+    · exact ⟨h1.2.1, h1.2.2⟩
+    · exact ⟨h1.2.1, h2.2.1⟩
+    · exact ⟨h1.2.2, h1.2.1⟩
+    · exact ⟨h2.2.1, h1.2.1⟩
+  refine ⟨?_, fun h' => huZ (hZ u hmem.1 h'), fun h' => hwZ (hZ w hmem.2 h')⟩
+  rw [moralGraph_adj]
+  refine ⟨hne, ?_⟩
+  rcases h1 with (h1 | ⟨c, h1, h2⟩) | (h1 | ⟨c, h1, h2⟩)
+  · exact Or.inl (Or.inl (hle h1))
+  · exact Or.inl (Or.inr ⟨c, hle h1, hle h2⟩)
+  · exact Or.inr (Or.inl (hle h1))
+  · exact Or.inr (Or.inr ⟨c, hle h1, hle h2⟩)
+
+section Converse
+
+open Relation
+
+variable {G : Digraph V} {x : Fin n → V}
+
+/-- The graph of a step is a subgraph of `G`. -/
+theorem stepGraph_le (k : Fin n) : G.stepGraph x k ≤ G :=
+  fun _ _ h => h.1.1
+
+/-- Later steps have fewer controls from them on. -/
+theorem controlsFrom_anti {j k : Fin n} (h : j ≤ k) : controlsFrom x k ⊆ controlsFrom x j :=
+  fun _ ⟨m, hm, e⟩ => ⟨m, h.trans hm, e⟩
+
+/-- A directed path of the graph of step `j` that starts outside the controls after `j` is a
+directed path of the graph of every later step `k`. -/
+theorem ReflTransGen.stepGraph_of_lt {j k : Fin n} (hjk : j < k) {a t : V}
+    (h : ReflTransGen (G.stepGraph x j).Adj a t) (ha : a ∉ controlsAfter x j) :
+    ReflTransGen (G.stepGraph x k).Adj a t := by
+  induction h using ReflTransGen.head_induction_on with
+  | refl => exact .refl
+  | @head a b hab _ ih =>
+    refine .head ⟨⟨hab.1.1, fun hax => ha ⟨k, hjk, (Set.mem_singleton_iff.1 hax).symm⟩⟩,
+      fun hb => hab.2 ?_⟩ (ih hab.2)
+    obtain ⟨m, hm, e⟩ := hb
+    exact ⟨m, hjk.trans hm, e⟩
+
+/-- In an acyclic graph with the controls listed in an order compatible with it, a directed
+path of `G` that ends at the control `x i` is a directed path of the graph of step `i`. -/
+theorem reflTransGen_stepGraph_of_reflTransGen (hG : G.IsAcyclic) (hord : G.ControlsOrdered x)
+    {i : Fin n} {a : V} (h : ReflTransGen G.Adj a (x i)) :
+    ReflTransGen (G.stepGraph x i).Adj a (x i) := by
+  induction h using ReflTransGen.head_induction_on with
+  | refl => exact .refl
+  | @head a b hab hb ih =>
+    refine .head ⟨⟨hab, fun hax => ?_⟩, fun hbc => ?_⟩ ih
+    · rw [Set.mem_singleton_iff] at hax
+      subst hax
+      exact hG _ (TransGen.head' hab hb)
+    · obtain ⟨m, hm, rfl⟩ := hbc
+      exact hord i m hm ⟨x m, rfl, hb⟩
+
+/-- In an acyclic graph with ordered controls, a vertex other than the controls that is an
+ancestor of the control `x i` is not a descendant of any control `x m` with `m ≥ i`. -/
+theorem notMem_descendantsOf_controlsFrom (hG : G.IsAcyclic) (hord : G.ControlsOrdered x)
+    {i : Fin n} {v : V} (hv : ReflTransGen G.Adj v (x i)) (hvx : ∀ m, x m ≠ v) :
+    v ∉ G.descendantsOf (controlsFrom x i) := by
+  rintro ⟨s, ⟨m, hm, rfl⟩, hs⟩
+  rcases hm.lt_or_eq with hlt | rfl
+  · exact hord i m hlt ⟨x m, rfl, hs.trans hv⟩
+  · rcases reflTransGen_iff_eq_or_transGen.1 hs with h | h
+    · exact hvx _ h.symm
+    · exact hG _ (h.trans_left hv)
+
+end Converse
+
 section Decidable
 
 instance decidableMemControlsFrom [DecidableEq V] (x : Fin n → V) (k : Fin n) :
@@ -208,6 +316,102 @@ theorem admissible_wSet {C : Finset V} {x : Fin n → V} {y : V}
 theorem gIdentifiable_of_wSet {C : Finset V} {x : Fin n → V} {y : V}
     (h : ∀ k, G.SeqBackDoorStep x y (G.wSet C x y) k) : G.GIdentifiable C x y :=
   ⟨_, admissible_wSet h⟩
+
+section Converse
+
+open Relation
+
+variable {C : Finset V} {x : Fin n → V} {y : V}
+
+/-- A covariate that is an ancestor in `G` of the control `x i` belongs to `W_i`, in an acyclic
+graph with ordered controls that are not covariates. -/
+theorem mem_wSet_of_reflTransGen (hG : G.IsAcyclic) (hord : G.ControlsOrdered x)
+    (hC : ∀ k, x k ∉ C) {i : Fin n} {v : V} (hvC : v ∈ C) (hv : ReflTransGen G.Adj v (x i)) :
+    v ∈ G.wSet C x y i := by
+  simp only [wSet, Finset.mem_filter]
+  refine ⟨hvC, notMem_descendantsOf_controlsFrom hG hord hv fun m h => hC m (h ▸ hvC), ?_⟩
+  exact ⟨x i, Or.inr rfl, reflTransGen_stepGraph_of_reflTransGen hG hord hv⟩
+
+/-- A member of `W_j` is an ancestor of `y` or of `x j` in the graph of every later step. -/
+theorem reflTransGen_of_mem_wSet_of_lt (hC : ∀ k, x k ∉ C) {j k : Fin n} (hjk : j < k) {v : V}
+    (hv : v ∈ G.wSet C x y j) :
+    ReflTransGen (G.stepGraph x k).Adj v y ∨ ReflTransGen (G.stepGraph x k).Adj v (x j) := by
+  simp only [wSet, Finset.mem_filter] at hv
+  obtain ⟨hvC, -, s, hs, hvs⟩ := hv
+  have hva : v ∉ controlsAfter x j := fun ⟨m, _, hm⟩ => hC m (hm ▸ hvC)
+  have h' := ReflTransGen.stepGraph_of_lt hjk hvs hva
+  rcases hs with rfl | hs
+  · exact Or.inl h'
+  · rw [Set.mem_singleton_iff] at hs
+    subst hs
+    exact Or.inr h'
+
+/-- **The "only if" direction of Theorem 4.4.6** (Pearl 2009): in an acyclic graph with the
+controls listed in an order compatible with the graph and outside the covariates, if some
+sequence of covariate sets passes the step tests, then the explicit sets `W_k` pass the test
+of every step. -/
+theorem seqBackDoorStep_wSet_of_admissible (hG : G.IsAcyclic) (hord : G.ControlsOrdered x)
+    (hC : ∀ k, x k ∉ C) {Zs : Fin n → Finset V} (h : G.Admissible C x y Zs) (k : Fin n) :
+    G.SeqBackDoorStep x y (G.wSet C x y) k := by
+  have hsep : (G.stepGraph x k).DSep {y} {x k} (stepCond x Zs k) := (h k).2
+  unfold SeqBackDoorStep
+  rw [dSep_iff_moralSep] at hsep ⊢
+  have key : ∀ v ∈ (G.stepGraph x k).ancestorsOf ({y} ∪ {x k} ∪ stepCond x (G.wSet C x y) k),
+      v ∈ (G.stepGraph x k).ancestorsOf {y, x k} ∨
+        ∃ i < k, ReflTransGen (G.stepGraph x k).Adj v (x i) := by
+    rintro v ⟨s, hs, hvs⟩
+    rcases hs with (hs | hs) | ⟨i, hi, rfl⟩ | ⟨i, hi, hsW⟩
+    · exact Or.inl ⟨s, Or.inl hs, hvs⟩
+    · exact Or.inl ⟨s, Or.inr hs, hvs⟩
+    · exact Or.inr ⟨i, hi, hvs⟩
+    · rcases hi.lt_or_eq with hlt | rfl
+      · rcases reflTransGen_of_mem_wSet_of_lt hC hlt hsW with h' | h'
+        · exact Or.inl ⟨y, Or.inl rfl, hvs.trans h'⟩
+        · exact Or.inr ⟨i, hlt, hvs.trans h'⟩
+      · simp only [wSet, Finset.mem_filter] at hsW
+        obtain ⟨-, -, t, ht, hst⟩ := hsW
+        exact Or.inl ⟨t, ht, hvs.trans hst⟩
+  refine MoralSep.of_subset hsep (fun v hv => ?_) fun v hv hvZ => ?_
+  · rcases key v hv with ⟨t, ht, hvt⟩ | ⟨i, hi, hvi⟩
+    · rcases ht with rfl | ht
+      · exact ⟨t, Or.inl (Or.inl rfl), hvt⟩
+      · exact ⟨t, Or.inl (Or.inr ht), hvt⟩
+    · exact ⟨x i, Or.inr (Or.inl ⟨i, hi, rfl⟩), hvi⟩
+  · rcases hvZ with ⟨i, hi, rfl⟩ | ⟨j, hj, hvZs⟩
+    · exact Or.inl ⟨i, hi, rfl⟩
+    · obtain ⟨hvC, hvd⟩ := (h j).1 v hvZs
+      right
+      rcases key v hv with hvt | ⟨i, hi, hvi⟩
+      · refine ⟨k, le_rfl, ?_⟩
+        simp only [wSet, Finset.mem_filter]
+        exact ⟨hvC, fun hd => hvd (descendantsOf_mono (controlsFrom_anti hj) hd), hvt⟩
+      · exact ⟨i, hi.le, mem_wSet_of_reflTransGen hG hord hC hvC
+          (reflTransGen_mono (stepGraph_le k) hvi)⟩
+
+/-- **Theorem 4.4.6** (Pearl 2009), the graphical equivalence: in an acyclic graph with the
+controls listed in an order compatible with the graph and outside the covariates, the plan is
+G-identifiable (some sequence passes the step tests) if and only if the sets `W_k` pass the
+test of every step. -/
+theorem gIdentifiable_iff_wSet (hG : G.IsAcyclic) (hord : G.ControlsOrdered x)
+    (hC : ∀ k, x k ∉ C) :
+    G.GIdentifiable C x y ↔ ∀ k, G.SeqBackDoorStep x y (G.wSet C x y) k :=
+  ⟨fun ⟨_, h⟩ => seqBackDoorStep_wSet_of_admissible hG hord hC h, gIdentifiable_of_wSet⟩
+
+/-- Theorem 4.4.6 within the standing assumptions of a control problem: in an acyclic graph a
+plan is G-identifiable in Pearl's sense exactly when it satisfies `PlanRoles` and the sets
+`W_k` pass the test of every step. -/
+theorem gIdentifiablePlan_iff_wSet (hG : G.IsAcyclic) :
+    G.GIdentifiablePlan C x y ↔
+      G.PlanRoles C x y ∧ ∀ k, G.SeqBackDoorStep x y (G.wSet C x y) k :=
+  ⟨fun ⟨hr, hi⟩ => ⟨hr, (gIdentifiable_iff_wSet hG hr.1 hr.2.2.1).1 hi⟩,
+    fun ⟨hr, hs⟩ => ⟨hr, gIdentifiable_of_wSet hs⟩⟩
+
+/-- The decision procedure for G-identifiability of a plan in an acyclic graph (Pearl 2009,
+Theorem 4.4.6): check the standing assumptions and the step tests with the sets `W_k`. -/
+def decidableGIdentifiablePlan (hG : G.IsAcyclic) : Decidable (G.GIdentifiablePlan C x y) :=
+  decidable_of_iff _ (gIdentifiablePlan_iff_wSet hG).symm
+
+end Converse
 
 end Decidable
 
@@ -286,7 +490,7 @@ abbrev pearlFig48 : Digraph (Fin 6) :=
 
 example : pearlFig48.ControlsOrdered ![2, 4] := by decide +kernel
 example : pearlFig48.ControlsOrdered ![4, 2] := by decide +kernel
--- The order `(X₁, X₂)` still admits the sequence `(∅, {Z})`.
+-- For the order `(X₁, X₂)` the sequence `(∅, {Z})` is still admissible.
 example : pearlFig48.Admissible {3} ![2, 4] 5 ![∅, {3}] := by decide +kernel
 
 /-- For the order `(X₂, X₁)` no admissible sequence exists in Figure 4.8. -/
@@ -301,6 +505,12 @@ theorem pearlFig48_not_gIdentifiable : ¬ pearlFig48.GIdentifiable {3} ![4, 2] 5
     (Finset.mem_singleton.1 ((h k).1 v hv).1)
   rw [hZs] at h
   exact key _ (Finset.mem_powerset.2 (hsub 0)) _ (Finset.mem_powerset.2 (hsub 1)) h
+
+/-- The same conclusion by the decision procedure of Theorem 4.4.6: for the order `(X₂, X₁)` the
+sets `W_k` fail a step test, so no admissible sequence exists. -/
+example : ¬ pearlFig48.GIdentifiable {3} ![4, 2] 5 := by
+  rw [gIdentifiable_iff_wSet (by decide +kernel) (by decide +kernel) (by decide +kernel)]
+  decide +kernel
 
 /-- A graph with the properties stated for Pearl's Figure 4.6: `X₁ = 0`, `W = 1`, `X₂ = 2`,
 `Y = 3`, latent `U₁ = 4`, `U₂ = 5`, with edges `X₁ → X₂`, `X₂ → Y`, `U₁ → W`, `U₂ → W`,
