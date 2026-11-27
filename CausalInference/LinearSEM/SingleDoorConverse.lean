@@ -7,6 +7,7 @@ module
 
 public import CausalInference.LinearSEM.DSeparation
 public import Mathlib.MeasureTheory.Measure.Lebesgue.EqHaar
+public import CausalInference.Basic.PolynomialNullSet
 
 /-!
 # The converse of the single-door criterion: three failure patterns
@@ -31,14 +32,30 @@ In each family `isUnit_subCov` gives invertible covariance blocks for positive v
 and `exceptional_null` shows that the set of parameter vectors with positive variances
 at which the regression coefficient equals the path coefficient is Lebesgue null (it lies in a
 finite union of coordinate hyperplanes), and `graph_facts` records which graphical condition
-fails and which hold.
+fails and which hold. `exceptional_null_of_polynomial` derives the same null statement from the
+fact that the zero set of a nonzero polynomial is null (`volume_zeroSet_eq_zero`), applied to
+the numerator of the bias.
 
-Not proved: the converse for an arbitrary DAG, edge `x → y` and set `Z`. The usual argument
-would set unit coefficients along a d-connecting path and zero elsewhere to obtain one parameter
-point with a nonzero bias, and then use that the bias times the regression determinant is a
-polynomial in the parameters, whose zero set is null because the polynomial is nonzero. Neither
-the general nonzero-bias construction nor a null-set theorem for zero sets of nonzero
-multivariate polynomials is available here.
+## Failure patterns on an arbitrary graph
+
+For an arbitrary acyclic graph `G` with an edge `x → y` and a set `Z` containing neither `x`
+nor any descendant of `y`, `exists_ne_of_fork`, `exists_ne_of_chain` and `exists_ne_of_collider`
+give a linear SEM on `G` with uncorrelated unit-variance errors (so every covariance block is
+invertible) at which the coefficient of `x` in the regression of `y` on `x` and `Z` differs from
+the path coefficient, whenever `Z` leaves open a path of `G` with `x → y` deleted of one of the
+shapes `x ← m → y` or `x → m → y` (with `m ∉ Z`), or `x → c ← w → y` (with `c ∈ Z`, `w ∉ Z`).
+The model has coefficient `1` on the edges of the pattern and `0` on every other edge of `G`;
+the other variables are then uncorrelated with the pattern, and regressors uncorrelated with the
+outcome and with the other regressors do not change a regression
+(`isRegCoeff_of_uncorrelated`).
+
+Not proved: the existence form for an arbitrary d-connecting path (any length, colliders opened
+through a directed path to `Z` rather than by membership in `Z`). The missing step is a closed
+form for the covariance of a model supported on such a path, with a common edge coefficient `t`,
+showing that the partial covariance of `x` and `y` given `Z` is a nonzero polynomial in `t`
+(its lowest-order term being the product of the path coefficients). Also not proved: that the
+bias times the regression determinant is a polynomial in all parameters of an arbitrary model,
+which together with `volume_zeroSet_eq_zero` would give the measure-zero form on every graph.
 
 Source: J. Pearl (2009), *Causality*, 2nd edition, Section 5.3.1, Theorem 5.3.1.
 -/
@@ -159,6 +176,20 @@ theorem exceptional_null :
   rintro θ ⟨h2, h3, h4, h⟩
   exact (regCoeff_eq_B_iff h2 h3 h4).1 h
 
+/-- The exceptional set of pattern 1 lies in the zero set of the nonzero polynomial
+`α β ^ 2 σy`, the numerator of the bias `r_YX·W - α = -α β ^ 2 σy / (β ^ 2 σy + σw)`; it is
+therefore null by `volume_zeroSet_eq_zero`. -/
+theorem exceptional_null_of_polynomial :
+    volume {θ : Fin 5 → ℝ | 0 < θ 2 ∧ 0 < θ 3 ∧ 0 < θ 4 ∧
+      regCoeff (model (θ 0) (θ 1) (θ 2) (θ 3) (θ 4)).cov {0, 2} 1 0 =
+        (model (θ 0) (θ 1) (θ 2) (θ 3) (θ 4)).B 1 0} = 0 := by
+  have hP : (MvPolynomial.X 0 * MvPolynomial.X 1 ^ 2 * MvPolynomial.X 3 :
+      MvPolynomial (Fin 5) ℝ) ≠ 0 := fun h => by
+    simpa using congrArg (MvPolynomial.eval fun _ => (1 : ℝ)) h
+  refine measure_mono_null ?_ (volume_zeroSet_eq_zero hP)
+  rintro θ ⟨h2, h3, h4, h⟩
+  rcases (regCoeff_eq_B_iff h2 h3 h4).1 h with h0 | h0 <;> simp [h0]
+
 /-- A parameter point of pattern 1 with invertible covariance blocks at which the regression
 coefficient differs from the path coefficient: `α = β = 1` and unit variances give `1 / 2`
 against `1`. -/
@@ -266,6 +297,20 @@ theorem exceptional_null :
     (measure_union_null (volume_coord_eq_zero 0) (volume_coord_eq_zero 1))
   rintro θ ⟨h3, h4, h5, h⟩
   exact (regCoeff_eq_B_iff h3 h4 h5).1 h
+
+/-- The exceptional set of pattern 2 lies in the zero set of the nonzero polynomial `γ δ σc`,
+the numerator of the bias `γ δ σc / (γ ^ 2 σc + σx)`; it is therefore null by
+`volume_zeroSet_eq_zero`. -/
+theorem exceptional_null_of_polynomial :
+    volume {θ : Fin 6 → ℝ | 0 < θ 3 ∧ 0 < θ 4 ∧ 0 < θ 5 ∧
+      regCoeff (model (θ 0) (θ 1) (θ 2) (θ 3) (θ 4) (θ 5)).cov {1} 2 1 =
+        (model (θ 0) (θ 1) (θ 2) (θ 3) (θ 4) (θ 5)).B 2 1} = 0 := by
+  have hP : (MvPolynomial.X 0 * MvPolynomial.X 1 * MvPolynomial.X 3 :
+      MvPolynomial (Fin 6) ℝ) ≠ 0 := fun h => by
+    simpa using congrArg (MvPolynomial.eval fun _ => (1 : ℝ)) h
+  refine measure_mono_null ?_ (volume_zeroSet_eq_zero hP)
+  rintro θ ⟨h3, h4, h5, h⟩
+  rcases (regCoeff_eq_B_iff h3 h4 h5).1 h with h0 | h0 <;> simp [h0]
 
 /-- A parameter point of pattern 2 with invertible covariance blocks at which the regression
 slope differs from the path coefficient: all coefficients and variances `1` give `3 / 2` against
@@ -390,6 +435,20 @@ theorem exceptional_null :
   rintro θ ⟨h4, h5, h6, h7, h⟩
   exact (regCoeff_eq_B_iff h4 h5 h6 h7).1 h
 
+/-- The exceptional set of pattern 3 lies in the zero set of the nonzero polynomial `a b d σu`,
+the numerator of the bias `-a b d σu / (b ^ 2 σu + σc)`; it is therefore null by
+`volume_zeroSet_eq_zero`. -/
+theorem exceptional_null_of_polynomial :
+    volume {θ : Fin 8 → ℝ | 0 < θ 4 ∧ 0 < θ 5 ∧ 0 < θ 6 ∧ 0 < θ 7 ∧
+      regCoeff (model (θ 0) (θ 1) (θ 2) (θ 3) (θ 4) (θ 5) (θ 6) (θ 7)).cov {0, 2} 3 0 =
+        (model (θ 0) (θ 1) (θ 2) (θ 3) (θ 4) (θ 5) (θ 6) (θ 7)).B 3 0} = 0 := by
+  have hP : (MvPolynomial.X 0 * MvPolynomial.X 1 * MvPolynomial.X 3 * MvPolynomial.X 5 :
+      MvPolynomial (Fin 8) ℝ) ≠ 0 := fun h => by
+    simpa using congrArg (MvPolynomial.eval fun _ => (1 : ℝ)) h
+  refine measure_mono_null ?_ (volume_zeroSet_eq_zero hP)
+  rintro θ ⟨h4, h5, h6, h7, h⟩
+  rcases (regCoeff_eq_B_iff h4 h5 h6 h7).1 h with h0 | h0 | h0 <;> simp [h0]
+
 /-- A parameter point of pattern 3 with invertible covariance blocks at which the regression
 coefficient differs from the path coefficient: all coefficients and variances `1` give `1 / 2`
 against `1`. -/
@@ -423,6 +482,448 @@ theorem graph_facts :
         by simp⟩
 
 end Collider
+
+/-! ### Failure patterns on an arbitrary graph -/
+
+section General
+
+variable {V : Type*} [Fintype V] [DecidableEq V]
+
+omit [DecidableEq V] in
+/-- Adding regressors that are uncorrelated with the outcome and with the other regressors does
+not change the regression coefficients. -/
+theorem isRegCoeff_of_uncorrelated {C : Matrix V V ℝ} {S₁ S : Finset V} {y : V} {β : V → ℝ}
+    (h : IsRegCoeff C S₁ y β) (hS : S₁ ⊆ S)
+    (hC : ∀ s ∈ S, s ∉ S₁ → C s y = 0 ∧ ∀ t ∈ S₁, C s t = 0) : IsRegCoeff C S y β := by
+  refine ⟨fun v hv => h.1 v fun h' => hv (hS h'), fun s hs => ?_⟩
+  by_cases hs₁ : s ∈ S₁
+  · exact h.2 s hs₁
+  · rw [(hC s hs hs₁).1]
+    refine Finset.sum_eq_zero fun t _ => ?_
+    by_cases ht : t ∈ S₁
+    · rw [(hC s hs hs₁).2 t ht, zero_mul]
+    · rw [h.1 t ht, mul_zero]
+
+omit [Fintype V] [DecidableEq V] in
+/-- A set closed under taking parents contains every ancestor of its members. -/
+theorem mem_of_reflTransGen {H : Digraph V} {S : Set V}
+    (hS : ∀ u w, H.Adj u w → w ∈ S → u ∈ S) {a v : V} (h : ReflTransGen H.Adj a v)
+    (hv : v ∈ S) : a ∈ S := by
+  induction h using ReflTransGen.head_induction_on with
+  | refl => exact hv
+  | head hab _ ih => exact hS _ _ hab ih
+
+omit [Fintype V] [DecidableEq V] in
+theorem ne_of_adj_of_isAcyclic {G : Digraph V} (hG : G.IsAcyclic) {u v : V} (h : G.Adj u v) :
+    u ≠ v := by
+  rintro rfl
+  exact hG u (TransGen.single h)
+
+omit [DecidableEq V] in
+theorem sum_eq_sum_of_support {f : V → ℝ} (s : Finset V) (h : ∀ a, a ∉ s → f a = 0) :
+    ∑ a, f a = ∑ a ∈ s, f a :=
+  (Finset.sum_subset (Finset.subset_univ s) fun a _ ha => h a ha).symm
+
+theorem T_apply_rec (M : LinearSEM V) (v u : V) :
+    M.T v u = (if v = u then 1 else 0) + ∑ k, M.B v k * M.T k u := by
+  conv_lhs => rw [M.T_eq_one_add_B_mul_T]
+  rw [Matrix.add_apply, Matrix.one_apply, Matrix.mul_apply]
+
+theorem cov_apply_of_eq_one (M : LinearSEM V) (hΩ : M.Ω = 1) (v w : V) :
+    M.cov v w = ∑ a, M.T v a * M.T w a := by
+  rw [M.cov_apply_of_isDiag (hΩ ▸ isDiag_one)]
+  simp [hΩ]
+
+/-- The model on an acyclic graph `H` with coefficient `1` on every edge and uncorrelated
+errors of variance `1`. -/
+noncomputable def unitModel (H : Digraph V) [DecidableRel H.Adj] (hH : H.IsAcyclic) :
+    LinearSEM V where
+  G := H
+  acyclic := hH
+  B v u := if H.Adj u v then 1 else 0
+  B_support v u h := by
+    by_contra h'
+    simp [h'] at h
+  Ω := 1
+  Ω_posSemidef := PosSemidef.one
+
+/-- The same coefficients and errors, read on a larger acyclic graph `G`. -/
+def onGraph (M : LinearSEM V) (G : Digraph V) (hG : G.IsAcyclic)
+    (hle : ∀ u v, M.G.Adj u v → G.Adj u v) : LinearSEM V where
+  G := G
+  acyclic := hG
+  B := M.B
+  B_support v u h := hle _ _ (M.B_support v u h)
+  Ω := M.Ω
+  Ω_posSemidef := M.Ω_posSemidef
+
+/-! #### An open fork `x ← m → y` -/
+
+/-- The fork pattern: edges `m → x`, `m → y`, `x → y`. -/
+def forkGraph (x y m : V) : Digraph V where
+  Adj p q := (p = m ∧ q = x) ∨ (p = m ∧ q = y) ∨ (p = x ∧ q = y)
+
+instance (x y m : V) : DecidableRel (forkGraph x y m).Adj :=
+  fun _ _ => inferInstanceAs (Decidable (_ ∨ _))
+
+/-- In a model whose only edges are `m → x`, `m → y`, `x → y`, all with coefficient `1`, and
+whose errors are uncorrelated with variance `1`, the coefficient of `x` in the regression of `y`
+on `x` and any set `Z` avoiding `x`, `y`, `m` is `3 / 2`. -/
+theorem fork_regCoeff (M : LinearSEM V) (hΩ : M.Ω = 1) {x y m : V}
+    (hB : ∀ v u, M.B v u = if (u = m ∧ v = x) ∨ (u = m ∧ v = y) ∨ (u = x ∧ v = y) then 1 else 0)
+    (hE : ∀ p q, M.G.Adj p q → (p = m ∧ q = x) ∨ (p = m ∧ q = y) ∨ (p = x ∧ q = y))
+    (nxy : x ≠ y) (nmx : m ≠ x) (nmy : m ≠ y) {Z : Finset V} (hxZ : x ∉ Z) (hyZ : y ∉ Z)
+    (hmZ : m ∉ Z) : regCoeff M.cov (insert x Z) y x = 3 / 2 := by
+  have anc_m : ∀ a, ReflTransGen M.G.Adj a m → a = m := fun a h =>
+    mem_of_reflTransGen (S := {m}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have anc_x : ∀ a, ReflTransGen M.G.Adj a x → a = x ∨ a = m := fun a h =>
+    mem_of_reflTransGen (S := {x, m}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h (by simp)
+  have anc_y : ∀ a, ReflTransGen M.G.Adj a y → a = y ∨ a = x ∨ a = m := fun a h =>
+    mem_of_reflTransGen (S := {y, x, m}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h (by simp)
+  have anc_s : ∀ s, s ≠ x → s ≠ y → ∀ a, ReflTransGen M.G.Adj a s → a = s := fun s hsx hsy a h =>
+    mem_of_reflTransGen (S := {s}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have hBx : ∀ k, M.B x k = if k = m then 1 else 0 := fun k => by
+    rw [hB]; by_cases hk : k = m <;> simp [hk, nxy]
+  have hBy : ∀ k, M.B y k = if k = m ∨ k = x then 1 else 0 := fun k => by
+    rw [hB]; by_cases hk : k = m <;> by_cases hk' : k = x <;> simp [hk, hk', Ne.symm nxy]
+  have sum_x : ∀ u, ∑ k, M.B x k * M.T k u = M.T m u := fun u => by
+    rw [sum_eq_sum_of_support {m} fun k hk => by simp [hBx, show k ≠ m by simpa using hk]]
+    simp [hBx]
+  have sum_y : ∀ u, ∑ k, M.B y k * M.T k u = M.T m u + M.T x u := fun u => by
+    rw [sum_eq_sum_of_support {m, x} fun k hk => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hk
+      simp [hBy, hk.1, hk.2], Finset.sum_pair nmx]
+    simp [hBy]
+  have Tmx : M.T m x = 0 := M.T_apply_eq_zero fun h => nmx (anc_m x h).symm
+  have Txm : M.T x m = 1 := by
+    rw [T_apply_rec, sum_x, M.T_apply_self]; norm_num [Ne.symm nmx]
+  have Tyx : M.T y x = 1 := by
+    rw [T_apply_rec, sum_y, Tmx, M.T_apply_self]; norm_num [Ne.symm nxy]
+  have Tym : M.T y m = 2 := by
+    rw [T_apply_rec, sum_y, Txm, M.T_apply_self]; norm_num [Ne.symm nmy]
+  have Tx0 : ∀ a, a ≠ x → a ≠ m → M.T x a = 0 := fun a h1 h2 =>
+    M.T_apply_eq_zero fun h => (anc_x a h).elim h1 h2
+  have Cxx : M.cov x x = 2 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x, m} fun a ha => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at ha
+      simp [Tx0 a ha.1 ha.2], Finset.sum_pair (Ne.symm nmx), M.T_apply_self, Txm]
+    norm_num
+  have Cxy : M.cov x y = 3 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x, m} fun a ha => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at ha
+      simp [Tx0 a ha.1 ha.2], Finset.sum_pair (Ne.symm nmx), M.T_apply_self, Txm, Tyx, Tym]
+    norm_num
+  have Cs : ∀ s, s ≠ x → s ≠ y → s ≠ m → ∀ w, (w = x ∨ w = y) → M.cov s w = 0 := by
+    intro s hsx hsy hsm w hw
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {s} fun a ha => by
+      have : M.T s a = 0 := M.T_apply_eq_zero fun h =>
+        (by simpa using ha : a ≠ s) (anc_s s hsx hsy a h)
+      simp [this], Finset.sum_singleton, M.T_apply_self, one_mul]
+    refine M.T_apply_eq_zero fun h => ?_
+    rcases hw with rfl | rfl
+    · exact (anc_x s h).elim hsx hsm
+    · exact (anc_y s h).elim hsy fun h' => h'.elim hsx hsm
+  have hβ : IsRegCoeff M.cov (insert x Z) y (Pi.single x (M.cov x y / M.cov x x)) := by
+    refine isRegCoeff_of_uncorrelated ((isRegCoeff_singleton_iff (by rw [Cxx]; norm_num)).2 rfl)
+      (by simp) fun s hs hs₁ => ?_
+    have hsx : s ≠ x := by simpa using hs₁
+    have hsZ : s ∈ Z := (Finset.mem_insert.1 hs).resolve_left hsx
+    have hsy : s ≠ y := fun h => hyZ (h ▸ hsZ)
+    have hsm : s ≠ m := fun h => hmZ (h ▸ hsZ)
+    exact ⟨Cs s hsx hsy hsm y (Or.inr rfl), fun t ht => by
+      rw [Finset.mem_singleton.1 ht]; exact Cs s hsx hsy hsm x (Or.inl rfl)⟩
+  have hu : IsUnit (subCov M.cov (insert x Z)) :=
+    isUnit_submatrix_of_posDef (M.cov_posDef (hΩ ▸ PosDef.one)) _
+  rw [(regCoeff_isRegCoeff y hu).unique hu hβ, Pi.single_eq_same, Cxx, Cxy]
+
+/-- **An open fork on an arbitrary graph.** Let `G` be acyclic with edges `x → y`, `m → x` and
+`m → y`, and let `Z` contain neither `x` nor `m` nor any descendant of `y`. Then the fork
+`x ← m → y` is an open path of `G` with `x → y` deleted, and there is a linear SEM on `G` with
+uncorrelated unit-variance errors (so every covariance block is invertible) at which the
+coefficient of `x` in the regression of `y` on `x` and `Z` differs from the path coefficient. -/
+theorem exists_ne_of_fork {G : Digraph V} (hG : G.IsAcyclic) {x y m : V} {Z : Finset V}
+    (hxy : G.Adj x y) (hmx : G.Adj m x) (hmy : G.Adj m y) (hxZ : x ∉ Z) (hmZ : m ∉ Z)
+    (hZ : ∀ s ∈ Z, ¬ ReflTransGen G.Adj y s) :
+    ∃ M : LinearSEM V, M.G = G ∧ M.Ω = 1 ∧ (∀ S : Finset V, IsUnit (subCov M.cov S)) ∧
+      regCoeff M.cov (insert x Z) y x ≠ M.B y x := by
+  have hyZ : y ∉ Z := fun h => hZ y h ReflTransGen.refl
+  have hle : ∀ p q, (forkGraph x y m).Adj p q → G.Adj p q := by
+    intro p q h
+    rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> rw [h1, h2] <;> assumption
+  have hH : (forkGraph x y m).IsAcyclic := Digraph.IsAcyclic.anti (H := forkGraph x y m) hle hG
+  let M₀ := unitModel (forkGraph x y m) hH
+  have h32 : regCoeff M₀.cov (insert x Z) y x = 3 / 2 :=
+    fork_regCoeff M₀ rfl (fun _ _ => rfl) (fun _ _ h => h) (ne_of_adj_of_isAcyclic hG hxy)
+      (ne_of_adj_of_isAcyclic hG hmx) (ne_of_adj_of_isAcyclic hG hmy) hxZ hyZ hmZ
+  refine ⟨onGraph M₀ G hG hle, rfl, rfl, fun S =>
+    isUnit_submatrix_of_posDef (M₀.cov_posDef PosDef.one) S, ?_⟩
+  change regCoeff M₀.cov (insert x Z) y x ≠ M₀.B y x
+  rw [h32]
+  simp [M₀, unitModel, forkGraph]
+  norm_num
+
+/-! #### An open chain `x → m → y` -/
+
+/-- The chain pattern: edges `x → m`, `m → y`, `x → y`. -/
+def chainGraph (x y m : V) : Digraph V where
+  Adj p q := (p = x ∧ q = m) ∨ (p = m ∧ q = y) ∨ (p = x ∧ q = y)
+
+instance (x y m : V) : DecidableRel (chainGraph x y m).Adj :=
+  fun _ _ => inferInstanceAs (Decidable (_ ∨ _))
+
+/-- In a model whose only edges are `x → m`, `m → y`, `x → y`, all with coefficient `1`, and
+whose errors are uncorrelated with variance `1`, the coefficient of `x` in the regression of `y`
+on `x` and any set `Z` avoiding `x`, `y`, `m` is the total effect `2`. -/
+theorem chain_regCoeff (M : LinearSEM V) (hΩ : M.Ω = 1) {x y m : V}
+    (hB : ∀ v u, M.B v u = if (u = x ∧ v = m) ∨ (u = m ∧ v = y) ∨ (u = x ∧ v = y) then 1 else 0)
+    (hE : ∀ p q, M.G.Adj p q → (p = x ∧ q = m) ∨ (p = m ∧ q = y) ∨ (p = x ∧ q = y))
+    (nxy : x ≠ y) (nxm : x ≠ m) (nmy : m ≠ y) {Z : Finset V} (hxZ : x ∉ Z) (hyZ : y ∉ Z)
+    (hmZ : m ∉ Z) : regCoeff M.cov (insert x Z) y x = 2 := by
+  have anc_x : ∀ a, ReflTransGen M.G.Adj a x → a = x := fun a h =>
+    mem_of_reflTransGen (S := {x}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have anc_y : ∀ a, ReflTransGen M.G.Adj a y → a = y ∨ a = m ∨ a = x := fun a h =>
+    mem_of_reflTransGen (S := {y, m, x}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h (by simp)
+  have anc_s : ∀ s, s ≠ m → s ≠ y → ∀ a, ReflTransGen M.G.Adj a s → a = s :=
+    fun s hsm hsy a h => mem_of_reflTransGen (S := {s}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have hBm : ∀ k, M.B m k = if k = x then 1 else 0 := fun k => by
+    rw [hB]; by_cases hk : k = x <;> simp [hk, nmy]
+  have hBy : ∀ k, M.B y k = if k = m ∨ k = x then 1 else 0 := fun k => by
+    rw [hB]; by_cases hk : k = m <;> by_cases hk' : k = x <;> simp [hk, hk', Ne.symm nmy]
+  have sum_m : ∀ u, ∑ k, M.B m k * M.T k u = M.T x u := fun u => by
+    rw [sum_eq_sum_of_support {x} fun k hk => by simp [hBm, show k ≠ x by simpa using hk]]
+    simp [hBm]
+  have sum_y : ∀ u, ∑ k, M.B y k * M.T k u = M.T m u + M.T x u := fun u => by
+    rw [sum_eq_sum_of_support {m, x} fun k hk => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hk
+      simp [hBy, hk.1, hk.2], Finset.sum_pair (Ne.symm nxm)]
+    simp [hBy]
+  have Tmx : M.T m x = 1 := by
+    rw [T_apply_rec, sum_m, M.T_apply_self]; norm_num [Ne.symm nxm]
+  have Tyx : M.T y x = 2 := by
+    rw [T_apply_rec, sum_y, Tmx, M.T_apply_self]; norm_num [Ne.symm nxy]
+  have Tx0 : ∀ a, a ≠ x → M.T x a = 0 := fun a h1 =>
+    M.T_apply_eq_zero fun h => h1 (anc_x a h)
+  have Cxx : M.cov x x = 1 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x} fun a ha => by
+      simp [Tx0 a (by simpa using ha)], Finset.sum_singleton, M.T_apply_self]
+    norm_num
+  have Cxy : M.cov x y = 2 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x} fun a ha => by
+      simp [Tx0 a (by simpa using ha)], Finset.sum_singleton, M.T_apply_self, Tyx]
+    norm_num
+  have Cs : ∀ s, s ≠ x → s ≠ y → s ≠ m → ∀ w, (w = x ∨ w = y) → M.cov s w = 0 := by
+    intro s hsx hsy hsm w hw
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {s} fun a ha => by
+      have : M.T s a = 0 := M.T_apply_eq_zero fun h =>
+        (by simpa using ha : a ≠ s) (anc_s s hsm hsy a h)
+      simp [this], Finset.sum_singleton, M.T_apply_self, one_mul]
+    refine M.T_apply_eq_zero fun h => ?_
+    rcases hw with rfl | rfl
+    · exact hsx (anc_x s h)
+    · exact (anc_y s h).elim hsy fun h' => h'.elim hsm hsx
+  have hβ : IsRegCoeff M.cov (insert x Z) y (Pi.single x (M.cov x y / M.cov x x)) := by
+    refine isRegCoeff_of_uncorrelated ((isRegCoeff_singleton_iff (by rw [Cxx]; norm_num)).2 rfl)
+      (by simp) fun s hs hs₁ => ?_
+    have hsx : s ≠ x := by simpa using hs₁
+    have hsZ : s ∈ Z := (Finset.mem_insert.1 hs).resolve_left hsx
+    have hsy : s ≠ y := fun h => hyZ (h ▸ hsZ)
+    have hsm : s ≠ m := fun h => hmZ (h ▸ hsZ)
+    exact ⟨Cs s hsx hsy hsm y (Or.inr rfl), fun t ht => by
+      rw [Finset.mem_singleton.1 ht]; exact Cs s hsx hsy hsm x (Or.inl rfl)⟩
+  have hu : IsUnit (subCov M.cov (insert x Z)) :=
+    isUnit_submatrix_of_posDef (M.cov_posDef (hΩ ▸ PosDef.one)) _
+  rw [(regCoeff_isRegCoeff y hu).unique hu hβ, Pi.single_eq_same, Cxx, Cxy]
+  norm_num
+
+/-- **An open chain on an arbitrary graph.** Let `G` be acyclic with edges `x → y`, `x → m` and
+`m → y`, and let `Z` contain neither `x` nor `m` nor any descendant of `y`. Then the chain
+`x → m → y` is an open path of `G` with `x → y` deleted, and there is a linear SEM on `G` with
+uncorrelated unit-variance errors at which the coefficient of `x` in the regression of `y` on `x`
+and `Z` differs from the path coefficient. -/
+theorem exists_ne_of_chain {G : Digraph V} (hG : G.IsAcyclic) {x y m : V} {Z : Finset V}
+    (hxy : G.Adj x y) (hxm : G.Adj x m) (hmy : G.Adj m y) (hxZ : x ∉ Z) (hmZ : m ∉ Z)
+    (hZ : ∀ s ∈ Z, ¬ ReflTransGen G.Adj y s) :
+    ∃ M : LinearSEM V, M.G = G ∧ M.Ω = 1 ∧ (∀ S : Finset V, IsUnit (subCov M.cov S)) ∧
+      regCoeff M.cov (insert x Z) y x ≠ M.B y x := by
+  have hyZ : y ∉ Z := fun h => hZ y h ReflTransGen.refl
+  have hle : ∀ p q, (chainGraph x y m).Adj p q → G.Adj p q := by
+    intro p q h
+    rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> rw [h1, h2] <;> assumption
+  have hH : (chainGraph x y m).IsAcyclic :=
+    Digraph.IsAcyclic.anti (H := chainGraph x y m) hle hG
+  let M₀ := unitModel (chainGraph x y m) hH
+  have h2 : regCoeff M₀.cov (insert x Z) y x = 2 :=
+    chain_regCoeff M₀ rfl (fun _ _ => rfl) (fun _ _ h => h) (ne_of_adj_of_isAcyclic hG hxy)
+      (ne_of_adj_of_isAcyclic hG hxm) (ne_of_adj_of_isAcyclic hG hmy) hxZ hyZ hmZ
+  refine ⟨onGraph M₀ G hG hle, rfl, rfl, fun S =>
+    isUnit_submatrix_of_posDef (M₀.cov_posDef PosDef.one) S, ?_⟩
+  change regCoeff M₀.cov (insert x Z) y x ≠ M₀.B y x
+  rw [h2]
+  simp [M₀, unitModel, chainGraph]
+
+/-! #### A collider `x → c ← w` opened by `c ∈ Z`, followed by `w → y` -/
+
+/-- The collider pattern: edges `x → c`, `w → c`, `w → y`, `x → y`. -/
+def colliderGraph (x y c w : V) : Digraph V where
+  Adj p q := (p = x ∧ q = c) ∨ (p = w ∧ q = c) ∨ (p = w ∧ q = y) ∨ (p = x ∧ q = y)
+
+instance (x y c w : V) : DecidableRel (colliderGraph x y c w).Adj :=
+  fun _ _ => inferInstanceAs (Decidable (_ ∨ _))
+
+/-- In a model whose only edges are `x → c`, `w → c`, `w → y`, `x → y`, all with coefficient `1`,
+and whose errors are uncorrelated with variance `1`, the coefficient of `x` in the regression of
+`y` on `x` and a set `Z` containing `c` but not `x`, `y`, `w` is `1 / 2`. -/
+theorem collider_regCoeff (M : LinearSEM V) (hΩ : M.Ω = 1) {x y c w : V}
+    (hB : ∀ v u, M.B v u = if (u = x ∧ v = c) ∨ (u = w ∧ v = c) ∨ (u = w ∧ v = y) ∨
+      (u = x ∧ v = y) then 1 else 0)
+    (hE : ∀ p q, M.G.Adj p q →
+      (p = x ∧ q = c) ∨ (p = w ∧ q = c) ∨ (p = w ∧ q = y) ∨ (p = x ∧ q = y))
+    (nxy : x ≠ y) (nxc : x ≠ c) (nwc : w ≠ c) (nwy : w ≠ y) (ncy : c ≠ y) (nwx : w ≠ x)
+    {Z : Finset V} (hxZ : x ∉ Z) (hyZ : y ∉ Z) (hwZ : w ∉ Z) (hcZ : c ∈ Z) :
+    regCoeff M.cov (insert x Z) y x = 1 / 2 := by
+  have anc_x : ∀ a, ReflTransGen M.G.Adj a x → a = x := fun a h =>
+    mem_of_reflTransGen (S := {x}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have anc_w : ∀ a, ReflTransGen M.G.Adj a w → a = w := fun a h =>
+    mem_of_reflTransGen (S := {w}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have anc_c : ∀ a, ReflTransGen M.G.Adj a c → a = c ∨ a = x ∨ a = w := fun a h =>
+    mem_of_reflTransGen (S := {c, x, w}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h (by simp)
+  have anc_y : ∀ a, ReflTransGen M.G.Adj a y → a = y ∨ a = w ∨ a = x := fun a h =>
+    mem_of_reflTransGen (S := {y, w, x}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h (by simp)
+  have anc_s : ∀ s, s ≠ c → s ≠ y → ∀ a, ReflTransGen M.G.Adj a s → a = s :=
+    fun s hsc hsy a h => mem_of_reflTransGen (S := {s}) (fun p q hpq hq => by
+      rcases hE p q hpq with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> simp_all) h rfl
+  have hBc : ∀ k, M.B c k = if k = x ∨ k = w then 1 else 0 := fun k => by
+    rw [hB]; by_cases hk : k = x <;> by_cases hk' : k = w <;> simp [hk, hk', ncy]
+  have hBy : ∀ k, M.B y k = if k = w ∨ k = x then 1 else 0 := fun k => by
+    rw [hB]; by_cases hk : k = x <;> by_cases hk' : k = w <;> simp [hk, hk', Ne.symm ncy]
+  have sum_c : ∀ u, ∑ k, M.B c k * M.T k u = M.T x u + M.T w u := fun u => by
+    rw [sum_eq_sum_of_support {x, w} fun k hk => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hk
+      simp [hBc, hk.1, hk.2], Finset.sum_pair (Ne.symm nwx)]
+    simp [hBc]
+  have sum_y : ∀ u, ∑ k, M.B y k * M.T k u = M.T w u + M.T x u := fun u => by
+    rw [sum_eq_sum_of_support {w, x} fun k hk => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hk
+      simp [hBy, hk.1, hk.2], Finset.sum_pair nwx]
+    simp [hBy]
+  have Twx : M.T w x = 0 := M.T_apply_eq_zero fun h => Ne.symm nwx (anc_w x h)
+  have Txw : M.T x w = 0 := M.T_apply_eq_zero fun h => nwx (anc_x w h)
+  have Tcx : M.T c x = 1 := by
+    rw [T_apply_rec, sum_c, Twx, M.T_apply_self]; norm_num [Ne.symm nxc]
+  have Tcw : M.T c w = 1 := by
+    rw [T_apply_rec, sum_c, Txw, M.T_apply_self]; norm_num [Ne.symm nwc]
+  have Tyx : M.T y x = 1 := by
+    rw [T_apply_rec, sum_y, Twx, M.T_apply_self]; norm_num [Ne.symm nxy]
+  have Tyw : M.T y w = 1 := by
+    rw [T_apply_rec, sum_y, Txw, M.T_apply_self]; norm_num [Ne.symm nwy]
+  have Tyc : M.T y c = 0 := M.T_apply_eq_zero fun h =>
+    (anc_y c h).elim ncy fun h' => h'.elim (Ne.symm nwc) (Ne.symm nxc)
+  have Tx0 : ∀ a, a ≠ x → M.T x a = 0 := fun a h1 =>
+    M.T_apply_eq_zero fun h => h1 (anc_x a h)
+  have Tc0 : ∀ a, a ≠ c → a ≠ x → a ≠ w → M.T c a = 0 := fun a h1 h2 h3 =>
+    M.T_apply_eq_zero fun h => (anc_c a h).elim h1 fun h' => h'.elim h2 h3
+  have sum_cxw : ∀ f : V → ℝ, (∀ a, a ≠ c → a ≠ x → a ≠ w → f a = 0) →
+      ∑ a, f a = f c + (f x + f w) := fun f hf => by
+    rw [sum_eq_sum_of_support {c, x, w} fun a ha => by
+      simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at ha
+      exact hf a ha.1 ha.2.1 ha.2.2, Finset.sum_insert (by simp [Ne.symm nxc, Ne.symm nwc]),
+      Finset.sum_pair (Ne.symm nwx)]
+  have Cxx : M.cov x x = 1 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x} fun a ha => by
+      simp [Tx0 a (by simpa using ha)], Finset.sum_singleton, M.T_apply_self]
+    norm_num
+  have Cxc : M.cov x c = 1 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x} fun a ha => by
+      simp [Tx0 a (by simpa using ha)], Finset.sum_singleton, M.T_apply_self, Tcx]
+    norm_num
+  have Cxy : M.cov x y = 1 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {x} fun a ha => by
+      simp [Tx0 a (by simpa using ha)], Finset.sum_singleton, M.T_apply_self, Tyx]
+    norm_num
+  have Ccc : M.cov c c = 3 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_cxw _ fun a h1 h2 h3 => by simp [Tc0 a h1 h2 h3],
+      M.T_apply_self, Tcx, Tcw]
+    norm_num
+  have Ccy : M.cov c y = 2 := by
+    rw [cov_apply_of_eq_one M hΩ, sum_cxw _ fun a h1 h2 h3 => by simp [Tc0 a h1 h2 h3],
+      M.T_apply_self, Tcx, Tcw, Tyc, Tyx, Tyw]
+    norm_num
+  have Cs : ∀ s, s ≠ x → s ≠ y → s ≠ w → s ≠ c → ∀ t, (t = x ∨ t = c ∨ t = y) →
+      M.cov s t = 0 := by
+    intro s hsx hsy hsw hsc t ht
+    rw [cov_apply_of_eq_one M hΩ, sum_eq_sum_of_support {s} fun a ha => by
+      have : M.T s a = 0 := M.T_apply_eq_zero fun h =>
+        (by simpa using ha : a ≠ s) (anc_s s hsc hsy a h)
+      simp [this], Finset.sum_singleton, M.T_apply_self, one_mul]
+    refine M.T_apply_eq_zero fun h => ?_
+    rcases ht with rfl | rfl | rfl
+    · exact hsx (anc_x s h)
+    · exact (anc_c s h).elim hsc fun h' => h'.elim hsx hsw
+    · exact (anc_y s h).elim hsy fun h' => h'.elim hsw hsx
+  set β : V → ℝ := fun v => if v = x then 1 / 2 else if v = c then 1 / 2 else 0 with hβdef
+  have hpair : IsRegCoeff M.cov {x, c} y β := by
+    refine (isRegCoeff_pair_iff nxc (M.cov_symm c x) (by rw [Cxx, Ccc, Cxc]; norm_num)).2
+      ⟨fun v hv => ?_, ?_, ?_⟩
+    · simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hv
+      simp [hβdef, hv.1, hv.2]
+    · rw [Ccc, Cxy, Cxc, Ccy, Cxx]; simp [hβdef]; norm_num
+    · rw [Ccc, Cxy, Cxc, Ccy, Cxx]; simp [hβdef, Ne.symm nxc]; norm_num
+  have hβ : IsRegCoeff M.cov (insert x Z) y β := by
+    refine isRegCoeff_of_uncorrelated hpair (Finset.insert_subset_insert _
+      (Finset.singleton_subset_iff.2 hcZ)) fun s hs hs₁ => ?_
+    simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hs₁
+    have hsZ : s ∈ Z := (Finset.mem_insert.1 hs).resolve_left hs₁.1
+    have hsy : s ≠ y := fun h => hyZ (h ▸ hsZ)
+    have hsw : s ≠ w := fun h => hwZ (h ▸ hsZ)
+    refine ⟨Cs s hs₁.1 hsy hsw hs₁.2 y (Or.inr (Or.inr rfl)), fun t ht => ?_⟩
+    rcases Finset.mem_insert.1 ht with rfl | ht
+    · exact Cs s hs₁.1 hsy hsw hs₁.2 t (Or.inl rfl)
+    · rw [Finset.mem_singleton.1 ht]; exact Cs s hs₁.1 hsy hsw hs₁.2 c (Or.inr (Or.inl rfl))
+  have hu : IsUnit (subCov M.cov (insert x Z)) :=
+    isUnit_submatrix_of_posDef (M.cov_posDef (hΩ ▸ PosDef.one)) _
+  rw [(regCoeff_isRegCoeff y hu).unique hu hβ]
+  simp [hβdef]
+
+/-- **A collider opened by the conditioning set, on an arbitrary graph.** Let `G` be acyclic with
+edges `x → y`, `x → c`, `w → c` and `w → y`, with `w ≠ x`, and let `Z` contain `c` but neither
+`x` nor `w` nor any descendant of `y`. Then `x → c ← w → y` is an open path of `G` with `x → y`
+deleted (the collider `c` is in `Z`), and there is a linear SEM on `G` with uncorrelated
+unit-variance errors at which the coefficient of `x` in the regression of `y` on `x` and `Z`
+differs from the path coefficient. -/
+theorem exists_ne_of_collider {G : Digraph V} (hG : G.IsAcyclic) {x y c w : V} {Z : Finset V}
+    (hxy : G.Adj x y) (hxc : G.Adj x c) (hwc : G.Adj w c) (hwy : G.Adj w y) (hwx : w ≠ x)
+    (hxZ : x ∉ Z) (hwZ : w ∉ Z) (hcZ : c ∈ Z) (hZ : ∀ s ∈ Z, ¬ ReflTransGen G.Adj y s) :
+    ∃ M : LinearSEM V, M.G = G ∧ M.Ω = 1 ∧ (∀ S : Finset V, IsUnit (subCov M.cov S)) ∧
+      regCoeff M.cov (insert x Z) y x ≠ M.B y x := by
+  have hyZ : y ∉ Z := fun h => hZ y h ReflTransGen.refl
+  have hle : ∀ p q, (colliderGraph x y c w).Adj p q → G.Adj p q := by
+    intro p q h
+    rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> rw [h1, h2] <;> assumption
+  have hH : (colliderGraph x y c w).IsAcyclic :=
+    Digraph.IsAcyclic.anti (H := colliderGraph x y c w) hle hG
+  let M₀ := unitModel (colliderGraph x y c w) hH
+  have h12 : regCoeff M₀.cov (insert x Z) y x = 1 / 2 :=
+    collider_regCoeff M₀ rfl (fun _ _ => rfl) (fun _ _ h => h) (ne_of_adj_of_isAcyclic hG hxy)
+      (ne_of_adj_of_isAcyclic hG hxc) (ne_of_adj_of_isAcyclic hG hwc)
+      (ne_of_adj_of_isAcyclic hG hwy) (fun h => hyZ (h ▸ hcZ)) hwx hxZ hyZ hwZ hcZ
+  refine ⟨onGraph M₀ G hG hle, rfl, rfl, fun S =>
+    isUnit_submatrix_of_posDef (M₀.cov_posDef PosDef.one) S, ?_⟩
+  change regCoeff M₀.cov (insert x Z) y x ≠ M₀.B y x
+  rw [h12]
+  norm_num [M₀, unitModel, colliderGraph]
+
+end General
 
 end SingleDoorConverse
 

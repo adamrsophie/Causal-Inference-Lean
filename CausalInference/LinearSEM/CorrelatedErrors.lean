@@ -7,8 +7,9 @@ module
 
 public import CausalInference.LinearSEM.DSeparation
 public import CausalInference.LinearSEM.Counterexamples
-public import CausalInference.Graphical.ADMG
+public import CausalInference.Graphical.MSeparation
 public import Mathlib.Data.Matrix.Block
+public import Mathlib.Basic.Real.Sign
 
 /-!
 # Correlated errors: path diagrams with bidirected arcs
@@ -22,25 +23,25 @@ pair, loading only on `a` and `b` and only along a bidirected edge `a ↔ b`, an
 residuals `η` with variances `D ≥ 0`. Every nonzero off-diagonal entry of `Ω` is then covered
 by a bidirected edge (`PathDiagram.covers`).
 
-Which models are covered: every model with uncorrelated errors (`PathDiagram.ofIsDiag`), and
-every model whose error covariance has such a factor representation along the bidirected edges.
-Not every positive semidefinite `Ω` whose off-diagonal support lies in the bidirected edges has
-one (a representation with one latent per edge exists, for example, when `Ω` is diagonally
-dominant, which is not proved here). The m-separation theorem for arbitrary `Ω` with the given
-support, proved by the trek rule in the literature, is not formalized.
+Which models are covered: every model with uncorrelated errors (`PathDiagram.ofIsDiag`), every
+model whose error covariance is diagonally dominant with off-diagonal support in the bidirected
+edges (`PathDiagram.ofDiagDominant`), and every model whose error covariance has such a factor
+representation along the bidirected edges. Not every positive definite `Ω` has one:
+`NoFactorRep.isEmpty_pathDiagram` gives a positive definite `3 × 3` error covariance with no
+factor representation along any bidirected edges. The m-separation theorem for arbitrary `Ω`
+with the given support, proved by the trek rule in the literature, is not formalized.
 
-m-separation (`ADMG.MSep`) is defined as d-separation of the observed vertices in the canonical
-DAG `ADMG.canonicalDAG`, which replaces each bidirected edge `a ↔ b` by a latent common parent
-of `a` and `b`. The path definition of m-separation (Richardson 2003) is not in this library,
-and its agreement with this definition is not proved here.
+m-separation (`ADMG.MSep`, in `CausalInference.Graphical.MSeparation`) is d-separation of the
+observed vertices in the canonical DAG `ADMG.canonicalDAG`, which replaces each bidirected edge
+`a ↔ b` by a latent common parent of `a` and `b`; by `ADMG.mSep_iff_not_mConn` it is the
+absence of an active trail of directed and bidirected edges (Richardson 2003).
 
 ## Main definitions
 
-* `ADMG.canonicalDAG G`: the DAG on `V ⊕ V × V` with a latent parent `Sum.inr (a, b)` of
-  `Sum.inl a` and `Sum.inl b` for each bidirected edge `a ↔ b`.
-* `ADMG.MSep G X Y Z`: m-separation, as d-separation in the canonical DAG.
 * `LinearSEM.PathDiagram M`: a path diagram with latent common causes for `M`.
 * `LinearSEM.PathDiagram.canonical`: the linear SEM on the canonical DAG with uncorrelated errors.
+* `LinearSEM.PathDiagram.ofDiagDominant`: the path diagram of a diagonally dominant error
+  covariance, with one factor per bidirected edge and orientation.
 
 ## Main results
 
@@ -53,6 +54,11 @@ and its agreement with this definition is not proved here.
 * `LinearSEM.PathDiagram.single_door`, `LinearSEM.PathDiagram.back_door`: the single-door
   criterion (Pearl 2009, Theorem 5.3.1) and the back-door criterion for linear models (Theorem
   5.3.2) on path diagrams with bidirected arcs.
+* `LinearSEM.PathDiagram.single_door_ofIsDiag`, `LinearSEM.PathDiagram.back_door_ofIsDiag`:
+  their specializations to uncorrelated errors, which are `LinearSEM.single_door` and
+  `LinearSEM.back_door`.
+* `LinearSEM.NoFactorRep.posDef`, `LinearSEM.NoFactorRep.isEmpty_pathDiagram`: a positive
+  definite error covariance on three variables (all correlations `3 / 5`) without a path diagram.
 * `LinearSEM.BowDiagram.single_door_needs_bidirected`: in the bow with path coefficient `1`, unit
   error variances and error covariance `1 / 2`, the slope is `3 / 2`; deleting `X → Y` leaves
   `X` and `Y` d-separated in the directed graph but m-connected in the diagram.
@@ -66,54 +72,6 @@ Sources: J. Pearl (2009), *Causality*, 2nd edition, Section 5.3.1; T. S. Richard
 namespace CausalInference
 
 open Matrix Finset Relation
-
-namespace ADMG
-
-variable {V : Type*}
-
-/-- The canonical DAG of a directed mixed graph `G` on `V`, on the vertex type `V ⊕ V × V`: the
-observed vertices `Sum.inl v` carry the directed edges of `G`, and for every bidirected edge
-`a ↔ b` of `G` the latent vertex `Sum.inr (a, b)` is a common parent of `Sum.inl a` and
-`Sum.inl b`. A latent `Sum.inr (a, b)` without a bidirected edge `a ↔ b` is isolated, and no
-edge points into a latent vertex. -/
-def canonicalDAG (G : ADMG V) : Digraph (V ⊕ V × V) where
-  Adj s t := match s, t with
-    | .inl u, .inl v => G.directed.Adj u v
-    | .inr p, .inl v => G.bidirected.Adj p.1 p.2 ∧ (v = p.1 ∨ v = p.2)
-    | _, .inr _ => False
-
-variable {G : ADMG V}
-
-@[simp] theorem canonicalDAG_adj_inl_inl {u v : V} :
-    G.canonicalDAG.Adj (.inl u) (.inl v) ↔ G.directed.Adj u v := Iff.rfl
-
-@[simp] theorem canonicalDAG_adj_inr_inl {p : V × V} {v : V} :
-    G.canonicalDAG.Adj (.inr p) (.inl v) ↔ G.bidirected.Adj p.1 p.2 ∧ (v = p.1 ∨ v = p.2) :=
-  Iff.rfl
-
-@[simp] theorem not_canonicalDAG_adj_inr {s : V ⊕ V × V} {p : V × V} :
-    ¬ G.canonicalDAG.Adj s (.inr p) := by
-  cases s <;> exact id
-
-/-- The canonical DAG of an acyclic directed mixed graph on a finite vertex type is acyclic. -/
-theorem IsAcyclic.canonicalDAG [Finite V] (hG : G.IsAcyclic) : G.canonicalDAG.IsAcyclic := by
-  have := Fintype.ofFinite V
-  obtain ⟨f, hf⟩ := Digraph.IsAcyclic.exists_adj_lt hG
-  refine Digraph.isAcyclic_of_adj_lt (Sum.elim (fun v => f v + 1) fun _ => 0) ?_
-  rintro (u | p) (v | q) h
-  · exact Nat.succ_lt_succ (hf h)
-  · exact absurd h not_canonicalDAG_adj_inr
-  · exact Nat.succ_pos _
-  · exact absurd h not_canonicalDAG_adj_inr
-
-/-- m-separation of `X` and `Y` given `Z` in a directed mixed graph, defined as d-separation of
-the corresponding observed vertices in the canonical DAG `ADMG.canonicalDAG`, where every
-bidirected edge is replaced by a latent common parent of its endpoints. This is the definition
-used in this library; its agreement with the path definition is not proved. -/
-def MSep (G : ADMG V) (X Y Z : Set V) : Prop :=
-  G.canonicalDAG.DSep (Sum.inl '' X) (Sum.inl '' Y) (Sum.inl '' Z)
-
-end ADMG
 
 namespace LinearSEM
 
@@ -410,6 +368,145 @@ theorem back_door {x y : V} {Z : Finset V} (hZ : ∀ s ∈ Z, ¬ ReflTransGen F.
   have hzero := (hγ.eq_zero_iff_partialCov_eq_zero hxZ huZ' hu').2 h0
   simp [hzero]
 
+/-! ### Uncorrelated errors -/
+
+/-- The single-door criterion for uncorrelated errors, `LinearSEM.single_door`, as the
+specialization of `PathDiagram.single_door` to the diagram `PathDiagram.ofIsDiag`: without
+bidirected edges m-separation is d-separation (`ADMG.mSep_ofDigraph`). -/
+theorem single_door_ofIsDiag (hΩ : M.Ω.IsDiag) {x y : V} {Z : Finset V} (hxy : M.G.Adj x y)
+    (hxZ : x ∉ Z) (hZ : ∀ s ∈ Z, ¬ ReflTransGen M.G.Adj y s)
+    (hsep : (deleteEdgeGraph M.G x y).DSep {x} {y} ↑Z)
+    (huZ : IsUnit (subCov M.cov Z)) (hu : IsUnit (subCov M.cov (insert x Z))) :
+    regCoeff M.cov (insert x Z) y x = M.B y x :=
+  (ofIsDiag hΩ).single_door hxy hxZ hZ
+    ((ADMG.mSep_ofDigraph (D := deleteEdgeGraph M.G x y)).2 hsep) huZ hu
+
+/-- The back-door criterion for uncorrelated errors, `LinearSEM.back_door`, as the
+specialization of `PathDiagram.back_door` to the diagram `PathDiagram.ofIsDiag`. -/
+theorem back_door_ofIsDiag (hΩ : M.Ω.IsDiag) {x y : V} {Z : Finset V}
+    (hZ : ∀ s ∈ Z, ¬ ReflTransGen M.G.Adj x s)
+    (hsep : (M.G.deleteOutgoing {x}).DSep {x} {y} ↑Z)
+    (huZ : IsUnit (subCov M.cov Z)) (hu : IsUnit (subCov M.cov (insert x Z))) :
+    regCoeff M.cov (insert x Z) y x = M.T y x :=
+  (ofIsDiag hΩ).back_door hZ ((ADMG.mSep_ofDigraph (D := M.G.deleteOutgoing {x})).2 hsep) huZ hu
+
+/-! ### Diagonally dominant error covariances -/
+
+theorem sign_mul_abs_self (r : ℝ) : Real.sign r * |r| = r := by
+  rcases lt_trichotomy r 0 with h | h | h
+  · rw [Real.sign_of_neg h, abs_of_neg h]; ring
+  · simp [h]
+  · rw [Real.sign_of_pos h, abs_of_pos h, one_mul]
+
+theorem sign_mul_sign_mul_abs (r : ℝ) : Real.sign r * Real.sign r * |r| = |r| := by
+  rcases lt_trichotomy r 0 with h | h | h
+  · rw [Real.sign_of_neg h]; ring
+  · simp [h]
+  · rw [Real.sign_of_pos h]; ring
+
+/-- The loadings of the factor representation of a diagonally dominant error covariance `Ω` along
+the bidirected edges of `H`: the factor `(a, b)`, for an edge `a ↔ b`, loads `√(|Ω a b| / 2)` on
+`a` and `sign (Ω a b) √(|Ω a b| / 2)` on `b`. The two factors `(a, b)` and `(b, a)` of an edge
+together produce the covariance `Ω a b`. -/
+noncomputable def ddLoading (H : SimpleGraph V) [DecidableRel H.Adj] (Ω : Matrix V V ℝ) :
+    Matrix V (V × V) ℝ :=
+  fun v p => if H.Adj p.1 p.2 then
+    (if v = p.1 then Real.sqrt (|Ω p.1 p.2| / 2)
+      else if v = p.2 then Real.sign (Ω p.1 p.2) * Real.sqrt (|Ω p.1 p.2| / 2) else 0)
+  else 0
+
+variable {H : SimpleGraph V} [DecidableRel H.Adj] {Ω : Matrix V V ℝ}
+
+theorem ddLoading_mul_apply_ne (hsymm : ∀ a b, Ω a b = Ω b a)
+    (hsupp : ∀ a b, a ≠ b → Ω a b ≠ 0 → H.Adj a b) {i j : V} (hij : i ≠ j) :
+    (ddLoading H Ω * (ddLoading H Ω)ᵀ) i j = Ω i j := by
+  rw [Matrix.mul_apply, Fintype.sum_eq_add (i, j) (j, i) (by simp [hij])]
+  · have hji : H.Adj j i ↔ H.Adj i j := H.adj_comm j i
+    by_cases hadj : H.Adj i j
+    · have hs := Real.mul_self_sqrt (show (0 : ℝ) ≤ |Ω i j| / 2 by positivity)
+      simp only [transpose_apply, ddLoading, hadj, hji, hij, Ne.symm hij, ↓reduceIte, hsymm j i]
+      linear_combination (2 * Real.sign (Ω i j)) * hs + sign_mul_abs_self (Ω i j)
+    · have h0 : Ω i j = 0 := not_not.1 fun h => hadj (hsupp i j hij h)
+      simp [transpose_apply, ddLoading, hadj, hji, h0]
+  · rintro ⟨a, b⟩ ⟨h1, h2⟩
+    simp only [transpose_apply, ddLoading]
+    split_ifs <;> simp_all
+
+theorem ddLoading_mul_apply_self (hsymm : ∀ a b, Ω a b = Ω b a)
+    (hsupp : ∀ a b, a ≠ b → Ω a b ≠ 0 → H.Adj a b) (i : V) :
+    (ddLoading H Ω * (ddLoading H Ω)ᵀ) i i = ∑ b ∈ univ.erase i, |Ω i b| := by
+  have hterm : ∀ p : V × V, ddLoading H Ω i p * ddLoading H Ω i p =
+      (if p.1 = i then (if H.Adj i p.2 then |Ω i p.2| / 2 else 0) else 0) +
+      (if p.2 = i then (if H.Adj i p.1 then |Ω i p.1| / 2 else 0) else 0) := by
+    rintro ⟨a, b⟩
+    have hs := Real.mul_self_sqrt (show (0 : ℝ) ≤ |Ω a b| / 2 by positivity)
+    simp only [ddLoading]
+    by_cases hab : H.Adj a b
+    · have hne : a ≠ b := hab.ne
+      by_cases ha : a = i
+      · subst ha
+        simp only [hab, Ne.symm hne, ↓reduceIte, add_zero, hs]
+      · by_cases hb : b = i
+        · subst hb
+          simp only [hab, Ne.symm ha, ha, ↓reduceIte, H.adj_comm b a, hsymm b a, zero_add]
+          calc Real.sign (Ω a b) * Real.sqrt (|Ω a b| / 2) *
+                (Real.sign (Ω a b) * Real.sqrt (|Ω a b| / 2))
+              = Real.sign (Ω a b) * Real.sign (Ω a b) *
+                  (Real.sqrt (|Ω a b| / 2) * Real.sqrt (|Ω a b| / 2)) := by ring
+            _ = |Ω a b| / 2 := by rw [hs, ← mul_div_assoc, sign_mul_sign_mul_abs]
+        · simp [hab, Ne.symm ha, Ne.symm hb, ha, hb]
+    · by_cases ha : a = i
+      · subst ha
+        by_cases hb : b = a
+        · subst hb; simp
+        · simp [hab, hb]
+      · by_cases hb : b = i
+        · subst hb; simp [hab, ha, H.adj_comm b a]
+        · simp [hab, ha, hb]
+  rw [Matrix.mul_apply]
+  simp only [transpose_apply, hterm, Finset.sum_add_distrib]
+  rw [Fintype.sum_prod_type_right, Fintype.sum_prod_type]
+  simp only [Finset.sum_ite_eq', Finset.mem_univ, ite_true]
+  rw [← Finset.sum_add_distrib, ← Finset.sum_erase univ (a := i) (by simp)]
+  refine Finset.sum_congr rfl fun b hb => ?_
+  have hbi : b ≠ i := Finset.ne_of_mem_erase hb
+  by_cases hadj : H.Adj i b
+  · simp only [hadj, ↓reduceIte]; ring
+  · have h0 : Ω i b = 0 := not_not.1 fun h => hadj (hsupp i b (Ne.symm hbi) h)
+    simp [hadj, h0]
+
+/-- **Diagonal dominance gives a path diagram.** If every nonzero off-diagonal entry of the
+error covariance lies on a bidirected edge of `H` and each diagonal entry is at least the sum of
+the absolute values of the other entries of its row, then `M` has a path diagram on the mixed
+graph `(M.G, H)`: one factor per bidirected edge and orientation (`PathDiagram.ddLoading`), and
+residual variances `Ω a a - ∑ b ≠ a, |Ω a b| ≥ 0`. -/
+noncomputable def ofDiagDominant (H : SimpleGraph V) [DecidableRel H.Adj]
+    (hsupp : ∀ a b, a ≠ b → M.Ω a b ≠ 0 → H.Adj a b)
+    (hdd : ∀ a, ∑ b ∈ univ.erase a, |M.Ω a b| ≤ M.Ω a a) : M.PathDiagram where
+  G := ⟨M.G, H⟩
+  acyclic := M.acyclic
+  B_support := M.B_support
+  Λ := ddLoading H M.Ω
+  Λ_support v p h := by
+    simp only [ddLoading] at h
+    split_ifs at h with h1 h2 h3
+    · exact ⟨h1, Or.inl h2⟩
+    · exact ⟨h1, Or.inr h3⟩
+    · exact absurd rfl h
+    · exact absurd rfl h
+  D a := M.Ω a a - ∑ b ∈ univ.erase a, |M.Ω a b|
+  D_nonneg a := sub_nonneg.2 (hdd a)
+  Ω_eq := by
+    have hsymm : ∀ a b, M.Ω a b = M.Ω b a := fun a b => by
+      simpa using (M.Ω_posSemidef.isHermitian.apply a b).symm
+    ext i j
+    rw [Matrix.add_apply]
+    by_cases hij : i = j
+    · subst hij
+      rw [ddLoading_mul_apply_self hsymm hsupp, diagonal_apply_eq]
+      ring
+    · rw [ddLoading_mul_apply_ne hsymm hsupp hij, diagonal_apply_ne _ hij, add_zero]
+
 end PathDiagram
 
 end PathDiagram
@@ -495,6 +592,70 @@ theorem single_door_needs_bidirected :
     · exact Digraph.bayesBall_adj_true.2 ⟨by simp [diagram], by simp⟩
 
 end BowDiagram
+
+/-! ### A positive definite error covariance without a path diagram -/
+
+namespace NoFactorRep
+
+/-- The equicorrelation matrix on three variables with all correlations `3 / 5`. -/
+noncomputable def Ω : Matrix (Fin 3) (Fin 3) ℝ :=
+  !![1, 3 / 5, 3 / 5; 3 / 5, 1, 3 / 5; 3 / 5, 3 / 5, 1]
+
+/-- The matrix `NoFactorRep.Ω` is positive definite: it is `(2 / 5) I + (3 / 5) 1 1ᵀ`. -/
+theorem posDef : Ω.PosDef := by
+  have : Ω = diagonal (fun _ => 2 / 5) +
+      vecMulVec (fun _ => Real.sqrt (3 / 5)) (star fun _ => Real.sqrt (3 / 5)) := by
+    ext i j
+    fin_cases i <;> fin_cases j <;>
+      norm_num [Ω, vecMulVec_apply, div_mul_div_comm, Real.mul_self_sqrt]
+  rw [this]
+  exact (posDef_diagonal_iff.2 fun _ => by norm_num).add_posSemidef
+    (posSemidef_vecMulVec_self_star _)
+
+/-- `NoFactorRep.Ω` is not of the form `Λ Λᵀ + diag(D)` with `D ≥ 0` and every factor loading on
+at most two variables. Each pair `a ≠ b` has covariance `3 / 5`, produced only by the factors
+`(a, b)` and `(b, a)`, so their squared loadings on `a` and `b` add up to at least `6 / 5`;
+summed over the three pairs this exceeds the total variance `3`. -/
+theorem not_exists_factorRep : ¬ ∃ (Λ : Matrix (Fin 3) (Fin 3 × Fin 3) ℝ) (D : Fin 3 → ℝ),
+    (∀ v p, Λ v p ≠ 0 → v = p.1 ∨ v = p.2) ∧ (∀ v, 0 ≤ D v) ∧ Ω = Λ * Λᵀ + diagonal D := by
+  rintro ⟨Λ, D, hΛ, hD, hΩ⟩
+  have z : ∀ v p, ¬ (v = p.1 ∨ v = p.2) → Λ v p = 0 := fun v p h =>
+    not_not.1 fun h' => h (hΛ v p h')
+  have z011 : Λ 0 (1, 1) = 0 := z 0 (1, 1) (by decide)
+  have z012 : Λ 0 (1, 2) = 0 := z 0 (1, 2) (by decide)
+  have z021 : Λ 0 (2, 1) = 0 := z 0 (2, 1) (by decide)
+  have z022 : Λ 0 (2, 2) = 0 := z 0 (2, 2) (by decide)
+  have z100 : Λ 1 (0, 0) = 0 := z 1 (0, 0) (by decide)
+  have z102 : Λ 1 (0, 2) = 0 := z 1 (0, 2) (by decide)
+  have z120 : Λ 1 (2, 0) = 0 := z 1 (2, 0) (by decide)
+  have z122 : Λ 1 (2, 2) = 0 := z 1 (2, 2) (by decide)
+  have z200 : Λ 2 (0, 0) = 0 := z 2 (0, 0) (by decide)
+  have z201 : Λ 2 (0, 1) = 0 := z 2 (0, 1) (by decide)
+  have z210 : Λ 2 (1, 0) = 0 := z 2 (1, 0) (by decide)
+  have z211 : Λ 2 (1, 1) = 0 := z 2 (1, 1) (by decide)
+  have e : ∀ i j, Ω i j = ∑ p, Λ i p * Λ j p + diagonal D i j := fun i j => by
+    rw [hΩ]; simp [Matrix.mul_apply]
+  have e00 := e 0 0
+  have e11 := e 1 1
+  have e22 := e 2 2
+  have e01 := e 0 1
+  have e02 := e 0 2
+  have e12 := e 1 2
+  simp [Ω, Fintype.sum_prod_type, Fin.sum_univ_three, z011, z012, z021, z022, z100, z102,
+    z120, z122, z200, z201, z210, z211] at e00 e11 e22 e01 e02 e12
+  nlinarith [sq_nonneg (Λ 0 (0, 1) - Λ 1 (0, 1)), sq_nonneg (Λ 0 (1, 0) - Λ 1 (1, 0)),
+    sq_nonneg (Λ 0 (0, 2) - Λ 2 (0, 2)), sq_nonneg (Λ 0 (2, 0) - Λ 2 (2, 0)),
+    sq_nonneg (Λ 1 (1, 2) - Λ 2 (1, 2)), sq_nonneg (Λ 1 (2, 1) - Λ 2 (2, 1)),
+    mul_self_nonneg (Λ 0 (0, 0)), mul_self_nonneg (Λ 1 (1, 1)), mul_self_nonneg (Λ 2 (2, 2)),
+    hD 0, hD 1, hD 2]
+
+/-- No linear SEM on three variables with error covariance `NoFactorRep.Ω` has a path diagram,
+whatever its bidirected edges. -/
+theorem isEmpty_pathDiagram (M : LinearSEM (Fin 3)) (hM : M.Ω = Ω) : IsEmpty M.PathDiagram :=
+  ⟨fun F => not_exists_factorRep ⟨F.Λ, F.D, fun v p h => (F.Λ_support v p h).2, F.D_nonneg,
+    hM ▸ F.Ω_eq⟩⟩
+
+end NoFactorRep
 
 end LinearSEM
 

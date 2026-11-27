@@ -188,3 +188,6 @@ public import CausalInference.StructuralNested.TwoStageCounterexamples
 public import CausalInference.LinearSEM.InstrumentCriterion
 public import CausalInference.SCM.InstrumentCounterfactual
 public import CausalInference.SCM.LatentTypes
+public import CausalInference.Graphical.MSeparation
+public import CausalInference.Basic.PolynomialNullSet
+public import CausalInference.LinearSEM.InstrumentCriterionCorrelated
