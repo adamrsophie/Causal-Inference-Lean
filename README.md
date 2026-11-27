@@ -11,15 +11,18 @@ The project is at an early stage. Modules are added only when they contain check
 
 | Directory | Content |
 |---|---|
-| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery, ancestral sets; d-separation with a decidable checker and the equivalence to active paths; acyclic directed mixed graphs, districts, latent projection |
+| `CausalInference/Basic` | Finite probability distributions, marginals, conditional independence and the graphoid properties |
+| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery, ancestral sets; d-separation with a decidable checker and the equivalence to active paths; Markov factorization and the local Markov property; acyclic directed mixed graphs, districts, latent projection |
 | `CausalInference/PartialIdentification` | Identified sets, point identification, Manski bounds with sharpness, monotone treatment response |
 | `CausalInference/Designs/Randomized` | Finite-population designs: Bernoulli, complete, stratified, paired, and cluster randomization; Neyman's variance; Fisher's randomization test |
 | `CausalInference/Designs/DifferenceInDifferences` | Two-period identification and bias, staggered adoption with group-time effects, a two-way fixed effects counterexample |
 | `CausalInference/Designs/RegressionDiscontinuity` | Sharp and fuzzy designs: identification at the cutoff from the observed law |
 | `CausalInference/Designs/SyntheticControl` | Synthetic control weights, fit, and the noiseless linear factor model |
-| `CausalInference/InstrumentalVariables` | Principal strata, the local average treatment effect theorem, counterexamples without monotonicity |
+| `CausalInference/InstrumentalVariables` | Principal strata, the local average treatment effect theorem, counterexamples without monotonicity, bounds on the average effect with sharpness, instrumental inequalities, linear instrumental variables |
 | `CausalInference/Interference` | Partial interference, direct and indirect effects, two-stage randomization |
 | `CausalInference/Mediation` | Controlled and natural effects, decompositions, the mediation formula, a cross-world counterexample |
+| `CausalInference/Longitudinal` | Time-varying treatments: sequential exchangeability, the g-formula at any finite horizon, inverse probability weighting, treatment-confounder feedback |
+| `CausalInference/Interaction` | Response types for two treatments, additive interaction, synergism, sufficient causes |
 | `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting, regression identities, a non-identification counterexample |
 | `CausalInference/Sensitivity` | Rosenbaum bounds and bias formulas for unmeasured confounding |
 | `CausalInference/Estimation` | Independent samples, consistency, asymptotic linearity, asymptotic normality, Wald interval coverage |

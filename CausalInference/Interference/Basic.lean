@@ -6,6 +6,7 @@ Authors: Adam R Sophie
 module
 
 public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # Potential outcomes under interference
@@ -22,6 +23,8 @@ according to `a` (`true` means treated). This file sets up the basic restriction
   given by `g : ι → G`, `Y a i` depends on `a` only through the assignments in the group of `i`.
 * `CausalInference.Interference.ExposureDepends`: for an exposure mapping `f`, `Y a i` depends
   on `a` only through the exposure `f a i`.
+* `CausalInference.Interference.StratifiedInterference`: `Y a i` depends on `a` only through
+  the unit's own assignment `a i` and the number of treated units in the group of `i`.
 
 ## Main results
 
@@ -33,6 +36,8 @@ according to `a` (`true` means treated). This file sets up the basic restriction
   factoring through it.
 * `noInterference_iff_exposureDepends`, `partialInterference_iff_exposureDepends`: both
   restrictions are instances of exposure dependence.
+* `NoInterference.stratifiedInterference`, `StratifiedInterference.partialInterference`:
+  stratified interference lies between no interference and partial interference.
 
 Source: M. G. Hudgens and M. E. Halloran (2008), Toward causal inference with interference;
 the exposure mapping formulation follows P. M. Aronow and C. Samii (2017), Estimating average
@@ -142,6 +147,36 @@ theorem ExposureDepends.of_finer {E' : Type*} {f : (ι → Bool) → ι → E}
     {f' : (ι → Bool) → ι → E'} {Y : (ι → Bool) → ι → ℝ} (h : ExposureDepends f' Y)
     (hff' : ∀ a b i, f a i = f b i → f' a i = f' b i) : ExposureDepends f Y :=
   fun a b i hab ↦ h a b i (hff' a b i hab)
+
+/-- The stratified interference exposure for the partition `g : ι → G`: the pair formed by the
+unit's own assignment and the number of treated units in its group. -/
+def stratifiedExposure [Fintype ι] [DecidableEq G] (g : ι → G) (a : ι → Bool) (i : ι) :
+    Bool × ℕ :=
+  (a i, (Finset.univ.filter fun j ↦ g j = g i ∧ a j = true).card)
+
+/-- Stratified interference (Hudgens and Halloran): the outcome of unit `i` depends on the
+assignment vector only through the unit's own assignment and the number of treated units in
+the group of `i`. It is exposure dependence for `stratifiedExposure g`. -/
+def StratifiedInterference [Fintype ι] [DecidableEq G] (g : ι → G)
+    (Y : (ι → Bool) → ι → ℝ) : Prop :=
+  ExposureDepends (stratifiedExposure g) Y
+
+/-- No interference implies stratified interference for every partition into groups. -/
+theorem NoInterference.stratifiedInterference [Fintype ι] [DecidableEq G]
+    {Y : (ι → Bool) → ι → ℝ} (h : NoInterference Y) (g : ι → G) :
+    StratifiedInterference g Y :=
+  ExposureDepends.of_finer h fun _ _ _ hab ↦ (Prod.ext_iff.1 hab).1
+
+/-- Stratified interference implies partial interference for the same partition: an assignment
+of the group of `i` determines both `a i` and the number treated in that group. -/
+theorem StratifiedInterference.partialInterference [Fintype ι] [DecidableEq G] {g : ι → G}
+    {Y : (ι → Bool) → ι → ℝ} (h : StratifiedInterference g Y) : PartialInterference g Y := by
+  refine fun a b i hab ↦ h a b i ?_
+  have hfilter : (Finset.univ.filter fun j ↦ g j = g i ∧ a j = true) =
+      Finset.univ.filter fun j ↦ g j = g i ∧ b j = true :=
+    Finset.filter_congr fun j _ ↦ ⟨fun ⟨hj, ha⟩ ↦ ⟨hj, hab j hj ▸ ha⟩,
+      fun ⟨hj, hb⟩ ↦ ⟨hj, (hab j hj).symm ▸ hb⟩⟩
+  simp only [stratifiedExposure, hab i rfl, hfilter]
 
 end Interference
 

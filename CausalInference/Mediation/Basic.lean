@@ -33,7 +33,12 @@ definitions rather than assumed as separate hypotheses.
 * `MediationModel.nested_eq_sum`: for a finite mediator, the nested outcome is the sum over
   mediator values of `Y a m` restricted to the event `M a' = m`.
 * `MediationModel.integrable_nested`: integrability of the nested outcome from integrability of
-  every `Y a m`.
+  every `Y a m`; `MediationModel.integrable_nested_of_ne_zero` needs it only for the mediator
+  values `m` with `P(M a' = m) > 0`.
+
+The effects `cde`, `te`, `nde` and `nie` are defined for an arbitrary measure, but they are means
+of potential outcomes only under a probability measure. Every theorem of the library that
+interprets them assumes `[IsProbabilityMeasure μ]`.
 
 Sources: J. M. Robins and S. Greenland (1992), Identifiability and exchangeability for direct and
 indirect effects; J. Pearl (2001), Direct and indirect effects; T. J. VanderWeele (2015),
@@ -59,10 +64,12 @@ structure MediationModel (Ω 𝓜 : Type*) where
   /-- The outcome potential outcome `Y a m` under treatment `a` and mediator value `m`. -/
   Y : Bool → 𝓜 → Ω → ℝ
 
-/-- The mean of `f` under `μ` conditioned on the event `s`, that is `∫ f ∂μ[|s]`. When
-`μ s = 0` the conditioned measure is zero and this value is `0`. The identification theorems
-assume positivity of every event whose conditional mean enters with a nonzero weight, so this
-convention never carries a result. -/
+/-- The mean of `f` under `μ` conditioned on the event `s`, that is `∫ f ∂μ[|s]`. The value is
+a conditional mean only when `s` is measurable with `0 < μ s < ∞` and `f` is integrable on `s`.
+When `μ s = 0` (or `μ s = ∞`) the conditioned measure is zero and this value is `0`. Every theorem
+of the library that interprets `condMean μ s f` assumes a finite measure (in fact a probability
+measure), a measurable event `s`, and positivity of `s` whenever the conditional mean enters
+with a nonzero weight, so this convention never carries a result. -/
 noncomputable def condMean {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω) (s : Set Ω)
     (f : Ω → ℝ) : ℝ :=
   ∫ ω, f ω ∂μ[|s]
@@ -125,22 +132,27 @@ theorem nested_eq_sum [Fintype 𝓜] (a a' : Bool) (ω : Ω) :
 
 variable [MeasurableSpace Ω]
 
-/-- The controlled direct effect `CDE(m) = E[Y 1 m - Y 0 m]`. -/
+/-- The controlled direct effect `CDE(m) = E[Y 1 m - Y 0 m]`. It is a causal mean only when `μ`
+is a probability measure; every theorem that interprets it assumes so. -/
 noncomputable def cde (μ : Measure Ω) (m : 𝓜) : ℝ :=
   ∫ ω, P.Y true m ω - P.Y false m ω ∂μ
 
-/-- The total effect `TE = E[Y 1 (M 1) - Y 0 (M 0)]`. -/
+/-- The total effect `TE = E[Y 1 (M 1) - Y 0 (M 0)]`. It is a causal mean only when `μ` is a
+probability measure; every theorem that interprets it assumes so. -/
 noncomputable def te (μ : Measure Ω) : ℝ :=
   ∫ ω, P.nested true true ω - P.nested false false ω ∂μ
 
 /-- The natural direct effect `NDE(a') = E[Y 1 (M a') - Y 0 (M a')]`, with the mediator held at
 its value under `a'`. `nde μ false` is the pure natural direct effect and `nde μ true` the total
-natural direct effect. -/
+natural direct effect. It is a causal mean only when `μ` is a probability measure; every theorem
+that interprets it assumes so. -/
 noncomputable def nde (μ : Measure Ω) (a' : Bool) : ℝ :=
   ∫ ω, P.nested true a' ω - P.nested false a' ω ∂μ
 
 /-- The natural indirect effect `NIE(a) = E[Y a (M 1) - Y a (M 0)]`, with the treatment held at
-`a`. `nie μ true` is the total natural indirect effect and `nie μ false` the pure one. -/
+`a`. `nie μ true` is the total natural indirect effect and `nie μ false` the pure one. It is a
+causal mean only when `μ` is a probability measure; every theorem that interprets it assumes
+so. -/
 noncomputable def nie (μ : Measure Ω) (a : Bool) : ℝ :=
   ∫ ω, P.nested a true ω - P.nested a false ω ∂μ
 
@@ -154,6 +166,32 @@ theorem integrable_nested [Finite 𝓜] [MeasurableSpace 𝓜] [MeasurableSingle
     funext (P.nested_eq_sum a a')
   rw [h]
   exact integrable_finsetSum _ fun m _ => (hY m).indicator (hM (measurableSet_singleton m))
+
+/-- The restriction of `Y a m` to the fiber `M a' = m` is integrable when `Y a m` is integrable
+or the fiber is null. -/
+theorem integrable_indicator_of_ne_zero [MeasurableSpace 𝓜] [MeasurableSingletonClass 𝓜]
+    {μ : Measure Ω} {a a' : Bool} {m : 𝓜} (hM : Measurable (P.M a'))
+    (hY : μ (P.M a' ⁻¹' {m}) ≠ 0 → Integrable (P.Y a m) μ) :
+    Integrable ((P.M a' ⁻¹' {m}).indicator (P.Y a m)) μ := by
+  have hS : MeasurableSet (P.M a' ⁻¹' {m}) := hM (measurableSet_singleton m)
+  by_cases hm : μ (P.M a' ⁻¹' {m}) = 0
+  · refine (integrable_indicator_iff hS).mpr ?_
+    rw [IntegrableOn, Measure.restrict_eq_zero.mpr hm]
+    exact integrable_zero_measure
+  · exact (hY hm).indicator hS
+
+/-- For a finite mediator with measurable `M a'`, the nested outcome `Y a (M a')` is integrable
+when `Y a m` is integrable for every mediator value `m` with `P(M a' = m) > 0`: on a null fiber
+of `M a'` the nested outcome vanishes almost everywhere. -/
+theorem integrable_nested_of_ne_zero [Finite 𝓜] [MeasurableSpace 𝓜]
+    [MeasurableSingletonClass 𝓜] {μ : Measure Ω} {a a' : Bool} (hM : Measurable (P.M a'))
+    (hY : ∀ m, μ (P.M a' ⁻¹' {m}) ≠ 0 → Integrable (P.Y a m) μ) :
+    Integrable (P.nested a a') μ := by
+  have := Fintype.ofFinite 𝓜
+  have h : P.nested a a' = fun ω => ∑ m, (P.M a' ⁻¹' {m}).indicator (P.Y a m) ω :=
+    funext (P.nested_eq_sum a a')
+  rw [h]
+  exact integrable_finsetSum _ fun m _ => P.integrable_indicator_of_ne_zero hM (hY m)
 
 end MediationModel
 

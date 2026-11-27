@@ -63,3 +63,9 @@ public import CausalInference.Longitudinal.Counterexamples
 public import CausalInference.Longitudinal.GFormula
 public import CausalInference.Longitudinal.TwoTime
 public import CausalInference.Longitudinal.Weighting
+public import CausalInference.InstrumentalVariables.Bounds
+public import CausalInference.InstrumentalVariables.LinearIV
+public import CausalInference.Interaction.ExcessFraction
+public import CausalInference.Interaction.ResponseTypes
+public import CausalInference.Interaction.SufficientCauses
+public import CausalInference.Interaction.Synergism
