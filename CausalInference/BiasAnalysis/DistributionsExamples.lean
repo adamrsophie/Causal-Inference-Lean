@@ -35,7 +35,12 @@ Data*, second edition.
 
 The correlation of the transformed pair is in general not `ρ`: it depends on the target laws
 through the quantile transformations. `norta_correlation_ne_example` shows this for `ρ = 1`: with
-a fair coin and a uniform target the transformed pair has correlation `√3/2 < 1`.
+a fair coin and a uniform target the transformed pair has correlation `√3/2 < 1`, and
+`norta_correlation_ne_bivariateNormal_one` restates it for a pair with law `bivariateNormal 1`
+(the diagonal pair `(Z, Z)` has that law by `map_diag_gaussianReal`). At the interior value
+`ρ = 1/2`, `bivariateNormal_half_orthant` gives `P(Z₁ > 0, Z₂ > 0) = 1/3`, and
+`norta_correlation_ne_bivariateNormal_half` shows that two fair coin targets give correlation
+`1/3`, not `1/2`.
 -/
 
 @[expose] public section
@@ -677,6 +682,323 @@ theorem norta_correlation_ne_example {Ω : Type*} [MeasurableSpace Ω] {P : Meas
   · linarith
 
 end CorrelationExample
+
+section BivariateNormalLinks
+
+open Complex
+
+/-- The bivariate normal law is a probability measure. -/
+instance (ρ : ℝ) : IsProbabilityMeasure (bivariateNormal ρ) := by
+  unfold bivariateNormal; infer_instance
+
+/-- The characteristic function of `bivariateNormal ρ`:
+`t ↦ exp(-(t₁² + 2ρ t₁ t₂ + t₂²)/2)`. -/
+lemma charFun_bivariateNormal {ρ : ℝ} (hρ : ρ ^ 2 ≤ 1) (t : EuclideanSpace ℝ (Fin 2)) :
+    charFun (bivariateNormal ρ) t =
+      cexp (-((t 0 ^ 2 + 2 * ρ * t 0 * t 1 + t 1 ^ 2 : ℝ) : ℂ) / 2) := by
+  rw [bivariateNormal, charFun_multivariateGaussian (corrMatrix_posSemidef hρ)]
+  congr 1
+  simp [corrMatrix, dotProduct, Matrix.mulVec, Fin.sum_univ_two]
+  ring
+
+/-- The diagonal pair `(Z, Z)` of a standard normal `Z` has law `bivariateNormal 1`. -/
+theorem map_diag_gaussianReal :
+    (gaussianReal 0 1).map (fun z : ℝ => !₂[z, z]) = bivariateNormal 1 := by
+  have hm : Measurable (fun z : ℝ => !₂[z, z]) := by fun_prop
+  apply Measure.ext_of_charFun
+  funext t
+  rw [charFun_bivariateNormal (by norm_num), charFun_apply, integral_map hm.aemeasurable
+    (by fun_prop)]
+  have h : ∀ z : ℝ, ((inner ℝ !₂[z, z] t : ℝ) : ℂ) = ((t 0 + t 1 : ℝ) : ℂ) * z := fun z => by
+    simp [PiLp.inner_apply, Fin.sum_univ_two]
+    ring
+  simp_rw [h]
+  rw [← charFun_apply_real, charFun_gaussianReal]
+  congr 1
+  push_cast
+  ring
+
+/-- The cyclic map `(z₁, z₂) ↦ (z₂ - z₁, -z₁)` preserves `bivariateNormal (1/2)`. -/
+theorem map_cyclic_bivariateNormal_half :
+    (bivariateNormal (1 / 2)).map (fun x : EuclideanSpace ℝ (Fin 2) => !₂[x 1 - x 0, -x 0]) =
+      bivariateNormal (1 / 2) := by
+  have hm : Measurable (fun x : EuclideanSpace ℝ (Fin 2) => !₂[x 1 - x 0, -x 0]) := by fun_prop
+  apply Measure.ext_of_charFun
+  funext t
+  rw [charFun_bivariateNormal (by norm_num), charFun_apply, integral_map hm.aemeasurable
+    (by fun_prop)]
+  have h : ∀ x : EuclideanSpace ℝ (Fin 2),
+      ((inner ℝ !₂[x 1 - x 0, -x 0] t : ℝ) : ℂ) = ((inner ℝ x !₂[-t 0 - t 1, t 0] : ℝ) : ℂ) :=
+      fun x => by
+    simp [PiLp.inner_apply, Fin.sum_univ_two]
+    ring
+  simp_rw [h]
+  rw [← charFun_apply, charFun_bivariateNormal (by norm_num)]
+  congr 1
+  simp
+  ring
+
+/-- A coordinate of a bivariate normal pair has a null level set. -/
+lemma bivariateNormal_coord_eq_zero {ρ : ℝ} (hρ : ρ ^ 2 ≤ 1) (i : Fin 2) :
+    bivariateNormal ρ {x | x i = 0} = 0 := by
+  have : NullSingletonClass (gaussianReal 0 1) := nullSingletonClass_gaussianReal one_ne_zero
+  have hmp : MeasurePreserving (fun x : EuclideanSpace ℝ (Fin 2) => x i) (bivariateNormal ρ)
+      (gaussianReal 0 1) := by
+    fin_cases i
+    · exact measurePreserving_bivariateNormal_fst hρ
+    · exact measurePreserving_bivariateNormal_snd hρ
+  rw [show {x : EuclideanSpace ℝ (Fin 2) | x i = 0} = (fun x => x i) ⁻¹' {0} from rfl,
+    hmp.measure_preimage (measurableSet_singleton 0).nullMeasurableSet]
+  exact measure_singleton 0
+
+/-- The orthant probability at `ρ = 1/2`: `P(Z₁ > 0, Z₂ > 0) = 1/3` for `(Z₁, Z₂)` with law
+`bivariateNormal (1/2)` (the general value is `1/4 + arcsin ρ / (2π)`). With
+`A = Z₁`, `B = Z₂ - Z₁`, `C = -Z₂`, the triple `(A, B, C)` has the same law as its cyclic shift
+`(B, C, A)` (`map_cyclic_bivariateNormal_half`), and `A + B + C = 0`. Off the null set where one
+of them vanishes, exactly one of the events `{A > 0, C < 0}`, `{B > 0, A < 0}`, `{C > 0, B < 0}`
+occurs; the three are congruent, so each has probability `1/3`, and the first is the orthant. -/
+theorem bivariateNormal_half_orthant :
+    (bivariateNormal (1 / 2)).real {x | 0 < x 0 ∧ 0 < x 1} = 1 / 3 := by
+  set μ := bivariateNormal (1 / 2) with hμ
+  set T : EuclideanSpace ℝ (Fin 2) → EuclideanSpace ℝ (Fin 2) := fun x => !₂[x 1 - x 0, -x 0]
+  have hTm : Measurable T := by fun_prop
+  have hT : MeasurePreserving T μ μ := ⟨hTm, map_cyclic_bivariateNormal_half⟩
+  have hmeas : ∀ (f g : EuclideanSpace ℝ (Fin 2) → ℝ), Measurable f → Measurable g →
+      MeasurableSet {x | 0 < f x ∧ 0 < g x} := fun f g hf hg => by
+    change MeasurableSet ({x | (0 : ℝ) < f x} ∩ {x | (0 : ℝ) < g x})
+    exact (measurableSet_lt measurable_const hf).inter (measurableSet_lt measurable_const hg)
+  set F₁ := {x : EuclideanSpace ℝ (Fin 2) | 0 < x 0 ∧ 0 < x 1}
+  set F₂ := {x : EuclideanSpace ℝ (Fin 2) | 0 < x 1 - x 0 ∧ 0 < -x 0}
+  set F₃ := {x : EuclideanSpace ℝ (Fin 2) | 0 < -x 1 ∧ 0 < x 0 - x 1}
+  have hF₁ : MeasurableSet F₁ := hmeas _ _ (by fun_prop) (by fun_prop)
+  have hF₂ : MeasurableSet F₂ := hmeas _ _ (by fun_prop) (by fun_prop)
+  have hF₃ : MeasurableSet F₃ := hmeas _ _ (by fun_prop) (by fun_prop)
+  have h₂ : T ⁻¹' F₁ = F₂ := by ext x; simp [T, F₁, F₂]
+  have h₃ : T ⁻¹' F₂ = F₃ := by
+    ext x
+    change (0 < (T x) 1 - (T x) 0 ∧ 0 < -(T x) 0) ↔ (0 < -x 1 ∧ 0 < x 0 - x 1)
+    have e0 : (T x) 0 = x 1 - x 0 := by simp [T]
+    have e1 : (T x) 1 = -x 0 := by simp [T]
+    rw [e0, e1]
+    constructor <;> rintro ⟨h1, h2⟩ <;> constructor <;> linarith
+  have e₂ : μ.real F₂ = μ.real F₁ := by
+    rw [measureReal_def, measureReal_def, ← h₂, hT.measure_preimage hF₁.nullMeasurableSet]
+  have e₃ : μ.real F₃ = μ.real F₂ := by
+    rw [measureReal_def, measureReal_def, ← h₃, hT.measure_preimage hF₂.nullMeasurableSet]
+  -- the null set where `A`, `C` or `B` vanishes
+  set N := {x : EuclideanSpace ℝ (Fin 2) | x 0 = 0} ∪ {x | x 1 = 0} ∪ T ⁻¹' {x | x 0 = 0}
+  have hN : μ N = 0 := by
+    refine measure_union_null (measure_union_null (bivariateNormal_coord_eq_zero (by norm_num) 0)
+      (bivariateNormal_coord_eq_zero (by norm_num) 1)) ?_
+    rw [hT.measure_preimage (measurableSet_eq_fun (by fun_prop) measurable_const).nullMeasurableSet]
+    exact bivariateNormal_coord_eq_zero (by norm_num) 0
+  have hcover : Nᶜ ⊆ F₁ ∪ F₂ ∪ F₃ := by
+    intro x hx
+    simp only [N, T, mem_compl_iff, mem_union, mem_ofPred_eq, mem_preimage, not_or] at hx
+    simp only [Matrix.cons_val_zero] at hx
+    obtain ⟨⟨h0, h1⟩, h2⟩ := hx
+    have h2' : x 1 ≠ x 0 := fun h => h2 (by rw [h, sub_self])
+    simp only [F₁, F₂, F₃, mem_union, mem_ofPred_eq]
+    rcases lt_or_gt_of_ne h0 with a | a <;> rcases lt_or_gt_of_ne h1 with b | b <;>
+      rcases lt_or_gt_of_ne h2' with c | c
+    all_goals first
+      | exact Or.inl (Or.inl ⟨by linarith, by linarith⟩)
+      | exact Or.inl (Or.inr ⟨by linarith, by linarith⟩)
+      | exact Or.inr ⟨by linarith, by linarith⟩
+  have hd₁₂ : Disjoint F₁ F₂ := disjoint_left.2 fun x h h' => by
+    simp only [F₁, F₂, mem_ofPred_eq] at h h'; linarith [h.1, h'.2]
+  have hd₃ : Disjoint (F₁ ∪ F₂) F₃ := disjoint_left.2 fun x h h' => by
+    simp only [F₁, F₂, F₃, mem_union, mem_ofPred_eq] at h h'
+    rcases h with h | h <;> linarith [h.1, h.2, h'.1, h'.2]
+  have hU : μ.real (F₁ ∪ F₂ ∪ F₃) = 1 := by
+    refine le_antisymm measureReal_le_one ?_
+    have hNc : μ.real Nᶜ = 1 := by
+      rw [probReal_compl_eq_one_sub₀ (NullMeasurableSet.of_null hN), measureReal_def, hN,
+        ENNReal.toReal_zero, sub_zero]
+    exact hNc ▸ measureReal_mono hcover
+  rw [measureReal_union hd₃ hF₃, measureReal_union hd₁₂ hF₂, e₃, e₂] at hU
+  linarith
+
+/-- For `z ∈ ℝ`, `Φ(z) > 1/2` exactly when `z > 0`. -/
+lemma half_lt_cdf_stdNormal_iff (z : ℝ) : 1 / 2 < cdf (gaussianReal 0 1) z ↔ 0 < z := by
+  rw [← cdf_stdNormal_zero]
+  constructor
+  · intro h
+    by_contra hz
+    exact absurd ((cdf (gaussianReal 0 1)).mono (not_lt.1 hz)) (not_le.2 h)
+  · intro hz
+    by_contra h
+    have h2 := (cdf (gaussianReal 0 1)).measure_Ioc 0 z
+    rw [measure_cdf, ENNReal.ofReal_eq_zero.2 (by linarith [not_lt.1 h])] at h2
+    have := gaussianReal_absolutelyContinuous' 0 one_ne_zero h2
+    rw [Real.volume_Ioc, ENNReal.ofReal_eq_zero] at this
+    linarith
+
+/-- The fair coin quantile of `Φ(z)` is the indicator of `z > 0`. -/
+lemma quantile_fairCoin_cdf_stdNormal (z : ℝ) :
+    quantile fairCoin (cdf (gaussianReal 0 1) z) = (Ioi (0 : ℝ)).indicator 1 z := by
+  rw [quantile_fairCoin (cdf_mem_Ioo_of_absolutelyContinuous
+    (gaussianReal_absolutelyContinuous' 0 one_ne_zero) z)]
+  simp only [half_lt_cdf_stdNormal_iff, indicator_apply, mem_Ioi, Pi.one_apply]
+
+/-- The variance of `f(W)` depends only on the law `ν` of `W`. -/
+lemma variance_fun_comp_of_hasLaw {Ω Ω' : Type*} [MeasurableSpace Ω] [MeasurableSpace Ω']
+    {Q : Measure Ω} {ν : Measure Ω'} {W : Ω → Ω'} (hW : HasLaw W ν Q) {f : Ω' → ℝ}
+    (hf : Measurable f) : Var[fun ω => f (W ω); Q] = Var[f; ν] := by
+  rw [← hW.map_eq, variance_map hf.aemeasurable hW.aemeasurable]
+  rfl
+
+/-- The `ρ = 1` example of `norta_correlation_ne_example`, stated for a pair `Z` with law
+`bivariateNormal 1`: transforming its first coordinate to a fair coin and its second to the
+uniform law gives correlation `√3/2`, while the correlation of `Z` is `1`. The pair `(Z, Z)` of
+that theorem has law `bivariateNormal 1` by `map_diag_gaussianReal`. -/
+theorem norta_correlation_ne_bivariateNormal_one {Ω : Type*} [MeasurableSpace Ω]
+    {P : Measure Ω} [IsProbabilityMeasure P] {Z : Ω → EuclideanSpace ℝ (Fin 2)}
+    (hZ : HasLaw Z (bivariateNormal 1) P) :
+    let X := fun ω => quantile fairCoin (cdf (gaussianReal 0 1) (Z ω 0))
+    let Y := fun ω => quantile (volume.restrict (Ioo (0 : ℝ) 1)) (cdf (gaussianReal 0 1) (Z ω 1))
+    HasLaw X fairCoin P ∧ HasLaw Y (volume.restrict (Ioo (0 : ℝ) 1)) P ∧
+      cov[fun ω => Z ω 0, fun ω => Z ω 1; P] = 1 ∧
+      cov[X, Y; P] = 1 / 8 ∧ Var[X; P] = 1 / 4 ∧ Var[Y; P] = 1 / 12 ∧
+      cov[X, Y; P] / (√Var[X; P] * √Var[Y; P]) = √3 / 2 := by
+  intro X Y
+  have hρ : (1 : ℝ) ^ 2 ≤ 1 := by norm_num
+  have hZ0 : HasLaw (fun ω => Z ω 0) (gaussianReal 0 1) P :=
+    HasLaw.comp (X := Z) (Y := fun x : EuclideanSpace ℝ (Fin 2) => x 0)
+      ⟨(measurePreserving_bivariateNormal_fst hρ).measurable.aemeasurable,
+        (measurePreserving_bivariateNormal_fst hρ).map_eq⟩ hZ
+  have hZ1 : HasLaw (fun ω => Z ω 1) (gaussianReal 0 1) P :=
+    HasLaw.comp (X := Z) (Y := fun x : EuclideanSpace ℝ (Fin 2) => x 1)
+      ⟨(measurePreserving_bivariateNormal_snd hρ).measurable.aemeasurable,
+        (measurePreserving_bivariateNormal_snd hρ).map_eq⟩ hZ
+  have hd : HasLaw (fun z : ℝ => !₂[z, z]) (bivariateNormal 1) (gaussianReal 0 1) :=
+    ⟨(by fun_prop : Measurable fun z : ℝ => !₂[z, z]).aemeasurable, map_diag_gaussianReal⟩
+  set F : EuclideanSpace ℝ (Fin 2) → ℝ :=
+    fun x => quantile fairCoin (cdf (gaussianReal 0 1) (x 0))
+  set G : EuclideanSpace ℝ (Fin 2) → ℝ :=
+    fun x => quantile (volume.restrict (Ioo (0 : ℝ) 1)) (cdf (gaussianReal 0 1) (x 1))
+  have hF : Measurable F := (measurable_quantile _).comp
+    ((cdf (gaussianReal 0 1)).mono.measurable.comp (by fun_prop))
+  have hG : Measurable G := (measurable_quantile _).comp
+    ((cdf (gaussianReal 0 1)).mono.measurable.comp (by fun_prop))
+  obtain ⟨-, -, -, -, -, hc, hv1, hv2, hr, -⟩ :=
+    norta_correlation_ne_example (P := gaussianReal 0 1) (Z := id) HasLaw.id
+  have hcov : cov[X, Y; P] = 1 / 8 := by
+    rw [show X = fun ω => F (Z ω) from rfl, show Y = fun ω => G (Z ω) from rfl,
+      hZ.covariance_fun_comp hF.aemeasurable hG.aemeasurable,
+      ← hd.covariance_fun_comp hF.aemeasurable hG.aemeasurable]
+    simpa [F, G] using hc
+  have hvX : Var[X; P] = 1 / 4 := by
+    rw [show X = fun ω => F (Z ω) from rfl, variance_fun_comp_of_hasLaw hZ hF,
+      ← variance_fun_comp_of_hasLaw hd hF]
+    simpa [F] using hv1
+  have hvY : Var[Y; P] = 1 / 12 := by
+    rw [show Y = fun ω => G (Z ω) from rfl, variance_fun_comp_of_hasLaw hZ hG,
+      ← variance_fun_comp_of_hasLaw hd hG]
+    simpa [G] using hv2
+  refine ⟨hasLaw_quantile_cdf_gaussian hZ0 _, hasLaw_quantile_cdf_gaussian hZ1 _, ?_, hcov, hvX,
+    hvY, ?_⟩
+  · rw [hZ.covariance_fun_comp (f := fun x : EuclideanSpace ℝ (Fin 2) => x 0)
+      (g := fun x : EuclideanSpace ℝ (Fin 2) => x 1) (Measurable.aemeasurable (by fun_prop))
+      (Measurable.aemeasurable (by fun_prop))]
+    exact covariance_bivariateNormal hρ
+  · rw [hcov, hvX, hvY, ← hc, ← hv1, ← hv2]
+    exact hr
+
+/-- An interior value of `ρ` at which the NORTA construction changes the correlation: for a pair
+`Z` with law `bivariateNormal (1/2)` (correlation `1/2`) and fair coin targets for both
+coordinates, the transformed pair is `X = 1{Z₁ > 0}`, `Y = 1{Z₂ > 0}`, with
+`P(X = 1, Y = 1) = 1/3` (`bivariateNormal_half_orthant`), `Cov(X, Y) = 1/3 - 1/4 = 1/12` and
+`Var(X) = Var(Y) = 1/4`, so its correlation is `1/3 ≠ 1/2`. -/
+theorem norta_correlation_ne_bivariateNormal_half {Ω : Type*} [MeasurableSpace Ω]
+    {P : Measure Ω} [IsProbabilityMeasure P] {Z : Ω → EuclideanSpace ℝ (Fin 2)}
+    (hZ : HasLaw Z (bivariateNormal (1 / 2)) P) :
+    let X := fun ω => quantile fairCoin (cdf (gaussianReal 0 1) (Z ω 0))
+    let Y := fun ω => quantile fairCoin (cdf (gaussianReal 0 1) (Z ω 1))
+    HasLaw X fairCoin P ∧ HasLaw Y fairCoin P ∧
+      cov[fun ω => Z ω 0, fun ω => Z ω 1; P] = 1 / 2 ∧
+      P.real {ω | X ω = 1 ∧ Y ω = 1} = 1 / 3 ∧
+      cov[X, Y; P] = 1 / 12 ∧ Var[X; P] = 1 / 4 ∧ Var[Y; P] = 1 / 4 ∧
+      cov[X, Y; P] / (√Var[X; P] * √Var[Y; P]) = 1 / 3 := by
+  intro X Y
+  have hρ : (1 / 2 : ℝ) ^ 2 ≤ 1 := by norm_num
+  set μ := bivariateNormal (1 / 2)
+  have hZ0 : HasLaw (fun ω => Z ω 0) (gaussianReal 0 1) P :=
+    HasLaw.comp (X := Z) (Y := fun x : EuclideanSpace ℝ (Fin 2) => x 0)
+      ⟨(measurePreserving_bivariateNormal_fst hρ).measurable.aemeasurable,
+        (measurePreserving_bivariateNormal_fst hρ).map_eq⟩ hZ
+  have hZ1 : HasLaw (fun ω => Z ω 1) (gaussianReal 0 1) P :=
+    HasLaw.comp (X := Z) (Y := fun x : EuclideanSpace ℝ (Fin 2) => x 1)
+      ⟨(measurePreserving_bivariateNormal_snd hρ).measurable.aemeasurable,
+        (measurePreserving_bivariateNormal_snd hρ).map_eq⟩ hZ
+  set A := {x : EuclideanSpace ℝ (Fin 2) | 0 < x 0}
+  set B := {x : EuclideanSpace ℝ (Fin 2) | 0 < x 1}
+  have hA : MeasurableSet A := measurableSet_lt measurable_const (by fun_prop)
+  have hB : MeasurableSet B := measurableSet_lt measurable_const (by fun_prop)
+  have hX : X = fun ω => A.indicator 1 (Z ω) := funext fun ω => by
+    simp only [X, quantile_fairCoin_cdf_stdNormal, indicator_apply, A, mem_Ioi, mem_ofPred_eq,
+      Pi.one_apply]
+  have hY : Y = fun ω => B.indicator 1 (Z ω) := funext fun ω => by
+    simp only [Y, quantile_fairCoin_cdf_stdNormal, indicator_apply, B, mem_Ioi, mem_ofPred_eq,
+      Pi.one_apply]
+  have hAm : Measurable (A.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ)) :=
+    measurable_one.indicator hA
+  have hBm : Measurable (B.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ)) :=
+    measurable_one.indicator hB
+  have hAL : MemLp (A.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ)) 2 μ :=
+    (memLp_const 1).indicator hA.nullMeasurableSet
+  have hBL : MemLp (B.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ)) 2 μ :=
+    (memLp_const 1).indicator hB.nullMeasurableSet
+  have hhalf : (gaussianReal 0 1).real (Ioi 0) = 1 / 2 := by
+    rw [← compl_Iic, probReal_compl_eq_one_sub measurableSet_Iic, ← cdf_eq_real,
+      cdf_stdNormal_zero]
+    norm_num
+  have IA : ∫ x, A.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ) x ∂μ = 1 / 2 := by
+    rw [integral_indicator_one hA, measureReal_def, show A = (fun x => x 0) ⁻¹' Ioi 0 from rfl,
+      (measurePreserving_bivariateNormal_fst hρ).measure_preimage
+        measurableSet_Ioi.nullMeasurableSet, ← measureReal_def, hhalf]
+  have IB : ∫ x, B.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ) x ∂μ = 1 / 2 := by
+    rw [integral_indicator_one hB, measureReal_def, show B = (fun x => x 1) ⁻¹' Ioi 0 from rfl,
+      (measurePreserving_bivariateNormal_snd hρ).measure_preimage
+        measurableSet_Ioi.nullMeasurableSet, ← measureReal_def, hhalf]
+  have IAB : ∫ x, (A.indicator 1 * B.indicator 1 : EuclideanSpace ℝ (Fin 2) → ℝ) x ∂μ =
+      1 / 3 := by
+    rw [← inter_indicator_one, integral_indicator_one (hA.inter hB)]
+    exact bivariateNormal_half_orthant
+  have hsq : ∀ s : Set (EuclideanSpace ℝ (Fin 2)),
+      (s.indicator (1 : EuclideanSpace ℝ (Fin 2) → ℝ)) ^ 2 = s.indicator 1 := fun s =>
+    funext fun x => by by_cases hx : x ∈ s <;> simp [hx]
+  have hcov : cov[X, Y; P] = 1 / 12 := by
+    rw [hX, hY, hZ.covariance_fun_comp hAm.aemeasurable hBm.aemeasurable,
+      covariance_eq_sub hAL hBL, IAB, IA, IB]
+    norm_num
+  have hvX : Var[X; P] = 1 / 4 := by
+    rw [hX, variance_fun_comp_of_hasLaw hZ hAm, variance_eq_sub hAL, hsq, IA]
+    norm_num
+  have hvY : Var[Y; P] = 1 / 4 := by
+    rw [hY, variance_fun_comp_of_hasLaw hZ hBm, variance_eq_sub hBL, hsq, IB]
+    norm_num
+  have hev : {ω | X ω = 1 ∧ Y ω = 1} = Z ⁻¹' {x | 0 < x 0 ∧ 0 < x 1} := by
+    ext ω
+    simp only [hX, hY, indicator_apply, A, B, mem_ofPred_eq, mem_preimage, Pi.one_apply]
+    split_ifs <;> simp_all
+  have h4 : √(1 / 4 : ℝ) = 1 / 2 := by
+    rw [show (1 / 4 : ℝ) = (1 / 2) ^ 2 by norm_num]
+    exact Real.sqrt_sq (by norm_num)
+  refine ⟨hasLaw_quantile_cdf_gaussian hZ0 _, hasLaw_quantile_cdf_gaussian hZ1 _, ?_, ?_, hcov,
+    hvX, hvY, ?_⟩
+  · rw [hZ.covariance_fun_comp (f := fun x : EuclideanSpace ℝ (Fin 2) => x 0)
+      (g := fun x : EuclideanSpace ℝ (Fin 2) => x 1) (Measurable.aemeasurable (by fun_prop))
+      (Measurable.aemeasurable (by fun_prop))]
+    exact covariance_bivariateNormal hρ
+  · rw [hev, measureReal_def, ← Measure.map_apply_of_aemeasurable hZ.aemeasurable
+      (show MeasurableSet {x : EuclideanSpace ℝ (Fin 2) | 0 < x 0 ∧ 0 < x 1} from hA.inter hB),
+      hZ.map_eq, ← measureReal_def]
+    exact bivariateNormal_half_orthant
+  · rw [hcov, hvX, hvY, h4]
+    norm_num
+
+end BivariateNormalLinks
 
 end Distributions
 
