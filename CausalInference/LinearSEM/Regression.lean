@@ -11,6 +11,7 @@ public import Mathlib.Basic.Real.Basic
 public import Mathlib.Tactic.LinearCombination
 public import Mathlib.Tactic.FieldSimp
 public import Mathlib.Tactic.Linarith
+public import Mathlib.Algebra.Order.Star.Real
 
 /-!
 # Population least squares from a covariance matrix
@@ -27,7 +28,8 @@ that is `C_SS β_S = C_Sy`. Everything is stated at the level of second moments.
 * `covComb C a b`: the covariance `aᵀ C b` of two linear combinations `a ⬝ X` and `b ⬝ X`.
 * `residual y β`: the coefficient vector of the residual `X y - β ⬝ X`.
 * `partialCov C Z x y`: the partial covariance of `X x` and `X y` given `X_Z`, the Schur
-  complement entry `C x y - C_xZ C_ZZ⁻¹ C_Zy`.
+  complement entry `C x y - C_xZ C_ZZ⁻¹ C_Zy`. It is the residual covariance only when `C_ZZ` is
+  invertible; on a singular block Lean's convention `C_ZZ⁻¹ = 0` returns the marginal covariance.
 
 ## Main results
 
@@ -43,9 +45,18 @@ that is `C_SS β_S = C_Sy`. Everything is stated at the level of second moments.
 * `IsRegCoeff.eq_zero_iff_partialCov_eq_zero`: the coefficient of `x` in the regression of `y` on
   `x` and `Z` vanishes if and only if the partial covariance of `x` and `y` given `Z` vanishes;
   `isRegCoeff_pair_fst_eq_zero_iff` gives the explicit form for one covariate.
+* `IsRegCoeff.partialCov_eq_covComb`: with `C_ZZ` invertible, the partial covariance is the
+  covariance of `X x` with the residual of the regression of `X y` on `X_Z`;
+  `PartialCovSingular.not_residual`: without invertibility it need not be.
+* `IsRegCoeff.mul_partialCov_self`, `IsRegCoeff.eq_partialCov_div`: the Frisch, Waugh, and Lovell
+  identity, the coefficient of `x` in the regression of `y` on `x` and `Z` is
+  `partialCov C Z x y / partialCov C Z x x`.
 
 Source: J. Pearl, M. Glymour and N. P. Jewell (2016), *Causal Inference in Statistics: A Primer*,
-Sections 1.3.10 and 1.3.11, equations (1.22), (1.24), (1.27), (1.28).
+Sections 1.3.10 and 1.3.11, equations (1.22), (1.24), (1.27), (1.28); R. Frisch and F. V. Waugh
+(1933), Partial time regressions as compared with individual trends, *Econometrica*; M. C. Lovell
+(1963), Seasonal adjustment of economic time series and multiple regression analysis, *Journal
+of the American Statistical Association*.
 -/
 
 @[expose] public section
@@ -79,9 +90,12 @@ noncomputable def regCoeff (C : Matrix V V ℝ) (S : Finset V) (y : V) : V → �
     ((subCov C S)⁻¹ *ᵥ fun s : S => C s y) ⟨v, h⟩
   else 0
 
-/-- The partial covariance of `X x` and `X y` given `X_Z`: the covariance of `X x` with the
-residual of the regression of `X y` on `X_Z`, that is the Schur complement entry
-`C x y - C_xZ C_ZZ⁻¹ C_Zy`. -/
+/-- The partial covariance of `X x` and `X y` given `X_Z`, defined as the Schur complement entry
+`C x y - C_xZ C_ZZ⁻¹ C_Zy`. When `C_ZZ` is invertible it is the covariance of `X x` with the
+residual of the regression of `X y` on `X_Z` (`IsRegCoeff.partialCov_eq_covComb`). When `C_ZZ` is
+singular Lean's inverse convention gives `C_ZZ⁻¹ = 0` and the value is the marginal covariance
+`C x y`, which need not be the residual covariance (`PartialCovSingular.not_residual`); every
+result that interprets it assumes `IsUnit (subCov C Z)`. -/
 noncomputable def partialCov (C : Matrix V V ℝ) (Z : Finset V) (x y : V) : ℝ :=
   C x y - ∑ t, C x t * regCoeff C Z y t
 
@@ -300,6 +314,89 @@ theorem IsRegCoeff.eq_zero_iff_partialCov_eq_zero {C : Matrix V V ℝ} {Z : Fins
     rw [hβ.unique hS hγS]
     exact hγ.1 x hx
 
+/-- The residual reading of the partial covariance: when `C_ZZ` is invertible and `β` solves the
+normal equations of the regression of `X y` on `X_Z`, the partial covariance of `X x` and `X y`
+given `X_Z` is the covariance of `X x` with the residual `X y - β ⬝ X`. -/
+theorem IsRegCoeff.partialCov_eq_covComb {C : Matrix V V ℝ} {Z : Finset V} {y : V} {β : V → ℝ}
+    (hZ : IsUnit (subCov C Z)) (hβ : IsRegCoeff C Z y β) (x : V) :
+    partialCov C Z x y = covComb C (Pi.single x 1) (residual y β) := by
+  rw [hβ.unique hZ (regCoeff_isRegCoeff y hZ), partialCov, covComb, single_dotProduct, one_mul,
+    residual, Matrix.mulVec_sub, Matrix.mulVec_single_one]
+  simp [Matrix.mulVec, dotProduct]
+
+/-- The partial covariance is symmetric for a symmetric covariance matrix with invertible
+control block. -/
+theorem partialCov_comm {C : Matrix V V ℝ} (hC : Cᵀ = C) {Z : Finset V}
+    (hZ : IsUnit (subCov C Z)) (x y : V) : partialCov C Z x y = partialCov C Z y x := by
+  have hx := regCoeff_isRegCoeff x hZ
+  have hy := regCoeff_isRegCoeff y hZ
+  have hs : ∀ i j, C i j = C j i := fun i j => by rw [← Matrix.transpose_apply C j i, hC]
+  have key : ∑ t, C x t * regCoeff C Z y t = ∑ t, C y t * regCoeff C Z x t := by
+    calc ∑ t, C x t * regCoeff C Z y t
+        = ∑ t, (∑ s, C t s * regCoeff C Z x s) * regCoeff C Z y t := by
+          refine Finset.sum_congr rfl fun t _ => ?_
+          by_cases ht : t ∈ Z
+          · rw [hx.2 t ht, hs]
+          · rw [hy.1 t ht, mul_zero, mul_zero]
+      _ = ∑ s, regCoeff C Z x s * ∑ t, C s t * regCoeff C Z y t := by
+          simp only [Finset.sum_mul, Finset.mul_sum]
+          rw [Finset.sum_comm]
+          exact Finset.sum_congr rfl fun s _ => Finset.sum_congr rfl fun t _ => by
+            rw [hs t s]; ring
+      _ = ∑ s, C y s * regCoeff C Z x s := by
+          refine Finset.sum_congr rfl fun s _ => ?_
+          by_cases hs' : s ∈ Z
+          · rw [hy.2 s hs', hs]; ring
+          · rw [hx.1 s hs', zero_mul, mul_zero]
+  rw [partialCov, partialCov, key, hs]
+
+/-- The Frisch, Waugh, and Lovell identity in product form: for `x ∉ Z` with `C_ZZ` invertible, if
+`β` solves the normal equations of the regression of `X y` on `X x` and `X_Z`, then
+`β x · partialCov C Z x x = partialCov C Z x y`. Neither symmetry of `C` nor invertibility of the
+block on `insert x Z` is needed. -/
+theorem IsRegCoeff.mul_partialCov_self {C : Matrix V V ℝ} {Z : Finset V} {x y : V}
+    {β : V → ℝ} (hx : x ∉ Z) (hZ : IsUnit (subCov C Z))
+    (hβ : IsRegCoeff C (insert x Z) y β) :
+    β x * partialCov C Z x x = partialCov C Z x y := by
+  have hγ := regCoeff_isRegCoeff y hZ
+  have hδ := regCoeff_isRegCoeff x hZ
+  have hsum : ∀ (s : V) (a b : ℝ) (f g : V → ℝ),
+      ∑ t, C s t * (f t - a * (Pi.single x 1 : V → ℝ) t + b * g t) =
+        ∑ t, C s t * f t - a * C s x + b * ∑ t, C s t * g t := by
+    intro s a b f g
+    have e : ∀ t, C s t * (f t - a * (Pi.single x 1 : V → ℝ) t + b * g t) =
+        C s t * f t - a * (C s t * (Pi.single x 1 : V → ℝ) t) + b * (C s t * g t) := fun t => by
+      ring
+    simp only [e, Finset.sum_add_distrib, Finset.sum_sub_distrib, ← Finset.mul_sum]
+    simp [Pi.single_apply]
+  -- `β - β x e_x + β x δ` solves the normal equations of the regression of `y` on `Z`
+  have hη : IsRegCoeff C Z y (fun t => β t - β x * (Pi.single x 1 : V → ℝ) t +
+      β x * regCoeff C Z x t) := by
+    refine ⟨fun v hv => ?_, fun s hs => ?_⟩
+    · by_cases hvx : v = x
+      · subst hvx; simp [hδ.1 v hx]
+      · simp [hvx, hβ.1 v (by simp [hvx, hv]), hδ.1 v hv]
+    · rw [hsum s _ _ _ _, hβ.2 s (Finset.mem_insert_of_mem hs), hδ.2 s hs]
+      ring
+  have hβeq := hη.unique hZ hγ
+  have hrow := hβ.2 x (Finset.mem_insert_self x Z)
+  have hrow' : ∑ t, C x t * β t = ∑ t, C x t * (fun t => β t - β x * (Pi.single x 1 : V → ℝ) t +
+      β x * regCoeff C Z x t) t + β x * C x x - β x * ∑ t, C x t * regCoeff C Z x t := by
+    rw [hsum x _ _ _ _]; ring
+  rw [hβeq] at hrow'
+  rw [partialCov, partialCov]
+  linear_combination hrow - hrow'
+
+/-- The Frisch, Waugh, and Lovell identity: for `x ∉ Z`, with `C_ZZ` invertible and nonzero
+residual variance `partialCov C Z x x` of `X x` given `X_Z`, the coefficient of `x` in the
+regression of `X y` on `X x` and `X_Z` is the ratio of partial covariances
+`partialCov C Z x y / partialCov C Z x x`. -/
+theorem IsRegCoeff.eq_partialCov_div {C : Matrix V V ℝ} {Z : Finset V} {x y : V}
+    {β : V → ℝ} (hx : x ∉ Z) (hZ : IsUnit (subCov C Z)) (hxx : partialCov C Z x x ≠ 0)
+    (hβ : IsRegCoeff C (insert x Z) y β) :
+    β x = partialCov C Z x y / partialCov C Z x x := by
+  rw [eq_div_iff hxx, hβ.mul_partialCov_self hx hZ]
+
 /-- The explicit form for one covariate: with `C z z ≠ 0` and `D ≠ 0`, the coefficient of `x` in
 the regression of `y` on `x` and `z` vanishes if and only if the partial covariance
 `C x y - C x z C z y / C z z` vanishes. -/
@@ -311,5 +408,55 @@ theorem isRegCoeff_pair_fst_eq_zero_iff {C : Matrix V V ℝ} {x z y : V} {β : V
   constructor
   · intro h; field_simp; linarith
   · intro h; field_simp at h; linarith
+
+/-! ### The partial covariance on a singular control block -/
+
+namespace PartialCovSingular
+
+/-- Four variables `X, Y, Z₁, Z₂` (indices `0, 1, 2, 3`) that are all equal to one variable of
+variance one: every covariance is one. -/
+def C : Matrix (Fin 4) (Fin 4) ℝ := Matrix.of fun _ _ => 1
+
+/-- The covariance matrix is positive semidefinite: it is `v vᵀ` with `v` the all ones vector. -/
+theorem posSemidef : C.PosSemidef := by
+  have h := Matrix.posSemidef_self_mul_conjTranspose (Matrix.of fun (_ : Fin 4) (_ : Fin 1) =>
+    (1 : ℝ))
+  convert h using 1
+  ext i j
+  simp [C, Matrix.mul_apply]
+
+/-- Without invertibility of the control block the partial covariance is not the residual
+covariance: the block of `Z₁, Z₂` is singular; regressing `Y` on `Z₁, Z₂` with coefficients
+`(1, 0)` solves the normal equations and leaves a residual of variance zero, uncorrelated with
+`X`; but `partialCov C {Z₁, Z₂} X Y = 1`, the marginal covariance. -/
+theorem not_residual :
+    ¬ IsUnit (subCov C {2, 3}) ∧ IsRegCoeff C {2, 3} 1 (Pi.single 2 1) ∧
+      covComb C (residual 1 (Pi.single 2 1)) (residual 1 (Pi.single 2 1)) = 0 ∧
+      covComb C (Pi.single 0 1) (residual 1 (Pi.single 2 1)) = 0 ∧
+      partialCov C {2, 3} 0 1 = 1 := by
+  have hsing : ¬ IsUnit (subCov C {2, 3}) := by
+    intro hu
+    have h := Matrix.mulVec_injective_of_isUnit hu (a₁ := fun s => if s.val = 2 then 1 else -1)
+      (a₂ := 0) (by
+        ext s
+        simp only [Matrix.mulVec, dotProduct, Matrix.submatrix_apply, C, Matrix.of_apply,
+          one_mul, Pi.zero_apply]
+        rw [Finset.sum_coe_sort ({2, 3} : Finset (Fin 4)) (fun t => if t = 2 then (1 : ℝ)
+          else -1)]
+        simp)
+    have := congrFun h ⟨2, by simp⟩
+    simp at this
+  have hinv : (subCov C {2, 3})⁻¹ = 0 :=
+    Matrix.nonsing_inv_apply_not_isUnit _ fun h => hsing ((Matrix.isUnit_iff_isUnit_det _).2 h)
+  refine ⟨hsing, ⟨fun v hv => ?_, fun s hs => ?_⟩, ?_, ?_, ?_⟩
+  · have : v ≠ 2 := fun h => hv (by simp [h])
+    simp [this]
+  · simp [C, Pi.single_apply]
+  · simp [covComb, residual, C, Matrix.mulVec, dotProduct, Pi.single_apply]
+  · simp [covComb, residual, C, Matrix.mulVec, dotProduct, Pi.single_apply]
+  · simp only [partialCov, regCoeff, hinv, Matrix.zero_mulVec]
+    simp [C]
+
+end PartialCovSingular
 
 end CausalInference

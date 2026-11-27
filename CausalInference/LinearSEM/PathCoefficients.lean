@@ -7,6 +7,7 @@ module
 
 public import CausalInference.LinearSEM.Basic
 public import CausalInference.LinearSEM.Regression
+public import CausalInference.Graphical.DSeparation
 
 /-!
 # Path coefficients, regression coefficients, and total effects
@@ -23,15 +24,25 @@ coefficients to population regression coefficients computed from `Σ`.
 * `LinearSEM.isRegCoeff_of_nondesc`, `LinearSEM.isRegCoeff_parents`: in a Markovian model
   (diagonal `Ω`), regressing `v` on its parents, or on any set of non-descendants of `v` that
   contains its parents, returns the structural coefficients;
-  `LinearSEM.regCoeff_parents_eq` states it for the unique regression vector when `Ω` is
-  positive definite. With `LinearSEM.direct_effect`, the regression coefficient of a parent is the
-  direct effect.
-* `LinearSEM.isRegCoeff_insert_total_effect`, `LinearSEM.regCoeff_insert_eq_T`: in a Markovian
-  model, the coefficient of `x` in the regression of `y` on `x` and a set `A` of non-descendants of
-  `x` containing the parents of `x` is the total effect `T y x`;
-  `LinearSEM.regCoeff_parents_total_effect` is the case `A = pa(x)`. Every such `A` satisfies the
-  back-door criterion; the general linear back-door theorem (Pearl 2009, Theorem 5.3.2) needs a
-  bridge from d-separation to vanishing partial covariance and is not proved here.
+  `LinearSEM.regCoeff_parents_eq_of_isUnit` states it for the unique regression vector when
+  the covariance block of the parents is invertible, and `LinearSEM.regCoeff_parents_eq` when
+  `Ω` is positive definite. With `LinearSEM.direct_effect`, the regression coefficient of a
+  parent is the direct effect.
+* `LinearSEM.isRegCoeff_insert_total_effect`, `LinearSEM.regCoeff_insert_eq_T_of_isUnit`
+  (invertible blocks of `A` and `insert x A`), `LinearSEM.regCoeff_insert_eq_T` (positive
+  definite `Ω`): in a Markovian model, the coefficient of `x` in the regression of `y` on `x` and
+  a set `A` of non-descendants of `x` containing the parents of `x` is the total effect `T y x`;
+  `LinearSEM.regCoeff_parents_total_effect_of_isUnit` and
+  `LinearSEM.regCoeff_parents_total_effect` are the case `A = pa(x)`. Every such `A` satisfies the
+  back-door criterion; the general linear back-door theorem (Pearl 2009, Theorem 5.3.2) for
+  uncorrelated errors is `LinearSEM.back_door` in `CausalInference.LinearSEM.DSeparation`.
+* `LinearSEM.partialCov_parents_eq_zero`, `LinearSEM.partialCov_parents_eq_zero_of_dSep`: the
+  local Markov property in covariance form: in a Markovian model with an invertible covariance
+  block of the parents of `a`, a non-descendant `b` of `a` (or any `b` d-separated from
+  `a` by the parents of `a`) has zero partial covariance with `a` given the parents of `a`. This
+  is the case `Z = pa(a)` of the bridge from d-separation to vanishing partial covariance; the
+  general case is `LinearSEM.partialCov_eq_zero_of_dSep` in
+  `CausalInference.LinearSEM.DSeparation`.
 * `LinearSEM.cov_instrument`, `LinearSEM.iv_ratio`: if `x` is the only variable in the equation
   for `y`, with coefficient `α`, and `z` is uncorrelated with `ε y`, then `Σ z y = α Σ z x`, so
   `α = Σ z y / Σ z x` when `Σ z x ≠ 0` (the linear instrumental variable formula).
@@ -84,19 +95,66 @@ theorem not_reflTransGen_of_adj {u v : V} (h : M.G.Adj u v) : ¬ ReflTransGen M.
 
 /-- In a Markovian model, regressing a variable on its parents returns the structural
 coefficients (Primer, Section 3.8.3: the structural equation is an identifying regression when
-the errors are independent). -/
+the errors are uncorrelated). -/
 theorem isRegCoeff_parents [DecidableRel M.G.Adj] (hΩ : M.Ω.IsDiag) (v : V) :
     IsRegCoeff M.cov (M.G.parentsFinset v) v (M.B v) :=
   M.isRegCoeff_of_nondesc hΩ v _ (fun u hu => by simpa using hu)
     fun s hs => M.not_reflTransGen_of_adj (by simpa using hs)
 
+/-- With a diagonal error covariance, if the covariance block of the parents of `v` is
+invertible, the population regression coefficients of `v` on its parents are exactly the path
+coefficients `B v ·`. -/
+theorem regCoeff_parents_eq_of_isUnit [DecidableRel M.G.Adj] (hΩ : M.Ω.IsDiag) (v : V)
+    (hu : IsUnit (subCov M.cov (M.G.parentsFinset v))) :
+    regCoeff M.cov (M.G.parentsFinset v) v = M.B v :=
+  ((M.isRegCoeff_parents hΩ v).unique hu (regCoeff_isRegCoeff v hu)).symm
+
 /-- With a diagonal, positive definite error covariance, the population regression coefficients
 of `v` on its parents are exactly the path coefficients `B v ·`. -/
 theorem regCoeff_parents_eq [DecidableRel M.G.Adj] (hΩ : M.Ω.IsDiag) (hpd : M.Ω.PosDef)
     (v : V) : regCoeff M.cov (M.G.parentsFinset v) v = M.B v :=
-  ((M.isRegCoeff_parents hΩ v).unique
-    (isUnit_submatrix_of_posDef (M.cov_posDef hpd) _)
-    (regCoeff_isRegCoeff v (isUnit_submatrix_of_posDef (M.cov_posDef hpd) _))).symm
+  M.regCoeff_parents_eq_of_isUnit hΩ v (isUnit_submatrix_of_posDef (M.cov_posDef hpd) _)
+
+/-! ### The local Markov property in covariance form -/
+
+/-- The local Markov property in covariance form: in a Markovian model (diagonal `Ω`, uncorrelated
+errors), if the covariance block of the parents of `a` is invertible, then every variable `b`
+that is not a descendant of `a` (in particular `b ≠ a`) has zero partial covariance with `a`
+given the parents of `a`. -/
+theorem partialCov_parents_eq_zero [DecidableRel M.G.Adj] (hΩ : M.Ω.IsDiag) {a b : V}
+    (hb : ¬ ReflTransGen M.G.Adj a b) (hu : IsUnit (subCov M.cov (M.G.parentsFinset a))) :
+    partialCov M.cov (M.G.parentsFinset a) a b = 0 := by
+  rw [partialCov_comm M.cov_transpose hu, partialCov, M.regCoeff_parents_eq_of_isUnit hΩ a hu,
+    M.cov_apply_eq b a, M.T_mul_Ω_apply_of_isDiag hΩ, M.T_apply_eq_zero hb, zero_mul, add_zero]
+  simp only [mul_comm (M.B a _)]
+  exact sub_self _
+
+/-- The local Markov property in covariance form, graphical statement (stage one of the bridge
+from d-separation to vanishing partial covariance, for the conditioning set of the parents): in a
+Markovian model with an invertible covariance block of the parents of `a`, if `a` and `b` are
+d-separated by the parents of `a`, then their partial covariance given the parents of `a`
+vanishes. -/
+theorem partialCov_parents_eq_zero_of_dSep [DecidableRel M.G.Adj] (hΩ : M.Ω.IsDiag) {a b : V}
+    (hsep : M.G.DSep {a} {b} ↑(M.G.parentsFinset a))
+    (hu : IsUnit (subCov M.cov (M.G.parentsFinset a))) :
+    partialCov M.cov (M.G.parentsFinset a) a b = 0 := by
+  set Z := M.G.parentsFinset a
+  by_cases hbZ : b ∈ Z
+  · -- a conditioning variable: the normal equation of the row `b`
+    rw [partialCov_comm M.cov_transpose hu, partialCov, (regCoeff_isRegCoeff a hu).2 b hbZ,
+      sub_self]
+  have haZ : a ∉ Z := fun h => M.acyclic.irrefl a (by simpa [Z] using h)
+  refine M.partialCov_parents_eq_zero hΩ (fun hab => hsep ?_) hu
+  rcases ReflTransGen.cases_head hab with rfl | ⟨u, hau, hub⟩
+  · exact ⟨a, rfl, a, rfl, haZ, haZ, false, ReflTransGen.refl⟩
+  · have huZ : u ∉ M.G.ancestorsOf ↑Z := by
+      intro h
+      obtain ⟨p, hp, hup⟩ := Digraph.mem_ancestorsOf.1 h
+      have hpa : M.G.Adj p a := by simpa [Z] using hp
+      exact M.acyclic a (TransGen.head' hau (hup.tail hpa))
+    obtain ⟨c, hc⟩ := Digraph.exists_reflTransGen_bayesBall_of_reflTransGen hub huZ true
+    exact ⟨a, rfl, b, rfl, haZ, hbZ, c,
+      ReflTransGen.head (Digraph.bayesBall_adj_true.2 ⟨hau, haZ⟩) hc⟩
 
 /-! ### Total effects by regression -/
 
@@ -159,22 +217,42 @@ theorem isRegCoeff_insert_total_effect (hΩ : M.Ω.IsDiag) (x y : V) (A : Finset
     · -- the rows of `A`
       rw [hcovA s hs, sub_self, mul_zero, add_zero, hγ.2 s hs]
 
+/-- The total effect is a regression coefficient: in a Markovian model, for every set `A` of
+non-descendants of `x` containing the parents of `x` such that the covariance blocks of `A` and of
+`insert x A` are invertible, the coefficient of `x` in the population regression of `y` on `x` and
+`A` is the total effect `T y x`. This is a precursor of the linear back-door theorem (Pearl 2009,
+Theorem 5.3.2): every such `A` is back-door admissible, but the theorem is stated for this class
+only, and for Markovian models only. -/
+theorem regCoeff_insert_eq_T_of_isUnit (hΩ : M.Ω.IsDiag) (x y : V) (A : Finset V)
+    (hpa : ∀ u, M.G.Adj u x → u ∈ A) (hA : ∀ a ∈ A, ¬ ReflTransGen M.G.Adj x a)
+    (huA : IsUnit (subCov M.cov A)) (hu : IsUnit (subCov M.cov (insert x A))) :
+    regCoeff M.cov (insert x A) y x = M.T y x := by
+  have hγ := regCoeff_isRegCoeff y huA
+  have hxA : x ∉ A := fun h => hA x h ReflTransGen.refl
+  have hβ := M.isRegCoeff_insert_total_effect hΩ x y A hpa hA hγ
+  rw [← hβ.unique hu (regCoeff_isRegCoeff y hu)]
+  simp [hγ.1 x hxA, M.B_apply_self]
+
 /-- The total effect is a regression coefficient: in a Markovian model with positive definite
 error covariance, for every set `A` of non-descendants of `x` containing the parents of `x`, the
 coefficient of `x` in the population regression of `y` on `x` and `A` is the total effect
-`T y x`. This is a precursor of the linear back-door theorem (Pearl 2009, Theorem 5.3.2): every
-such `A` is back-door admissible, but the theorem is stated for this class only, and for
-Markovian models only. -/
+`T y x` (the corollary of `regCoeff_insert_eq_T_of_isUnit` in which every block is invertible). -/
 theorem regCoeff_insert_eq_T (hΩ : M.Ω.IsDiag) (hpd : M.Ω.PosDef) (x y : V) (A : Finset V)
     (hpa : ∀ u, M.G.Adj u x → u ∈ A) (hA : ∀ a ∈ A, ¬ ReflTransGen M.G.Adj x a) :
-    regCoeff M.cov (insert x A) y x = M.T y x := by
-  have hu := isUnit_submatrix_of_posDef (M.cov_posDef hpd)
-  have hγ := regCoeff_isRegCoeff y (hu A)
-  have hxA : x ∉ A := fun h => hA x h ReflTransGen.refl
-  have hβ := M.isRegCoeff_insert_total_effect hΩ x y A hpa hA hγ
-  rw [← hβ.unique (hu _) (regCoeff_isRegCoeff y (hu _))]
-  have hBxx : M.B x x = 0 := not_not.1 fun h => M.acyclic.irrefl x (M.B_support x x h)
-  simp [hγ.1 x hxA, hBxx]
+    regCoeff M.cov (insert x A) y x = M.T y x :=
+  M.regCoeff_insert_eq_T_of_isUnit hΩ x y A hpa hA
+    (isUnit_submatrix_of_posDef (M.cov_posDef hpd) _)
+    (isUnit_submatrix_of_posDef (M.cov_posDef hpd) _)
+
+/-- The case `A = pa(x)` with invertible covariance blocks of `pa(x)` and `insert x pa(x)`:
+adjusting for the parents of `x`, the coefficient of `x` in the population regression of `y` is
+the total effect `T y x` (Markovian model). -/
+theorem regCoeff_parents_total_effect_of_isUnit [DecidableRel M.G.Adj] (hΩ : M.Ω.IsDiag)
+    (x y : V) (huA : IsUnit (subCov M.cov (M.G.parentsFinset x)))
+    (hu : IsUnit (subCov M.cov (insert x (M.G.parentsFinset x)))) :
+    regCoeff M.cov (insert x (M.G.parentsFinset x)) y x = M.T y x :=
+  M.regCoeff_insert_eq_T_of_isUnit hΩ x y _ (fun u hu => by simpa using hu)
+    (fun a ha => M.not_reflTransGen_of_adj (by simpa using ha)) huA hu
 
 /-- The case `A = pa(x)`: adjusting for the parents of `x`, the coefficient of `x` in the
 population regression of `y` is the total effect `T y x` (Markovian model, positive definite

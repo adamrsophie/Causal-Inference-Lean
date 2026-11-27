@@ -19,8 +19,15 @@ A linear structural equation model (linear SEM) on a finite set of variables `V`
 `X = B X + ε`, where `B : Matrix V V ℝ` is the matrix of path coefficients (`B v u` is the
 coefficient of `X u` in the equation for `X v`), supported on the edges of a directed acyclic
 graph `G`, and `ε` is a vector of errors with covariance matrix `Ω`. Off-diagonal entries of `Ω`
-are correlated errors (bidirected arcs in a path diagram); a diagonal `Ω` is a Markovian model.
-Everything here is at the level of second moments: no probability space is needed.
+are correlated errors (bidirected arcs in a path diagram); a diagonal `Ω` is a Markovian model,
+with uncorrelated errors. Everything here is at the level of second moments: no probability space
+is needed, and "uncorrelated" (not "independent") is the property a diagonal `Ω` expresses.
+
+The error covariance `Ω` is required to be positive semidefinite (the field
+`LinearSEM.Ω_posSemidef`), because every result that reads `LinearSEM.cov` as a covariance matrix
+needs it: an indefinite symmetric `Ω`, such as `Ω = [-1]` on one vertex, would give a negative
+"variance". Symmetry is derived (`LinearSEM.Ω_symm`). The worked examples therefore take a proof
+that their error covariance is positive semidefinite as an argument.
 
 ## Main definitions
 
@@ -29,7 +36,8 @@ Everything here is at the level of second moments: no probability space is neede
 * `LinearSEM.T`: the total effect matrix `∑_{k < |V|} B ^ k`.
 * `LinearSEM.cov`: the implied covariance matrix `T Ω Tᵀ`.
 * `LinearSEM.intervene M x`: the model of the intervention `do(X x = t)`, whose coefficient matrix
-  has row `x` set to zero and whose graph has the arrows into `x` removed.
+  has row `x` set to zero, whose graph has the arrows into `x` removed, and whose error
+  covariance has row and column `x` set to zero (the value `t` is a constant offset).
 
 ## Main results
 
@@ -45,9 +53,10 @@ Everything here is at the level of second moments: no probability space is neede
   from `u` to `v` of the products of the path coefficients.
 * `LinearSEM.cov_apply`: the trek expansion `Σ v w = ∑ a b, T v a Ω a b T w b`.
 * `LinearSEM.intervene_T_apply_col`, `LinearSEM.intervene_value`: under `do(X x = t)` the value of
-  `X y` is affine in `t` with slope `T y x`: the total effect is the interventional slope.
-* `LinearSEM.direct_effect`: holding every variable other than `y` fixed, the slope of `X y` in
-  `X x` is the path coefficient `B y x`.
+  `X y` is affine in `t` with slope `T y x`: the total effect is the interventional slope;
+  `LinearSEM.intervene_cov_apply_self`: the intervened variable has variance zero.
+* `LinearSEM.direct_effect`: for `x ≠ y`, holding every variable other than `y` fixed, the slope
+  of `X y` in `X x` is the path coefficient `B y x`.
 
 Source: J. Pearl (2009), *Causality*, 2nd edition, Section 5.3.1; J. Pearl, M. Glymour and
 N. P. Jewell (2016), *Causal Inference in Statistics: A Primer*, Section 3.8.2 (path coefficients
@@ -62,8 +71,9 @@ open Matrix Finset Relation
 
 /-- A linear structural equation model `X = B X + ε` on a finite set of variables `V`.
 `B v u` is the path coefficient of the arrow `u → v`; it may be nonzero only on edges of the
-directed acyclic graph `G`. `Ω` is the covariance matrix of the errors `ε`; positive
-semidefiniteness and diagonality are not fields but explicit hypotheses of the theorems that use
+directed acyclic graph `G`. `Ω` is the covariance matrix of the errors `ε`, so it is required to
+be positive semidefinite (symmetry follows, `LinearSEM.Ω_symm`). Diagonality (uncorrelated
+errors) and positive definiteness are not fields but explicit hypotheses of the theorems that use
 them. -/
 structure LinearSEM (V : Type*) [Fintype V] where
   /-- The causal graph. -/
@@ -76,12 +86,18 @@ structure LinearSEM (V : Type*) [Fintype V] where
   B_support : ∀ v u, B v u ≠ 0 → G.Adj u v
   /-- The covariance matrix of the errors. -/
   Ω : Matrix V V ℝ
-  /-- The error covariance matrix is symmetric. -/
-  Ω_symm : Ωᵀ = Ω
+  /-- The error covariance matrix is positive semidefinite, as every covariance matrix is. -/
+  Ω_posSemidef : Ω.PosSemidef
 
 namespace LinearSEM
 
 variable {V : Type*} [Fintype V] [DecidableEq V] (M : LinearSEM V)
+
+omit [DecidableEq V] in
+/-- The error covariance matrix is symmetric. -/
+theorem Ω_symm : M.Ωᵀ = M.Ω := by
+  have h := M.Ω_posSemidef.isHermitian
+  rwa [Matrix.IsHermitian, Matrix.conjTranspose_eq_transpose_of_trivial] at h
 
 /-! ### Nilpotency of the coefficient matrix -/
 
@@ -345,9 +361,15 @@ theorem cov_posSemidef (hΩ : M.Ω.PosSemidef) : M.cov.PosSemidef := by
 
 /-! ### Interventions and direct effects -/
 
+/-- The diagonal mask `P_x` that zeros coordinate `x`. -/
+def coordMask (x : V) : Matrix V V ℝ := Matrix.diagonal fun i => if i = x then 0 else 1
+
 /-- The model of the intervention `do(X x = t)`: the equation for `x` is removed (row `x` of `B` is
-set to zero, and the arrows into `x` are deleted from the graph). The value `t` enters through
-the error vector, see `intervene_value`. -/
+set to zero, and the arrows into `x` are deleted from the graph), and the error of `x` is replaced
+by the constant `t`, so the row and column `x` of the error covariance are set to zero: the new
+error covariance is `P_x Ω P_xᵀ`, with `P_x` the mask `coordMask x`. The value `t` enters as the
+deterministic offset of `x` in the error vector, see `intervene_value`; the intervened variable has
+variance zero, see `intervene_cov_apply_self`. -/
 def intervene (x : V) : LinearSEM V where
   G := M.G.deleteIncoming {x}
   acyclic := M.acyclic.deleteIncoming
@@ -357,8 +379,18 @@ def intervene (x : V) : LinearSEM V where
     split_ifs at h with hv
     · exact absurd rfl h
     · exact ⟨M.B_support v u h, hv⟩
-  Ω := M.Ω
-  Ω_symm := M.Ω_symm
+  Ω := coordMask x * M.Ω * (coordMask x)ᵀ
+  Ω_posSemidef := by
+    have h := M.Ω_posSemidef.mul_mul_conjTranspose_same (coordMask x)
+    rwa [Matrix.conjTranspose_eq_transpose_of_trivial] at h
+
+/-- The error covariance of the intervened model: entries in row or column `x` are zero, the others
+are those of `Ω`. -/
+theorem intervene_Ω_apply (x i j : V) :
+    (M.intervene x).Ω i j = if i = x ∨ j = x then 0 else M.Ω i j := by
+  simp only [intervene, coordMask, Matrix.diagonal_transpose, Matrix.diagonal_mul,
+    Matrix.mul_diagonal]
+  by_cases hi : i = x <;> by_cases hj : j = x <;> simp [hi, hj]
 
 /-- Removing the equation of `x` does not change the total effects of `x`:
 `T' y x = T y x` for every `y`. -/
@@ -379,15 +411,31 @@ theorem intervene_T_apply_col (x y : V) : (M.intervene x).T y x = M.T y x := by
           Finset.mem_univ, ite_true]
     _ = M.T y x := by rw [← Matrix.mul_assoc, hT, Matrix.one_mul]
 
+/-- In the intervened model the row `x` of the total effect matrix is the row of the identity:
+`X x` depends on no error other than its own offset. -/
+theorem intervene_T_apply_row (x w : V) : (M.intervene x).T x w = (1 : Matrix V V ℝ) x w := by
+  rw [(M.intervene x).T_eq_one_add_B_mul_T, Matrix.add_apply, Matrix.mul_apply]
+  simp [intervene]
+
 /-- Under `do(X x = t)` with errors `e`, the system is `X = B' X + e'` where `e'` is `e` with
 entry `x` replaced by `t`; its solution is `T' e'`. The intervened variable takes the value `t`. -/
 theorem intervene_value_self (x : V) (e : V → ℝ) (t : ℝ) :
     ((M.intervene x).T *ᵥ Function.update e x t) x = t := by
-  have hrow : ∀ w, (M.intervene x).T x w = (1 : Matrix V V ℝ) x w := by
-    intro w
-    rw [(M.intervene x).T_eq_one_add_B_mul_T, Matrix.add_apply, Matrix.mul_apply]
-    simp [intervene]
-  simp [Matrix.mulVec, dotProduct, hrow, Matrix.one_apply]
+  simp [Matrix.mulVec, dotProduct, intervene_T_apply_row, Matrix.one_apply]
+
+/-- Under `do(X x = t)` the intervened variable is a constant: its row of the implied covariance
+matrix vanishes. -/
+theorem intervene_cov_apply_left (x w : V) : (M.intervene x).cov x w = 0 := by
+  rw [cov_apply]
+  refine Finset.sum_eq_zero fun a _ => Finset.sum_eq_zero fun b _ => ?_
+  rw [intervene_T_apply_row, intervene_Ω_apply, Matrix.one_apply]
+  by_cases ha : x = a
+  · simp [ha]
+  · simp [ha]
+
+/-- Under `do(X x = t)` the intervened variable has variance zero. -/
+theorem intervene_cov_apply_self (x : V) : (M.intervene x).cov x x = 0 :=
+  M.intervene_cov_apply_left x x
 
 /-- The total effect is the interventional slope: under `do(X x = t)` the value of every variable
 `y` is affine in `t` with slope `T y x`. -/
@@ -402,10 +450,10 @@ theorem intervene_value (x y : V) (e : V → ℝ) (t : ℝ) :
   rw [this, Matrix.mulVec_add, Pi.add_apply, ← M.intervene_T_apply_col x y]
   simp [Matrix.mulVec_single, mul_comm]
 
-/-- The path coefficient is the direct effect (Primer, Section 3.8.2): when every variable other
-than `y` is held fixed by intervention at the values `c`, the equation for `y` gives
-`X y = (B c) y + e y`, and raising `X x` by one unit raises `X y` by `B y x`. -/
-theorem direct_effect (c e : V → ℝ) (x y : V) (t : ℝ) :
+/-- The structural right-hand side is affine in each argument: raising the input `c x` of the
+equation for `y` by one raises `(B c) y + e y` by `B y x`. This is a matrix identity, valid for
+every `x` and `y`; its causal reading is `direct_effect`, which needs `x ≠ y`. -/
+theorem structural_rhs_update_sub (c e : V → ℝ) (x y : V) (t : ℝ) :
     ((M.B *ᵥ Function.update c x (t + 1)) y + e y) - ((M.B *ᵥ Function.update c x t) y + e y) =
       M.B y x := by
   simp only [Matrix.mulVec, dotProduct]
@@ -413,6 +461,34 @@ theorem direct_effect (c e : V → ℝ) (x y : V) (t : ℝ) :
   · simp; ring
   · intro b _ hb; simp [hb]
   · simp
+
+omit [DecidableEq V] in
+/-- The coefficient of a variable in its own equation is zero (acyclicity). -/
+theorem B_apply_self (v : V) : M.B v v = 0 :=
+  not_not.1 fun h => M.acyclic.irrefl v (M.B_support v v h)
+
+/-- The path coefficient is the direct effect (Primer, Section 3.8.2). Let `x ≠ y`. Hold every
+variable other than `y` fixed by intervention, at the values `c` except that `X x` is set to `t`
+(for `X₀`) or to `t + 1` (for `X₁`), and let `X y` obey its structural equation
+`X y = (B X) y + e y` with the same error `e y`. Then `X x` takes the values `t` and `t + 1`, and
+raising it by one unit raises `X y` by exactly `B y x`. For `x = y` the first part fails: `X y` is
+not held fixed, and `B y y = 0` (`B_apply_self`) is no direct effect. -/
+theorem direct_effect {x y : V} (hxy : x ≠ y) (c e : V → ℝ) (t : ℝ) {X₀ X₁ : V → ℝ}
+    (h₀ : ∀ v, v ≠ y → X₀ v = Function.update c x t v) (h₀y : X₀ y = (M.B *ᵥ X₀) y + e y)
+    (h₁ : ∀ v, v ≠ y → X₁ v = Function.update c x (t + 1) v)
+    (h₁y : X₁ y = (M.B *ᵥ X₁) y + e y) :
+    X₀ x = t ∧ X₁ x = t + 1 ∧ X₁ y - X₀ y = M.B y x := by
+  refine ⟨by rw [h₀ x hxy, Function.update_self], by rw [h₁ x hxy, Function.update_self], ?_⟩
+  have key : ∀ (X : V → ℝ) (s : ℝ), (∀ v, v ≠ y → X v = Function.update c x s v) →
+      (M.B *ᵥ X) y = (M.B *ᵥ Function.update c x s) y := by
+    intro X s hX
+    simp only [Matrix.mulVec, dotProduct]
+    refine Finset.sum_congr rfl fun v _ => ?_
+    by_cases hv : v = y
+    · subst hv; rw [M.B_apply_self, zero_mul, zero_mul]
+    · rw [hX v hv]
+  rw [h₀y, h₁y, key X₀ t h₀, key X₁ (t + 1) h₁]
+  exact M.structural_rhs_update_sub c e x y t
 
 end LinearSEM
 
