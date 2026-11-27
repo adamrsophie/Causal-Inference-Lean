@@ -12,7 +12,7 @@ The project is at an early stage. Modules are added only when they contain check
 | Directory | Content |
 |---|---|
 | `CausalInference/Basic` | Finite probability distributions, marginals, conditional independence and the graphoid properties |
-| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery, ancestral sets; d-separation with a decidable checker and the equivalence to active paths; Markov factorization and the local Markov property; acyclic directed mixed graphs, districts, latent projection |
+| `CausalInference/Graphical` | Directed graphs on Mathlib's `Digraph`: parents, ancestors, acyclicity, topological orders, graph surgery, ancestral sets; d-separation with a decidable checker and the equivalence to active paths; Markov factorization, the local Markov property, and the global Markov property (d-separation implies conditional independence, with no positivity assumption); acyclic directed mixed graphs, districts, latent projection |
 | `CausalInference/PartialIdentification` | Identified sets, point identification, Manski bounds with sharpness, monotone treatment response |
 | `CausalInference/Designs/Randomized` | Finite-population designs: Bernoulli, complete, stratified, paired, and cluster randomization; Neyman's variance; Fisher's randomization test |
 | `CausalInference/Designs/DifferenceInDifferences` | Two-period identification and bias, staggered adoption with group-time effects, a two-way fixed effects counterexample |
@@ -26,7 +26,7 @@ The project is at an early stage. Modules are added only when they contain check
 | `CausalInference/Interaction` | Response types for two treatments, additive interaction, synergism, sufficient causes |
 | `CausalInference/Bias` | Selection bias and conditioning on a collider, selection without bias, the built-in selection bias of hazard ratios, measurement error and misclassification with correction formulas |
 | `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting, regression identities, a non-identification counterexample |
-| `CausalInference/Sensitivity` | Rosenbaum bounds and bias formulas for unmeasured confounding |
+| `CausalInference/Sensitivity` | Rosenbaum bounds for sign and signed-rank statistics, bias formulas for unmeasured confounding, the bounding factor and the E-value |
 | `CausalInference/Estimation` | Independent samples, consistency, asymptotic linearity, asymptotic normality, Wald interval coverage |
 
 ## Principles

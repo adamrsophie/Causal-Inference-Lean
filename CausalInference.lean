@@ -77,3 +77,5 @@ public import CausalInference.Interference.DesignBridge
 public import CausalInference.Bias.HazardRatio
 public import CausalInference.Bias.Misclassification
 public import CausalInference.Bias.Selection
+public import CausalInference.Graphical.GlobalMarkov
+public import CausalInference.Graphical.GlobalMarkovCompleteness
