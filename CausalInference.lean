@@ -117,3 +117,5 @@ public import CausalInference.Longitudinal.WeightingGeneral
 public import CausalInference.Longitudinal.Dynamic
 public import CausalInference.Longitudinal.GNull
 public import CausalInference.BiasAnalysis.VarianceFormulas
+public import CausalInference.BiasAnalysis.MisclassificationTables
+public import CausalInference.BiasAnalysis.MisclassificationMatrix
