@@ -84,3 +84,4 @@ public import CausalInference.Attribution.Bounds
 public import CausalInference.Attribution.Definitions
 public import CausalInference.Attribution.Examples
 public import CausalInference.Attribution.Identification
+public import CausalInference.Estimation.DeltaMethod

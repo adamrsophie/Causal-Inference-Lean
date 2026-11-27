@@ -26,10 +26,19 @@ Main results:
   `√n (θhat n - θ)` converges in distribution to `N(0, E φ(O)²)`. The proof combines the
   central limit theorem of Mathlib (`ProbabilityTheory.tendstoInDistribution_inv_sqrt_mul_sum_sub`)
   with the Slutsky-type lemma `MeasureTheory.tendstoInDistribution_of_tendstoInMeasure_sub`.
+* `CausalInference.IsAsymptoticallyLinear.tendstoInDistribution_of_isSampleMeasurable`: the same
+  for an estimator that is a measurable function of the first `n` observations.
 * `CausalInference.IsAsymptoticallyLinear.ae_eq`: the influence function is unique: two influence
   functions of the same estimator at the same `θ` agree almost surely at the observation.
+* `CausalInference.IsAsymptoticallyLinear.of_expansion`: an exact expansion
+  `θhat n - θ = n⁻¹ ∑_{i < n} φ (O i) + r n` with `√n r n → 0` in probability gives asymptotic
+  linearity; `IsAsymptoticallyLinear.add`, `.sub`, `.const_mul` and
+  `.of_tendstoInMeasure_sqrt_mul_sub` give closure under sums, differences, scaling and
+  `o_p(n^{-1/2})` perturbations.
 * `CausalInference.exists_isAsymptoticallyLinear`: the hypotheses are satisfiable together: a
   standard Gaussian i.i.d. sample and its sample mean.
+
+The predicate `IsAsymptoticallyLinear` is formed only for a probability measure.
 
 Sources: A. W. van der Vaart (1998), *Asymptotic Statistics*, chapters 2, 3 and 5;
 A. A. Tsiatis (2006), *Semiparametric Theory and Missing Data*, chapter 3.
@@ -45,11 +54,19 @@ namespace CausalInference
 variable {Ω 𝒪 : Type*} {mΩ : MeasurableSpace Ω} [MeasurableSpace 𝒪]
 
 /-- The estimator sequence `θhat` is asymptotically linear at `θ` with influence function `φ`
-for the sample `O` under `μ`: `φ` is measurable, `φ (O 0)` is square integrable with mean zero,
-and the remainder `√n (θhat n - θ) - n^{-1/2} ∑_{i < n} φ (O i)` converges to `0` in
-probability. -/
+for the sample `O` under the probability measure `μ`: `φ` is measurable, `φ (O 0)` is square
+integrable with mean zero, and the remainder `√n (θhat n - θ) - n^{-1/2} ∑_{i < n} φ (O i)`
+converges to `0` in probability.
+
+The predicate is only formed for a probability measure `μ`. On an infinite measure a square
+integrable `φ (O 0)` need not be integrable, and then the mean zero condition would hold by the
+convention that the integral of a non-integrable function is `0`; on a probability measure the
+second moment condition implies integrability, so the mean zero condition is genuine.
+
+The predicate does not ask `θhat n` to depend only on the first `n` observations; the corollaries
+with suffix `_of_isSampleMeasurable` add that requirement (`IsSampleMeasurable θhat O`). -/
 structure IsAsymptoticallyLinear (θhat : ℕ → Ω → ℝ) (θ : ℝ) (φ : 𝒪 → ℝ) (O : ℕ → Ω → 𝒪)
-    (μ : Measure Ω) : Prop where
+    (μ : Measure Ω) [IsProbabilityMeasure μ] : Prop where
   /-- The influence function is measurable. -/
   measurable : Measurable φ
   /-- The influence function has a finite second moment at the observation. -/
@@ -107,6 +124,12 @@ namespace IsAsymptoticallyLinear
 
 variable {θhat : ℕ → Ω → ℝ} {θ : ℝ} {φ : 𝒪 → ℝ} {O : ℕ → Ω → 𝒪} {μ : Measure Ω}
 
+/-- An asymptotically linear estimator has an integrable influence function at the observation;
+this is where the probability measure hypothesis of the predicate is used. -/
+theorem integrable [IsProbabilityMeasure μ] (h : IsAsymptoticallyLinear θhat θ φ O μ) :
+    Integrable (fun ω ↦ φ (O 0 ω)) μ :=
+  h.memLp.integrable one_le_two
+
 /-- **An asymptotically linear estimator is consistent.** The proof writes
 `θhat n - θ = n⁻¹ ∑_{i < n} φ (O i) + n^{-1/2} R n` for `n ≥ 1`, where `R n` is the remainder;
 the first term tends to `E φ (O 0) = 0` by the law of large numbers and the second is dominated
@@ -116,17 +139,17 @@ theorem isConsistent [IsProbabilityMeasure μ] (hO : IsIIDSample O μ)
   set R : ℕ → Ω → ℝ :=
     fun n ω ↦ √n * (θhat n ω - θ) - (√n)⁻¹ * ∑ i ∈ range n, φ (O i ω) with hR
   have hA : TendstoInMeasure μ (sampleMean φ O) atTop 0 := by
-    have := sampleMean_isConsistent hO h.measurable (h.memLp.integrable one_le_two)
+    have := sampleMean_isConsistent hO h.measurable h.integrable
     rw [IsConsistent, h.integral_eq_zero] at this
     exact this
   have hB : TendstoInMeasure μ (fun (n : ℕ) ω ↦ (√n)⁻¹ * R n ω) atTop 0 := by
-    refine TendstoInMeasure.of_norm_le h.remainder ?_
+    refine h.remainder.of_norm_le ?_
     filter_upwards [eventually_ge_atTop 1] with n hn ω
     rw [norm_mul]
     refine mul_le_of_le_one_left (norm_nonneg _) ?_
     rw [norm_inv, Real.norm_of_nonneg (Real.sqrt_nonneg _)]
     exact inv_le_one_of_one_le₀ (Real.one_le_sqrt.2 (by exact_mod_cast hn))
-  have hsum := TendstoInMeasure.add hA hB
+  have hsum := hA.add hB
   rw [add_zero] at hsum
   have hcongr : TendstoInMeasure μ (fun n ω ↦ θhat n ω - θ) atTop 0 := by
     refine TendstoInMeasure.congr' ?_ EventuallyEq.rfl hsum
@@ -164,6 +187,17 @@ theorem tendstoInDistribution [IsProbabilityMeasure μ] (hO : IsIIDSample O μ)
     simp [h.integral_eq_zero]
   · exact fun n ↦ ((hmeas n).sub_const θ).const_mul _
 
+/-- **Asymptotic normality for an estimator built from the sample.** The form of
+`IsAsymptoticallyLinear.tendstoInDistribution` for an estimator `θhat` such that each `θhat n` is
+a measurable function of the first `n` observations. -/
+theorem tendstoInDistribution_of_isSampleMeasurable [IsProbabilityMeasure μ]
+    (hO : IsIIDSample O μ) (h : IsAsymptoticallyLinear θhat θ φ O μ)
+    (hθ : IsSampleMeasurable θhat O)
+    {Ω' : Type*} {mΩ' : MeasurableSpace Ω'} {P' : Measure Ω'} [IsProbabilityMeasure P']
+    {Y : Ω' → ℝ} (hY : HasLaw Y (gaussianReal 0 (μ[fun ω ↦ φ (O 0 ω) ^ 2]).toNNReal) P') :
+    TendstoInDistribution (fun (n : ℕ) ω ↦ √n * (θhat n ω - θ)) atTop Y (fun _ ↦ μ) P' :=
+  h.tendstoInDistribution hO (hθ.aemeasurable hO) hY
+
 /-- **Uniqueness of the influence function.** If `θhat` is asymptotically linear at `θ` with
 influence functions `φ` and `ψ` for an i.i.d. sample under a probability measure, then
 `φ (O 0) = ψ (O 0)` almost surely. The difference `n^{-1/2} ∑_{i < n} (φ - ψ)(O i)` tends to zero
@@ -176,7 +210,7 @@ theorem ae_eq [IsProbabilityMeasure μ] {ψ : 𝒪 → ℝ} (hO : IsIIDSample O 
   have hD := hO.comp hm
   have hL2 : MemLp (fun ω ↦ φ (O 0 ω) - ψ (O 0 ω)) 2 μ := hφ.memLp.sub hψ.memLp
   have hint : μ[fun ω ↦ φ (O 0 ω) - ψ (O 0 ω)] = 0 := by
-    rw [integral_sub (hφ.memLp.integrable one_le_two) (hψ.memLp.integrable one_le_two),
+    rw [integral_sub hφ.integrable hψ.integrable,
       hφ.integral_eq_zero, hψ.integral_eq_zero, sub_zero]
   set S : ℕ → Ω → ℝ := fun n ω ↦ (√n)⁻¹ *
     (∑ k ∈ range n, (φ (O k ω) - ψ (O k ω)) - n * μ[fun ω ↦ φ (O 0 ω) - ψ (O 0 ω)]) with hS
@@ -205,6 +239,98 @@ theorem ae_eq [IsProbabilityMeasure μ] {ψ : 𝒪 → ℝ} (hO : IsIIDSample O 
   rw [hint] at hω
   exact sub_eq_zero.1 hω
 
+/-! ### Building asymptotically linear estimators -/
+
+/-- **Asymptotic linearity from an exact expansion.** Let `μ` be a probability measure and `φ` a
+measurable function with `φ (O 0)` square integrable and of mean zero. If eventually, for almost
+every `ω`, `θhat n - θ = n⁻¹ ∑_{i < n} φ (O i) + r n` with a remainder satisfying
+`√n r n → 0` in probability (that is, `r n = o_p(n^{-1/2})`), then `θhat` is asymptotically
+linear at `θ` with influence function `φ`. -/
+theorem of_expansion [IsProbabilityMeasure μ] (hφ : Measurable φ)
+    (h2 : MemLp (fun ω ↦ φ (O 0 ω)) 2 μ) (h0 : μ[fun ω ↦ φ (O 0 ω)] = 0) {r : ℕ → Ω → ℝ}
+    (hexp : ∀ᶠ n in atTop, ∀ᵐ ω ∂μ, θhat n ω - θ = sampleMean φ O n ω + r n ω)
+    (hr : TendstoInMeasure μ (fun (n : ℕ) ω ↦ √n * r n ω) atTop 0) :
+    IsAsymptoticallyLinear θhat θ φ O μ where
+  measurable := hφ
+  memLp := h2
+  integral_eq_zero := h0
+  remainder := by
+    refine hr.congr' ?_ EventuallyEq.rfl
+    filter_upwards [hexp] with n hn
+    filter_upwards [hn] with ω hω
+    have h1 := sqrt_mul_inv_self (n : ℝ)
+    simp only [hω, sampleMean]
+    linear_combination (-∑ i ∈ range n, φ (O i ω)) * h1
+
+/-- **Invariance under negligible perturbations.** If `θhat` is asymptotically linear at `θ` with
+influence function `φ` and `√n (θhat' n - θhat n) → 0` in probability (that is,
+`θhat' n - θhat n = o_p(n^{-1/2})`), then `θhat'` is asymptotically linear at `θ` with the same
+influence function. -/
+theorem of_tendstoInMeasure_sqrt_mul_sub [IsProbabilityMeasure μ] {θhat' : ℕ → Ω → ℝ}
+    (h : IsAsymptoticallyLinear θhat θ φ O μ)
+    (hd : TendstoInMeasure μ (fun (n : ℕ) ω ↦ √n * (θhat' n ω - θhat n ω)) atTop 0) :
+    IsAsymptoticallyLinear θhat' θ φ O μ where
+  measurable := h.measurable
+  memLp := h.memLp
+  integral_eq_zero := h.integral_eq_zero
+  remainder := by
+    have := h.remainder.add hd
+    rw [add_zero] at this
+    convert this using 1
+    funext n ω
+    simp only [Pi.add_apply]
+    ring
+
+/-- **Sums of asymptotically linear estimators.** If `θhat` and `θhat'` are asymptotically linear
+at `θ` and `θ'` with influence functions `φ` and `φ'` for the same sample, then
+`θhat + θhat'` is asymptotically linear at `θ + θ'` with influence function `φ + φ'`. -/
+theorem add [IsProbabilityMeasure μ] {θhat' : ℕ → Ω → ℝ} {θ' : ℝ} {φ' : 𝒪 → ℝ}
+    (h : IsAsymptoticallyLinear θhat θ φ O μ) (h' : IsAsymptoticallyLinear θhat' θ' φ' O μ) :
+    IsAsymptoticallyLinear (fun n ω ↦ θhat n ω + θhat' n ω) (θ + θ') (fun x ↦ φ x + φ' x) O μ where
+  measurable := h.measurable.add h'.measurable
+  memLp := h.memLp.add h'.memLp
+  integral_eq_zero := by
+    rw [integral_add h.integrable h'.integrable, h.integral_eq_zero, h'.integral_eq_zero, add_zero]
+  remainder := by
+    have := h.remainder.add h'.remainder
+    rw [add_zero] at this
+    convert this using 1
+    funext n ω
+    simp only [Pi.add_apply, sum_add_distrib]
+    ring
+
+/-- **Differences of asymptotically linear estimators.** If `θhat` and `θhat'` are asymptotically
+linear at `θ` and `θ'` with influence functions `φ` and `φ'` for the same sample, then
+`θhat - θhat'` is asymptotically linear at `θ - θ'` with influence function `φ - φ'`. -/
+theorem sub [IsProbabilityMeasure μ] {θhat' : ℕ → Ω → ℝ} {θ' : ℝ} {φ' : 𝒪 → ℝ}
+    (h : IsAsymptoticallyLinear θhat θ φ O μ) (h' : IsAsymptoticallyLinear θhat' θ' φ' O μ) :
+    IsAsymptoticallyLinear (fun n ω ↦ θhat n ω - θhat' n ω) (θ - θ') (fun x ↦ φ x - φ' x) O μ where
+  measurable := h.measurable.sub h'.measurable
+  memLp := h.memLp.sub h'.memLp
+  integral_eq_zero := by
+    rw [integral_sub h.integrable h'.integrable, h.integral_eq_zero, h'.integral_eq_zero, sub_zero]
+  remainder := by
+    have := h.remainder.sub h'.remainder
+    rw [sub_zero] at this
+    convert this using 1
+    funext n ω
+    simp only [Pi.sub_apply, sum_sub_distrib]
+    ring
+
+/-- **Scaling an asymptotically linear estimator.** If `θhat` is asymptotically linear at `θ` with
+influence function `φ`, then `c θhat` is asymptotically linear at `c θ` with influence function
+`c φ`. -/
+theorem const_mul [IsProbabilityMeasure μ] (c : ℝ) (h : IsAsymptoticallyLinear θhat θ φ O μ) :
+    IsAsymptoticallyLinear (fun n ω ↦ c * θhat n ω) (c * θ) (fun x ↦ c * φ x) O μ where
+  measurable := h.measurable.const_mul c
+  memLp := h.memLp.const_mul c
+  integral_eq_zero := by rw [integral_const_mul, h.integral_eq_zero, mul_zero]
+  remainder := by
+    refine (h.remainder.const_mul c).congr' (Eventually.of_forall fun n ↦
+      Eventually.of_forall fun ω ↦ ?_) (Eventually.of_forall fun ω ↦ by simp)
+    simp only [← mul_sum]
+    ring
+
 end IsAsymptoticallyLinear
 
 /-- **Non-vacuity.** The hypotheses of the asymptotic linearity theorems can be met together:
@@ -212,10 +338,10 @@ there is an i.i.d. sample `O` of standard Gaussian observations under a probabil
 its sample mean is asymptotically linear at `0` with influence function `x ↦ x`. -/
 theorem exists_isAsymptoticallyLinear :
     ∃ Ω : Type, ∃ _ : MeasurableSpace Ω, ∃ P : Measure Ω, ∃ O : ℕ → Ω → ℝ,
-      IsProbabilityMeasure P ∧ IsIIDSample O P ∧
+      ∃ _ : IsProbabilityMeasure P, IsIIDSample O P ∧ (∀ i, HasLaw (O i) (gaussianReal 0 1) P) ∧
         IsAsymptoticallyLinear (sampleMean (fun x ↦ x) O) 0 (fun x ↦ x) O P := by
   obtain ⟨Ω, _, P, O, hP, -, hO, hlaw⟩ := exists_isIIDSample (gaussianReal 0 1)
-  refine ⟨Ω, _, P, O, hP, hO, ?_⟩
+  refine ⟨Ω, _, P, O, hP, hO, hlaw, ?_⟩
   have hL2 : MemLp (fun ω ↦ O 0 ω) 2 P := (hlaw 0).memLp (memLp_id_gaussianReal 2)
   have hm : P[fun ω ↦ O 0 ω] = 0 := by
     rw [show (fun ω ↦ O 0 ω) = O 0 from rfl, (hlaw 0).integral_eq, integral_id_gaussianReal]

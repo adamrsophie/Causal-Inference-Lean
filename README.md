@@ -28,7 +28,7 @@ The project is at an early stage. Modules are added only when they contain check
 | `CausalInference/Bias` | Selection bias and conditioning on a collider, selection without bias, the built-in selection bias of hazard ratios, measurement error and misclassification with correction formulas |
 | `CausalInference/MissingData` | Missingness mechanisms, inverse probability weighting, regression identities, a non-identification counterexample |
 | `CausalInference/Sensitivity` | Rosenbaum bounds for sign and signed-rank statistics, bias formulas for unmeasured confounding, the bounding factor and the E-value |
-| `CausalInference/Estimation` | Independent samples, consistency, asymptotic linearity, asymptotic normality, Wald interval coverage |
+| `CausalInference/Estimation` | Independent samples, consistency with continuous mapping, asymptotic linearity and its closure properties, asymptotic normality, the delta method, Wald interval coverage with an estimated scale |
 
 ## Principles
 

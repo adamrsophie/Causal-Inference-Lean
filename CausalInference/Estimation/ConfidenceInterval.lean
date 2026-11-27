@@ -11,8 +11,11 @@ public import Mathlib.Probability.CDF
 /-!
 # Wald confidence intervals
 
-The Wald interval for `θ` from an estimate `θhat`, a standard error estimate `σhat` and a
-critical value `z` at sample size `n` is `[θhat - z σhat / √n, θhat + z σhat / √n]`.
+The Wald interval for `θ` from an estimate `θhat`, an estimate `σhat` of the asymptotic standard
+deviation of `√n (θhat - θ)` and a critical value `z` at sample size `n` is
+`[θhat - z σhat / √n, θhat + z σhat / √n]` (`waldInterval`). The standard error of `θhat` is
+`σhat / √n`; the same interval written with a standard error `se` is `[θhat - z se, θhat + z se]`
+(`waldIntervalSE`), and `waldInterval_eq_waldIntervalSE` relates the two.
 
 Main results:
 
@@ -25,8 +28,15 @@ Main results:
   Mathlib (`MeasureTheory.TendstoInDistribution.continuous_comp_prodMk_of_tendstoInMeasure_const`)
   and the portmanteau theorem
   (`MeasureTheory.ProbabilityMeasure.tendsto_measure_of_null_frontier_of_tendsto'`).
+* `CausalInference.tendsto_waldIntervalSE_coverage`: the same conclusion for the interval built
+  from a standard error estimate `se n` with `√n se n` consistent for `σ`.
 * `CausalInference.IsAsymptoticallyLinear.tendsto_waldInterval_coverage`: the same conclusion
-  for an asymptotically linear estimator with influence function `φ`, `σ² = E φ(O)²`.
+  for an asymptotically linear estimator with influence function `φ`, `σ² = E φ(O)²`, and its
+  form `IsAsymptoticallyLinear.tendsto_waldInterval_coverage_of_isSampleMeasurable` for estimators
+  that are measurable functions of the first `n` observations.
+* `CausalInference.sampleMean_tendsto_waldInterval_coverage`: the end of the chain for the sample
+  mean: with the sample standard deviation as scale, the Wald interval for `E f (O 0)` has
+  asymptotic coverage `1 - α` whenever `0 < Var f (O 0) < ∞`.
 
 Source: A. W. van der Vaart (1998), *Asymptotic Statistics*, chapters 2, 3 and 5.
 -/
@@ -40,14 +50,35 @@ namespace CausalInference
 
 variable {Ω : Type*} {mΩ : MeasurableSpace Ω}
 
-/-- The Wald interval `[est - z se / √n, est + z se / √n]` built from an estimate `est`, a
-standard error estimate `se`, a critical value `z` and the sample size `n`. -/
-noncomputable def waldInterval (est se z : ℝ) (n : ℕ) : Set ℝ :=
-  Icc (est - z * se / √n) (est + z * se / √n)
+/-- The Wald interval `[est - z sd / √n, est + z sd / √n]` built from an estimate `est`, a scale
+`sd`, a critical value `z` and the sample size `n`. The scale `sd` is an estimate of the asymptotic
+standard deviation of `√n (θhat n - θ)`, that is of the standard deviation `σ` of its normal
+limit; it is **not** the standard error of `est`, which is `sd / √n`. For an interval built from
+a standard error use `waldIntervalSE`; see `waldInterval_eq_waldIntervalSE`. -/
+noncomputable def waldInterval (est sd z : ℝ) (n : ℕ) : Set ℝ :=
+  Icc (est - z * sd / √n) (est + z * sd / √n)
 
-/-- For `n ≥ 1`, `θ` lies in the Wald interval exactly when `|√n (est - θ)| ≤ z se`. -/
-lemma mem_waldInterval_iff {est se z θ : ℝ} {n : ℕ} (hn : 1 ≤ n) :
-    θ ∈ waldInterval est se z n ↔ |√n * (est - θ)| - z * se ≤ 0 := by
+/-- The Wald interval `[est - z se, est + z se]` built from an estimate `est`, an estimate `se` of
+its standard error and a critical value `z`. -/
+def waldIntervalSE (est se z : ℝ) : Set ℝ :=
+  Icc (est - z * se) (est + z * se)
+
+/-- The Wald interval with asymptotic scale `sd` at sample size `n` is the Wald interval with
+standard error `sd / √n`. -/
+theorem waldInterval_eq_waldIntervalSE (est sd z : ℝ) (n : ℕ) :
+    waldInterval est sd z n = waldIntervalSE est (sd / √n) z := by
+  simp only [waldInterval, waldIntervalSE, mul_div_assoc]
+
+/-- For `n ≥ 1`, the Wald interval with standard error `se` is the Wald interval with asymptotic
+scale `√n se`. -/
+theorem waldIntervalSE_eq_waldInterval (est se z : ℝ) {n : ℕ} (hn : 1 ≤ n) :
+    waldIntervalSE est se z = waldInterval est (√n * se) z n := by
+  have hs : √(n : ℝ) ≠ 0 := (Real.sqrt_pos.2 (by exact_mod_cast hn)).ne'
+  rw [waldInterval_eq_waldIntervalSE, mul_div_cancel_left₀ _ hs]
+
+/-- For `n ≥ 1`, `θ` lies in the Wald interval exactly when `|√n (est - θ)| ≤ z sd`. -/
+lemma mem_waldInterval_iff {est sd z θ : ℝ} {n : ℕ} (hn : 1 ≤ n) :
+    θ ∈ waldInterval est sd z n ↔ |√n * (est - θ)| - z * sd ≤ 0 := by
   have hs : 0 < √(n : ℝ) := Real.sqrt_pos.2 (by exact_mod_cast hn)
   rw [waldInterval, mem_Icc, abs_mul, abs_of_pos hs, sub_nonpos, ← le_div_iff₀' hs,
     abs_sub_le_iff]
@@ -151,6 +182,24 @@ theorem tendsto_waldInterval_coverage {μ : Measure Ω} [IsProbabilityMeasure μ
   ext ω
   simp [hg, mem_waldInterval_iff hn]
 
+/-- **Asymptotic coverage of the Wald interval built from a standard error.** Under the
+hypotheses of `tendsto_waldInterval_coverage`, with a standard error estimate `se` such that
+`√n se n` is consistent for `σ` and each `se n` is almost everywhere measurable, the coverage
+probability `μ {θ ∈ [θhat n - z se n, θhat n + z se n]}` converges to `1 - α`. -/
+theorem tendsto_waldIntervalSE_coverage {μ : Measure Ω} [IsProbabilityMeasure μ]
+    {θhat se : ℕ → Ω → ℝ} {θ σ z α : ℝ} (hσ : 0 < σ) (hz : 0 ≤ z)
+    (hzα : cdf (gaussianReal 0 1) z = 1 - α / 2)
+    {Ω' : Type*} {mΩ' : MeasurableSpace Ω'} {P' : Measure Ω'} [IsProbabilityMeasure P']
+    {Y : Ω' → ℝ} (hY : HasLaw Y (gaussianReal 0 (σ ^ 2).toNNReal) P')
+    (hAN : TendstoInDistribution (fun (n : ℕ) ω ↦ √n * (θhat n ω - θ)) atTop Y (fun _ ↦ μ) P')
+    (hse : IsConsistent (fun n ω ↦ √n * se n ω) σ μ) (hsemeas : ∀ n, AEMeasurable (se n) μ) :
+    Tendsto (fun n ↦ μ.real {ω | θ ∈ waldIntervalSE (θhat n ω) (se n ω) z}) atTop
+      (𝓝 (1 - α)) := by
+  refine (tendsto_waldInterval_coverage hσ hz hzα hY hAN hse
+    fun n ↦ (hsemeas n).const_mul _).congr' ?_
+  filter_upwards [eventually_ge_atTop 1] with n hn
+  simp only [waldIntervalSE_eq_waldInterval _ _ _ hn]
+
 /-- **Wald interval for an asymptotically linear estimator.** Let `θhat` be asymptotically linear
 at `θ` with influence function `φ` for an i.i.d. sample `O` under a probability measure `μ`, with
 each `θhat n` almost everywhere measurable, and let `σ > 0` with `σ² = E φ (O 0)²`. If `σhat` is
@@ -171,5 +220,39 @@ theorem IsAsymptoticallyLinear.tendsto_waldInterval_coverage {𝒪 : Type*} [Mea
     exact HasLaw.id
   exact CausalInference.tendsto_waldInterval_coverage hσ hz hzα HasLaw.id
     (h.tendstoInDistribution hO hmeas hY) hσhat hσmeas
+
+/-- **Wald interval for an asymptotically linear estimator built from the sample.** The form of
+`IsAsymptoticallyLinear.tendsto_waldInterval_coverage` for an estimator `θhat` and a scale
+estimator `σhat` that are measurable functions of the first `n` observations. -/
+theorem IsAsymptoticallyLinear.tendsto_waldInterval_coverage_of_isSampleMeasurable
+    {𝒪 : Type*} [MeasurableSpace 𝒪] {μ : Measure Ω} [IsProbabilityMeasure μ] {O : ℕ → Ω → 𝒪}
+    {φ : 𝒪 → ℝ} {θhat σhat : ℕ → Ω → ℝ} {θ σ z α : ℝ} (hO : IsIIDSample O μ)
+    (h : IsAsymptoticallyLinear θhat θ φ O μ) (hθ : IsSampleMeasurable θhat O)
+    (hσ : 0 < σ) (hσ2 : μ[fun ω ↦ φ (O 0 ω) ^ 2] = σ ^ 2) (hz : 0 ≤ z)
+    (hzα : cdf (gaussianReal 0 1) z = 1 - α / 2)
+    (hσhat : IsConsistent σhat σ μ) (hσhatθ : IsSampleMeasurable σhat O) :
+    Tendsto (fun n ↦ μ.real {ω | θ ∈ waldInterval (θhat n ω) (σhat n ω) z n}) atTop
+      (𝓝 (1 - α)) :=
+  h.tendsto_waldInterval_coverage hO (hθ.aemeasurable hO) hσ hσ2 hz hzα hσhat
+    (hσhatθ.aemeasurable hO)
+
+/-- **Wald interval for the sample mean.** Let `O` be an i.i.d. sample under a probability
+measure `μ`, `f` measurable with `f (O 0)` of finite second moment and positive variance, and let
+`z ≥ 0` satisfy `Φ(z) = 1 - α / 2`. Then the Wald interval built from the sample mean and the
+sample standard deviation `√(P_n f² - (P_n f)²)`,
+`[P_n f - z σhat n / √n, P_n f + z σhat n / √n]`, covers `E f (O 0)` with probability tending to
+`1 - α`. -/
+theorem sampleMean_tendsto_waldInterval_coverage {𝒪 : Type*} [MeasurableSpace 𝒪]
+    {μ : Measure Ω} [IsProbabilityMeasure μ] {O : ℕ → Ω → 𝒪} (hO : IsIIDSample O μ)
+    {f : 𝒪 → ℝ} (hf : Measurable f) (hf2 : MemLp (fun ω ↦ f (O 0 ω)) 2 μ)
+    (hvar : 0 < Var[fun ω ↦ f (O 0 ω); μ]) {z α : ℝ} (hz : 0 ≤ z)
+    (hzα : cdf (gaussianReal 0 1) z = 1 - α / 2) :
+    Tendsto (fun n ↦ μ.real {ω | μ[fun ω ↦ f (O 0 ω)] ∈
+      waldInterval (sampleMean f O n ω) (sampleSD f O n ω) z n}) atTop (𝓝 (1 - α)) := by
+  refine IsAsymptoticallyLinear.tendsto_waldInterval_coverage_of_isSampleMeasurable hO
+    (sampleMean_isAsymptoticallyLinear hf hf2) (isSampleMeasurable_sampleMean hf O)
+    (Real.sqrt_pos.2 hvar) ?_ hz hzα
+    (sampleSD_isConsistent hO hf hf2) (isSampleMeasurable_sampleSD hf O)
+  rw [Real.sq_sqrt hvar.le, variance_eq_integral hf2.aemeasurable]
 
 end CausalInference

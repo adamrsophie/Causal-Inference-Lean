@@ -21,7 +21,8 @@ This file sets up the generic statistical layer used by the estimation files.
   `θhat n` equal to a measurable function of the first `n` observations.
 * `CausalInference.sampleMean f O n`: the sample mean `n⁻¹ ∑_{i < n} f (O i)`.
 * `CausalInference.empiricalMeasure O n ω`: the empirical measure `n⁻¹ ∑_{i < n} δ_{O i ω}`, with
-  `integral_empiricalMeasure`: integrating `f` against it gives the sample mean.
+  `integral_empiricalMeasure`: integrating `f` against it gives the sample mean, and the instance
+  `isProbabilityMeasure_empiricalMeasure`: it is a probability measure for `n ≠ 0`.
 * `CausalInference.exists_isIIDSample`: for every probability measure `ν` there is an i.i.d.
   sample with marginal law `ν`, so the i.i.d. hypothesis is never vacuous.
 
@@ -111,6 +112,14 @@ theorem isSampleMeasurable_sampleMean {f : 𝒪 → ℝ} (hf : Measurable f) (O 
 the zero measure. -/
 noncomputable def empiricalMeasure (O : ℕ → Ω → 𝒪) (n : ℕ) (ω : Ω) : Measure 𝒪 :=
   (n : ENNReal)⁻¹ • ∑ i ∈ range n, Measure.dirac (O i ω)
+
+/-- For a positive sample size `n`, the empirical measure is a probability measure: each of the `n`
+Dirac masses has weight `n⁻¹`. -/
+instance isProbabilityMeasure_empiricalMeasure (O : ℕ → Ω → 𝒪) (n : ℕ) [NeZero n] (ω : Ω) :
+    IsProbabilityMeasure (empiricalMeasure O n ω) where
+  measure_univ := by
+    simpa [empiricalMeasure] using
+      ENNReal.inv_mul_cancel (Nat.cast_ne_zero.2 (NeZero.ne n)) (ENNReal.natCast_ne_top n)
 
 /-- On an observation space with measurable singletons, integrating any real function against the
 empirical measure gives the sample mean. -/
