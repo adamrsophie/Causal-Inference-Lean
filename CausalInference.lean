@@ -128,3 +128,5 @@ public import CausalInference.SCM.CounterfactualExamples
 public import CausalInference.SCM.ActualCause
 public import CausalInference.Graphical.DSeparationLemmas
 public import CausalInference.BiasAnalysis.MultipleBias
+public import CausalInference.SCM.Adjustment
+public import CausalInference.SCM.Plans
