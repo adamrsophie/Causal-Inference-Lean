@@ -17,12 +17,15 @@ space, the factual and counterfactual worlds share the same `u`.
 
 ## Main definitions
 
-* `SCM.potentialResponse M X x u`: the potential response `V_x(u)`, the solution of the submodel
-  of `do(X := x)` at the noise value `u`.
+* `SCM.potentialResponse M X x u` (defined in `CausalInference.SCM.Intervention`): the potential
+  response `V_x(u)`, the solution of the submodel of `do(X := x)` at the noise value `u`.
 * `SCM.counterfactualProb M E hE X x Q`: the probability of the counterfactual event `Q` under
   `do(X := x)` given the factual evidence `E`, computed by abduction (condition the noise law on
   `E`), action (pass to the submodel of `do(X := x)`), and prediction (push the conditioned noise
   law forward along the submodel's solution map) (Pearl 2009, Theorem 7.1.7).
+* `SCM.cfFamilyDist M X x`, `SCM.jointCounterfactualProb M E hE X x Q`: the joint law of the
+  potential responses `(V_{x k})_k` to a finite family of interventions at one shared noise
+  draw, and the joint counterfactual probability given evidence.
 
 ## Main results
 
@@ -36,8 +39,20 @@ space, the factual and counterfactual worlds share the same `u`.
   Property 3 and the argument on p. 230): for distinct vertices `Y` and `W`, `Y_w(u) = y` and
   `W_y(u) = w` imply `Y(u) = y`. Applied to the submodel `M.intervene X x` this is
   `Y_{xw}(u) = y ∧ W_{xy}(u) = w → Y_x(u) = y`.
+* `SCM.potentialResponse_of_agree`, `SCM.potentialResponse_union_of_agree`,
+  `SCM.potentialResponse_of_mem`: consistency, composition and effectiveness stated with
+  potential responses. `SCM.potentialResponse_eq_of_reversibility`: reversibility with a prior
+  intervention, `Y_{xw}(u) = y ∧ W_{xy}(u) = w → Y_x(u) = y` (Pearl 2009, (7.21)).
 * `SCM.counterfactualProb_eq`: the counterfactual probability given evidence is
   `P_u(E(V(u)) ∧ Q(V_x(u))) / P(E)`, Pearl's formula (7.6) with the noise posterior written out.
+* `SCM.counterfactualProb_of_agree` (**consistency for probabilities**): evidence that fixes
+  `X = x` makes `P(Q(V_x) | E)` the observational `P(Q | E)`.
+* `SCM.probOf_cfFamilyDist`, `SCM.map_eval_cfFamilyDist`, `SCM.jointCounterfactualProb_eq`,
+  `SCM.jointCounterfactualProb_eval`: joint counterfactual events across several interventions
+  (Pearl 2009, (7.5)), and their marginals, the single-intervention laws. The joint law of the
+  factual world and one counterfactual world is `SCM.cfJointDist` in
+  `CausalInference.SCM.TwinNetwork`, a marginal of `cfFamilyDist`
+  (`SCM.cfJointDist_eq_map_cfFamilyDist`).
 * `SCMExamples.pearlModel1`, `SCMExamples.pearlModel2` (Pearl 2009, equations (1.47), (1.48)):
   two models on `X → Y` with the same observational distribution (`P(x, y) = 1/4`) and the same
   interventional distributions for every intervention, but with
@@ -57,15 +72,6 @@ namespace SCM
 
 variable {V : Type*} [Fintype V] [DecidableEq V] {G : Digraph V} [DecidableRel G.Adj]
   {α : V → Type*} {ε : V → Type*} [∀ v, Fintype (ε v)] (M : SCM G α ε)
-
-/-- The **potential response** `V_x(u)` (Pearl 2009, Definition 7.1.4): the configuration that
-solves the submodel of `do(X := x)` at the noise value `u`. Its value at a vertex `Y` is
-`Y_x(u)`. The theorems below are stated with the unfolded form `(M.intervene X x).solve u`. -/
-noncomputable def potentialResponse (X : Finset V) (x : ∀ v, α v) (u : ∀ v, ε v) : ∀ v, α v :=
-  (M.intervene X x).solve u
-
-theorem potentialResponse_eq (X : Finset V) (x : ∀ v, α v) (u : ∀ v, ε v) :
-    M.potentialResponse X x u = (M.intervene X x).solve u := rfl
 
 /-! ### The axioms of structural counterfactuals -/
 
@@ -136,6 +142,46 @@ theorem solve_eq_of_reversibility {Y W : V} (hYW : Y ≠ W) (w y : ∀ v, α v) 
       exact notMem_descendantsOf_singleton (Ne.symm hYW) hWY
     rwa [M.solve_intervene_of_notMem_descendantsOf u hY] at h1
 
+/-! ### The axioms in terms of potential responses -/
+
+/-- **The empty intervention**: `V_∅(u) = V(u)`. -/
+theorem potentialResponse_empty (x : ∀ v, α v) (u : ∀ v, ε v) :
+    M.potentialResponse ∅ x u = M.solve u := by
+  rw [potentialResponse_eq, solve_intervene_empty]
+
+/-- **Consistency** (Pearl 2009, Corollary 7.3.2, equation (7.20)), with potential responses:
+if `X(u) = x`, then `V_x(u) = V(u)`. -/
+theorem potentialResponse_of_agree {X : Finset V} {x : ∀ v, α v} {u : ∀ v, ε v}
+    (h : ∀ v ∈ X, M.solve u v = x v) : M.potentialResponse X x u = M.solve u :=
+  M.solve_intervene_of_agree h
+
+/-- **Effectiveness** (Pearl 2009, Property 2), with potential responses: `X_x(u) = x`. -/
+theorem potentialResponse_of_mem {X : Finset V} (x : ∀ v, α v) (u : ∀ v, ε v) {v : V}
+    (hv : v ∈ X) : M.potentialResponse X x u v = x v :=
+  M.solve_intervene_of_mem u hv
+
+/-- **Composition** (Pearl 2009, Property 1, equation (7.19)), with potential responses: if
+`W_x(u) = w`, then `V_{xw}(u) = V_x(u)`, where `xw` sets `W` to `w` and the rest of `X` to `x`. -/
+theorem potentialResponse_union_of_agree {X W : Finset V} {x w : ∀ v, α v} {u : ∀ v, ε v}
+    (h : ∀ v ∈ W, M.potentialResponse X x u v = w v) :
+    M.potentialResponse (X ∪ W) (fun v => if v ∈ W then w v else x v) u =
+      M.potentialResponse X x u :=
+  M.solve_intervene_union_of_agree h
+
+/-- **Reversibility** for recursive models (Pearl 2009, Property 3, equation (7.21)), with a
+prior intervention `do(X := x)`: for distinct vertices `Y` and `W`,
+`Y_{xw}(u) = y ∧ W_{xy}(u) = w → Y_x(u) = y`. Here `xw` sets `W` to `w` and the rest of `X` to
+`x`, and `xy` sets `Y` to `y` and the rest of `X` to `x`. -/
+theorem potentialResponse_eq_of_reversibility (X : Finset V) (x : ∀ v, α v) {Y W : V}
+    (hYW : Y ≠ W) (w y : ∀ v, α v) (u : ∀ v, ε v)
+    (h1 : M.potentialResponse (X ∪ {W}) (fun v => if v ∈ ({W} : Finset V) then w v else x v) u
+      Y = y Y)
+    (h2 : M.potentialResponse (X ∪ {Y}) (fun v => if v ∈ ({Y} : Finset V) then y v else x v) u
+      W = w W) :
+    M.potentialResponse X x u Y = y Y := by
+  rw [potentialResponse_eq, ← solve_intervene_intervene] at h1 h2
+  exact (M.intervene X x).solve_eq_of_reversibility hYW w y u h1 h2
+
 /-! ### Abduction, action, prediction -/
 
 variable [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)]
@@ -160,6 +206,75 @@ theorem counterfactualProb_eq (E : (∀ v, α v) → Prop) [DecidablePred E]
       M.noiseDist.probOf (fun u => E (M.solve u) ∧ Q ((M.intervene X x).solve u)) /
         M.dist.probOf E := by
   rw [counterfactualProb, FiniteDist.probOf_map, FiniteDist.probOf_cond, probOf_dist]
+
+/-- **Consistency for counterfactual probabilities**: if the evidence `E` already fixes the
+vertices of `X` at the values `x`, the counterfactual `P(Q(V_x) | E)` is the ordinary
+conditional probability `P(Q | E)` under the observational distribution. -/
+theorem counterfactualProb_of_agree (E : (∀ v, α v) → Prop) [DecidablePred E]
+    (hE : 0 < M.dist.probOf E) (X : Finset V) (x : ∀ v, α v) (Q : (∀ v, α v) → Prop)
+    [DecidablePred Q] (hEX : ∀ y, E y → ∀ v ∈ X, y v = x v) :
+    M.counterfactualProb E hE X x Q = (M.dist.cond E hE).probOf Q := by
+  rw [counterfactualProb_eq, FiniteDist.probOf_cond, M.probOf_dist (fun y => E y ∧ Q y)]
+  congr 1
+  refine FiniteDist.probOf_congr _ fun u => and_congr_right fun hu => ?_
+  rw [M.solve_intervene_of_agree (hEX _ hu)]
+
+/-! ### Joint counterfactuals across several interventions -/
+
+variable {κ : Type*} [Fintype κ] [DecidableEq κ]
+
+/-- The **joint law of the potential responses to a family of interventions** `do(X k := x k)`,
+indexed by a finite type `κ`, all computed at one shared noise draw: the law of
+`k ↦ V_{x k}(u)` when `u` has the noise law of `M`. The factual world is the index with
+`X k = ∅` (`SCM.potentialResponse_empty`). -/
+noncomputable def cfFamilyDist (X : κ → Finset V) (x : κ → ∀ v, α v) :
+    FiniteDist (κ → ∀ v, α v) :=
+  M.noiseDist.map fun u k => M.potentialResponse (X k) (x k) u
+
+/-- Joint counterfactual events have the probability
+`P(Q((V_{x k})_k)) = P_u(Q((V_{x k}(u))_k))`, with the same noise value `u` in every world
+(Pearl 2009, equation (7.5)). -/
+theorem probOf_cfFamilyDist (X : κ → Finset V) (x : κ → ∀ v, α v)
+    (Q : (κ → ∀ v, α v) → Prop) [DecidablePred Q] :
+    (M.cfFamilyDist X x).probOf Q =
+      M.noiseDist.probOf (fun u => Q fun k => M.potentialResponse (X k) (x k) u) :=
+  FiniteDist.probOf_map _ _ _
+
+/-- The marginals of the joint law are the interventional distributions: the law of
+`V_{x k}` alone is the distribution induced by `do(X k := x k)`. -/
+theorem map_eval_cfFamilyDist (X : κ → Finset V) (x : κ → ∀ v, α v) (k : κ) :
+    (M.cfFamilyDist X x).map (fun f => f k) = (M.intervene (X k) (x k)).dist := by
+  rw [cfFamilyDist, FiniteDist.map_map]
+  rfl
+
+/-- The joint counterfactual probability of an event `Q` about the worlds `(V_{x k})_k`, given
+factual evidence `E` of positive probability, by abduction, action and prediction with one
+shared posterior noise draw for all worlds. -/
+noncomputable def jointCounterfactualProb (E : (∀ v, α v) → Prop) [DecidablePred E]
+    (hE : 0 < M.dist.probOf E) (X : κ → Finset V) (x : κ → ∀ v, α v)
+    (Q : (κ → ∀ v, α v) → Prop) [DecidablePred Q] : ℝ :=
+  ((M.noiseDist.cond (fun u => E (M.solve u)) (by rwa [← probOf_dist])).map
+    fun u k => M.potentialResponse (X k) (x k) u).probOf Q
+
+/-- The joint counterfactual probability in closed form:
+`P(Q((V_{x k})_k) | E) = P_u(E(V(u)) ∧ Q((V_{x k}(u))_k)) / P(E)`. -/
+theorem jointCounterfactualProb_eq (E : (∀ v, α v) → Prop) [DecidablePred E]
+    (hE : 0 < M.dist.probOf E) (X : κ → Finset V) (x : κ → ∀ v, α v)
+    (Q : (κ → ∀ v, α v) → Prop) [DecidablePred Q] :
+    M.jointCounterfactualProb E hE X x Q =
+      M.noiseDist.probOf (fun u => E (M.solve u) ∧ Q fun k => M.potentialResponse (X k) (x k) u) /
+        M.dist.probOf E := by
+  rw [jointCounterfactualProb, FiniteDist.probOf_map, FiniteDist.probOf_cond, probOf_dist]
+
+/-- The marginals of the joint counterfactual probability: an event about the world `k` alone
+has its single-intervention counterfactual probability. -/
+theorem jointCounterfactualProb_eval (E : (∀ v, α v) → Prop) [DecidablePred E]
+    (hE : 0 < M.dist.probOf E) (X : κ → Finset V) (x : κ → ∀ v, α v) (k : κ)
+    (Q : (∀ v, α v) → Prop) [DecidablePred Q] :
+    M.jointCounterfactualProb E hE X x (fun f => Q (f k)) =
+      M.counterfactualProb E hE (X k) (x k) Q := by
+  rw [jointCounterfactualProb_eq, counterfactualProb_eq]
+  rfl
 
 end SCM
 

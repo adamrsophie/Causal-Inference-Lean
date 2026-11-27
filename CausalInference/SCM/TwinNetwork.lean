@@ -316,6 +316,18 @@ theorem counterfactualProb_eq_cond_cfJointDist (M : SCM G α ε) (E : (∀ v, α
   rw [FiniteDist.probOf_cond, probOf_cfJointDist_fst, counterfactualProb_eq, cfJointDist,
     FiniteDist.probOf_map]
 
+omit [∀ v, DecidableEq (ε v)] in
+/-- The joint law of the factual world and the world of `do(X := x)` is a marginal of the joint
+law of a family of potential responses (`SCM.cfFamilyDist`): the family indexed by `Bool` with
+the empty intervention (the factual world) at `false` and `do(X := x)` at `true`. -/
+theorem cfJointDist_eq_map_cfFamilyDist (M : SCM G α ε) (X : Finset V) (x : ∀ v, α v) :
+    M.cfJointDist X x = (M.cfFamilyDist (fun b : Bool => if b then X else ∅) (fun _ => x)).map
+      fun f => (f false, f true) := by
+  rw [cfJointDist, cfFamilyDist, FiniteDist.map_map]
+  congr 1
+  funext u
+  simp [potentialResponse_eq, solve_intervene_empty]
+
 /-- **Counterfactual queries in the twin network**: the counterfactual probability
 `P(Q(V_x) | E)` is the conditional probability, under the distribution induced by the twin
 model, of `Q` on the counterfactual copy given `E` on the factual copy. -/

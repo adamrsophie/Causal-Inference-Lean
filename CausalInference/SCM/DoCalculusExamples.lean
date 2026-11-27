@@ -44,17 +44,6 @@ variable {V : Type*} [Fintype V] [DecidableEq V] {G : Digraph V} [DecidableRel G
   {α : V → Type*} [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)] {ε : V → Type*}
   [∀ v, Fintype (ε v)] (M : SCM G α ε)
 
-omit [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)] in
-/-- The submodel of `do(X := x)` depends only on the values of `x` on `X`. -/
-theorem intervene_congr {X : Finset V} {x x' : ∀ u, α u} (h : ∀ u ∈ X, x u = x' u) :
-    M.intervene X x = M.intervene X x' := by
-  unfold intervene
-  congr 1
-  funext u z e
-  split_ifs with hu
-  · exact h u hu
-  · rfl
-
 /-- Interventions on equal sets induce the same distribution. -/
 theorem dist_intervene_of_eq {X X' : Finset V} (h : X = X') {x : ∀ u, α u} :
     (M.intervene X x).dist = (M.intervene X' x).dist := by

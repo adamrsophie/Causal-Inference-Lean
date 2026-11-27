@@ -11,10 +11,16 @@ public import CausalInference.Basic.FiniteDistribution
 /-!
 # Finite Markovian structural causal models
 
-A finite Markovian structural causal model on a directed acyclic graph `G : Digraph V`: each
-endogenous vertex `v` takes values in a finite type `α v`, has its own exogenous noise in a
-finite type `ε v`, and is determined by a structural equation `x v = f v (x restricted to the
-parents of v) (u v)`. The noises are independent, with law `noise v` each.
+A finite Markovian structural causal model on a directed acyclic graph `G : Digraph V` with
+finitely many vertices: each endogenous vertex `v` takes values in a type `α v`, has its own
+exogenous noise in a finite type `ε v`, and is determined by a structural equation
+`x v = f v (x restricted to the parents of v) (u v)`. The noises are independent, with law
+`noise v` each.
+
+The value types `α v` are arbitrary in the definition of a model and of its solution: existence
+and uniqueness of the solution (`SCM.existsUnique_isSolution`) hold for any value types. The
+endogenous value types must be finite (with decidable equality) only from `SCM.dist` on, where
+the solution map pushes the noise law forward to a finite distribution on configurations.
 
 ## Main definitions
 
@@ -46,9 +52,10 @@ open Finset
 variable {V : Type*} [Fintype V]
 
 /-- A finite Markovian structural causal model on the graph `G`. Each vertex `v` has a value
-type `α v` and a noise type `ε v`; the structural equation of `v` computes its value from the
-values of its parents and its own noise, `x v = f v (x restricted to the parents) (u v)`; the
-noises are independent with laws `noise v`; and `G` is acyclic, so the system is recursive. -/
+type `α v` and a finite noise type `ε v`; the structural equation of `v` computes its value from
+the values of its parents and its own noise, `x v = f v (x restricted to the parents) (u v)`;
+the noises are independent with laws `noise v`; and `G` is acyclic, so the system is recursive.
+The value types need not be finite here; finiteness enters at `SCM.dist`. -/
 structure SCM (G : Digraph V) [DecidableRel G.Adj] (α : V → Type*) (ε : V → Type*)
     [∀ v, Fintype (ε v)] where
   /-- The causal graph is acyclic. -/
