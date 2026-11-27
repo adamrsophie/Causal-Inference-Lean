@@ -26,7 +26,7 @@ its consequence `LinearSEM.single_door_of_partialCov`: if the partial covariance
 given `Z` vanishes in that model, then `α = r_YX·Z`. d-separation in the directed graph alone
 yields that vanishing only for uncorrelated errors (or when correlated errors are drawn as
 bidirected arcs); `DescendantExample.counterexample` shows that the condition that `Z` contains no
-descendant of `Y` cannot be dropped. The Markovian precursors are in
+descendant of `Y` cannot be dropped. The precursors for uncorrelated errors are in
 `CausalInference.LinearSEM.PathCoefficients`. This file also checks the books' worked examples,
 with symbolic coefficients, by direct covariance algebra: each model is a `LinearSEM` on `Fin n`,
 its total effect matrix is computed by `LinearSEM.T_eq_of_mul_eq_one`, and each claimed identity
@@ -254,9 +254,12 @@ theorem T_deleteCoeff_eq : (model.deleteCoeff 1 0).T = !![1, 0, 0; 0, 1, 0; 0, 1
 
 /-- The single-door conclusion fails when `Z` contains a descendant of the outcome. With
 `Z = {Z}`: in the model with `X → Y` deleted, `X` is isolated, so it is d-separated from `Y` by
-`Z` and the partial covariance of `X` and `Y` given `Z` vanishes; both covariance blocks are
-invertible; but `Z` is a descendant of `Y`, and the coefficient of `X` in the regression of `Y`
-on `X` and `Z` is `1 / 2`, while the path coefficient is `1`. -/
+`Z` (proved as `DescendantExample.dSep_deleteEdgeGraph` in
+`CausalInference.LinearSEM.DSeparation`, where `DescendantExample.counterexample_single_door`
+checks every other hypothesis of `single_door`) and the partial covariance of `X` and `Y`
+given `Z` vanishes; both covariance blocks are invertible; but `Z` is a descendant of `Y`, and
+the coefficient of `X` in the regression of `Y` on `X` and `Z` is `1 / 2`,
+while the path coefficient is `1`. -/
 theorem counterexample :
     partialCov (model.deleteCoeff 1 0).cov {2} 0 1 = 0 ∧ IsUnit (subCov model.cov {2}) ∧
       IsUnit (subCov model.cov (insert 0 {2})) ∧ Relation.ReflTransGen model.G.Adj 1 2 ∧

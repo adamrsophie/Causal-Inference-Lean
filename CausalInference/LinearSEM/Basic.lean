@@ -19,9 +19,14 @@ A linear structural equation model (linear SEM) on a finite set of variables `V`
 `X = B X + ε`, where `B : Matrix V V ℝ` is the matrix of path coefficients (`B v u` is the
 coefficient of `X u` in the equation for `X v`), supported on the edges of a directed acyclic
 graph `G`, and `ε` is a vector of errors with covariance matrix `Ω`. Off-diagonal entries of `Ω`
-are correlated errors (bidirected arcs in a path diagram); a diagonal `Ω` is a Markovian model,
-with uncorrelated errors. Everything here is at the level of second moments: no probability space
-is needed, and "uncorrelated" (not "independent") is the property a diagonal `Ω` expresses.
+are correlated errors (bidirected arcs in a path diagram); a diagonal `Ω` means uncorrelated errors.
+Everything here is at the level of second moments: no probability space is needed, and
+"uncorrelated" (not "independent") is the property a diagonal `Ω` expresses. Uncorrelated errors
+need not be independent (for `U` uniform on `{-1, 0, 1}`, `U` and `U ^ 2 - 2 / 3` are uncorrelated
+and dependent), so a diagonal `Ω` is not by itself a Markovian model in the sense of independent
+disturbances; it is one for an independent realization of the errors, for example a jointly
+Gaussian one. A realization of the errors on a probability space is in
+`CausalInference.LinearSEM.InstrumentalVariable`.
 
 The error covariance `Ω` is required to be positive semidefinite (the field
 `LinearSEM.Ω_posSemidef`), because every result that reads `LinearSEM.cov` as a covariance matrix
@@ -300,8 +305,9 @@ theorem cov_apply (v w : V) :
   simp only [cov, Matrix.mul_apply, Matrix.transpose_apply, Finset.sum_mul]
   rw [Finset.sum_comm]
 
-/-- The trek expansion in a Markovian model (diagonal `Ω`): `Σ v w = ∑ a, T v a Ω a a T w a`, a sum
-over common sources `a` of a directed path to `v` and a directed path to `w`. -/
+/-- The trek expansion with uncorrelated errors (diagonal `Ω`):
+`Σ v w = ∑ a, T v a Ω a a T w a`, a sum over common sources `a` of a directed
+path to `v` and a directed path to `w`. -/
 theorem cov_apply_of_isDiag (hΩ : M.Ω.IsDiag) (v w : V) :
     M.cov v w = ∑ a, M.T v a * M.Ω a a * M.T w a := by
   rw [cov_apply]
@@ -336,7 +342,7 @@ theorem cov_apply_eq (a x : V) :
   simp only [mul_comm (M.B x _)]
   ring
 
-/-- In a Markovian model, `Cov(X a, ε x) = T a x Ω x x`. -/
+/-- With a diagonal `Ω`, `Cov(X a, ε x) = T a x Ω x x`. -/
 theorem T_mul_Ω_apply_of_isDiag (hΩ : M.Ω.IsDiag) (a x : V) :
     (M.T * M.Ω) a x = M.T a x * M.Ω x x := by
   rw [Matrix.mul_apply, Finset.sum_eq_single x]

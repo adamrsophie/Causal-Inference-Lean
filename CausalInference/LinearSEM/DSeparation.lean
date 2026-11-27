@@ -29,6 +29,10 @@ Theorem 5.3.2) are proved in graphical form for uncorrelated errors.
   total effect `T y x = r_YX·Z` when `Z` has no descendant of `x` and d-separates `x` from `y` in
   `G_x̲`. The proof uses the decomposition `LinearSEM.isRegCoeff_cutOutgoing_add` of the
   regression through the model `LinearSEM.cutOutgoing x` without the arrows out of `x`.
+* `LinearSEM.DescendantExample.dSep_deleteEdgeGraph`,
+  `LinearSEM.DescendantExample.counterexample_single_door`: in the chain `X → Y → Z`, with
+  `Z = {Z}`, every hypothesis of `single_door` other than the absence of descendants of `Y` from
+  `Z` holds (the d-separation in `G_α` included), and the conclusion fails.
 
 Correlated errors are not covered: for them d-separation in the directed graph does not imply a
 vanishing partial covariance (see `LinearSEM.single_door_of_partialCov`).
@@ -433,6 +437,44 @@ theorem back_door (hΩ : M.Ω.IsDiag) {x y : V} {Z : Finset V}
     (M.cutOutgoing x).partialCov_eq_zero_of_dSep hΩ hsep huZ'
   have hzero := (hγ.eq_zero_iff_partialCov_eq_zero hxZ huZ' hu').2 h0
   simp [hzero]
+
+
+/-! ### The descendant example in graphical form -/
+
+namespace DescendantExample
+
+open Relation
+
+/-- In the chain `X → Y → Z` of `DescendantExample`, deleting the edge `X → Y` isolates `X`, so
+`X` and `Y` are d-separated by `{Z}` in `G_α`. -/
+theorem dSep_deleteEdgeGraph :
+    (deleteEdgeGraph model.G 0 1).DSep {0} {1} ↑({2} : Finset (Fin 3)) := by
+  rintro ⟨x, hx, y, hy, -, -, b, h⟩
+  simp only [Set.mem_singleton_iff] at hx hy
+  subst hx hy
+  rcases ReflTransGen.cases_head h with h | ⟨⟨w, c⟩, hstep, -⟩
+  · simp at h
+  · have hA := hstep.1
+    cases c <;> simp [deleteEdgeGraph, model, G] at hA
+
+/-- The condition of `single_door` that `Z` contains no descendant of `y` cannot be dropped. In
+`DescendantExample.model` (diagonal `Ω`), with `x = X`, `y = Y` and `Z = {Z}`, every other
+hypothesis of `single_door` holds: `X → Y` is an edge, `X ∉ Z`, `Z` d-separates `X` from `Y` in
+`G_α`, and both covariance blocks are invertible. But `Z` is a descendant of `Y`, and the
+coefficient of `X` in the regression of `Y` on `X` and `Z` is `1 / 2`, not the path coefficient
+`1`. -/
+theorem counterexample_single_door :
+    model.Ω.IsDiag ∧ model.G.Adj 0 1 ∧ (0 : Fin 3) ∉ ({2} : Finset (Fin 3)) ∧
+      (deleteEdgeGraph model.G 0 1).DSep {0} {1} ↑({2} : Finset (Fin 3)) ∧
+      IsUnit (subCov model.cov {2}) ∧ IsUnit (subCov model.cov (insert 0 {2})) ∧
+      ReflTransGen model.G.Adj 1 2 ∧ regCoeff model.cov (insert 0 {2}) 1 0 = 1 / 2 ∧
+      model.B 1 0 = 1 ∧ regCoeff model.cov (insert 0 {2}) 1 0 ≠ model.B 1 0 := by
+  obtain ⟨-, hu₁, hu₂, hdesc, hr, hB⟩ := counterexample
+  refine ⟨Matrix.isDiag_one, Or.inl ⟨rfl, rfl⟩, by decide, dSep_deleteEdgeGraph, hu₁, hu₂, hdesc,
+    hr, hB, ?_⟩
+  rw [hr, hB]; norm_num
+
+end DescendantExample
 
 end LinearSEM
 
