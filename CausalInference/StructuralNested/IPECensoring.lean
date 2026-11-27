@@ -51,7 +51,16 @@ common shape of the two-arm Weibull fit with arm covariate is `shapeScore` (deri
 docstring); it is strictly decreasing in the shape (`shapeScore_strictAntiOn`), by the
 inequality `x^k (x^δ - exp (δ L)) (log x - L) ≥ 0` integrated at `L = E[X^k log X] / E[X^k]`,
 so the fitted shape is unique when it exists (`shapeScore_root_unique`), and the truth is the
-unique fixed point with the fitted shape (`isFixedPt_weibullMap_fittedShape`).
+unique fixed point with the fitted shape (`isFixedPt_weibullMap_fittedShape`). The fitted shape
+exists when the time is not almost surely constant in at least one arm and `log X` is
+integrable in each arm (`exists_shapeScore_root`): the score tends to `+∞` as `k → 0+`
+(`tendsto_shapeScore_zero`), is continuous on `k > 0` (`continuousOn_shapeScoreArm`, by
+dominated convergence), and is below `P/k - Q` for `k ≥ 1`, where `Q = pooledGap ψ > 0` by the
+strict inequality `E[log X] < E[X log X] / E[X]` for a nonconstant `X`
+(`integral_log_le_tiltedLogMean_one`); the intermediate value theorem gives a root, and
+`fittedShape` is that root (`fittedShape_eq_unique_root`). If the time is almost surely
+constant in both arms the score is `P/k > 0`, there is no root, and `fittedShape` is the
+fallback `1` (`shapeScore_of_ae_const`).
 
 ## Main results
 
@@ -60,7 +69,8 @@ unique fixed point with the fitted shape (`isFixedPt_weibullMap_fittedShape`).
 * `SwitchingTrial.unique_fixedPt_ipeMap_iff`, `SwitchingTrial.unique_fixedPt_logMap_iff`,
   `SwitchingTrial.unique_fixedPt_weibullMap_iff`.
 * `SwitchingTrial.shapeScore_strictAntiOn`, `SwitchingTrial.isFixedPt_weibullMap_rule`,
-  `SwitchingTrial.isFixedPt_weibullMap_fittedShape`.
+  `SwitchingTrial.isFixedPt_weibullMap_fittedShape`, `SwitchingTrial.exists_shapeScore_root`,
+  `SwitchingTrial.fittedShape_eq_unique_root`, `SwitchingTrial.shapeScore_of_ae_const`.
 
 ## Sources
 
@@ -647,6 +657,389 @@ theorem isFixedPt_weibullMap_fittedShape [IsFiniteMeasure μ] (hR : Measurable M
         ∀ q, IsFixedPt (fun ψ ↦ M.weibullMap μ (M.fittedShape μ ψ) ψ) q → q = ψ₀) :=
   isFixedPt_weibullMap_rule hR hTm hTem h hrand hfull hwf hTpos (M.fittedShape μ)
     fittedShape_pos (fun ψ ↦ hTk _ (fittedShape_pos ψ)) h1 h0
+
+end SwitchingTrial
+
+/-! ### Existence of the fitted Weibull shape -/
+
+section ShapeExistence
+
+variable {Ω : Type*} [MeasurableSpace Ω] {ν : Measure Ω} {X : Ω → ℝ}
+
+/-- **The tilted mean of `log X` at shape `k`**: `E[X^k log X] / E[X^k]`, the term subtracted in
+the shape score. -/
+noncomputable def tiltedLogMean (ν : Measure Ω) (X : Ω → ℝ) (k : ℝ) : ℝ :=
+  (∫ ω, X ω ^ k * Real.log (X ω) ∂ν) / ∫ ω, X ω ^ k ∂ν
+
+/-- **The gap of the tilted mean at shape `1`**: `E[X log X] / E[X] - E[log X]`. It is
+nonnegative, and positive when `X` is not almost surely constant
+(`integral_log_le_tiltedLogMean_one`). -/
+noncomputable def shapeGap (ν : Measure Ω) (X : Ω → ℝ) : ℝ :=
+  tiltedLogMean ν X 1 - ∫ ω, Real.log (X ω) ∂ν
+
+theorem shapeScoreArm_eq (ν : Measure Ω) (X : Ω → ℝ) (k : ℝ) :
+    shapeScoreArm ν X k = 1 / k + ∫ ω, Real.log (X ω) ∂ν - tiltedLogMean ν X k := rfl
+
+theorem integral_rpow_pos [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω) {k : ℝ}
+    (hi : Integrable (fun ω ↦ X ω ^ k) ν) : 0 < ∫ ω, X ω ^ k ∂ν := by
+  rw [integral_pos_iff_support_of_nonneg (fun ω ↦ (Real.rpow_pos_of_pos (hX ω) k).le) hi]
+  have : Function.support (fun ω ↦ X ω ^ k) = univ :=
+    eq_univ_of_forall fun ω ↦ (Real.rpow_pos_of_pos (hX ω) k).ne'
+  rw [this, measure_univ]
+  exact one_pos
+
+/-- **The tilted mean of `log X` is nondecreasing in the shape.** -/
+theorem tiltedLogMean_le [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω) {k k' : ℝ} (hle : k ≤ k')
+    (hk1 : Integrable (fun ω ↦ X ω ^ k) ν)
+    (hk2 : Integrable (fun ω ↦ X ω ^ k * Real.log (X ω)) ν)
+    (hk1' : Integrable (fun ω ↦ X ω ^ k') ν)
+    (hk2' : Integrable (fun ω ↦ X ω ^ k' * Real.log (X ω)) ν) :
+    tiltedLogMean ν X k ≤ tiltedLogMean ν X k' := by
+  rcases hle.lt_or_eq with hlt | rfl
+  swap
+  · exact le_rfl
+  have hDp := integral_rpow_pos hX hk1
+  have hD'p := integral_rpow_pos hX hk1'
+  unfold tiltedLogMean
+  set N := ∫ ω, X ω ^ k * Real.log (X ω) ∂ν
+  set D := ∫ ω, X ω ^ k ∂ν
+  set N' := ∫ ω, X ω ^ k' * Real.log (X ω) ∂ν
+  set D' := ∫ ω, X ω ^ k' ∂ν
+  set L := N / D
+  set c := Real.exp ((k' - k) * L)
+  have hpt : ∀ ω, c * (X ω ^ k * Real.log (X ω)) - c * L * X ω ^ k ≤
+      X ω ^ k' * Real.log (X ω) - L * X ω ^ k' := fun ω ↦ by
+    have := rpow_tilt_ineq (hX ω) k (sub_pos.2 hlt) L
+    rwa [add_sub_cancel] at this
+  have hmono := integral_mono ((hk2.const_mul c).sub (hk1.const_mul (c * L)))
+    (hk2'.sub (hk1'.const_mul L)) hpt
+  simp only [Pi.sub_apply] at hmono
+  rw [integral_sub (hk2.const_mul c) (hk1.const_mul (c * L)),
+    integral_sub hk2' (hk1'.const_mul L), integral_const_mul,
+    integral_const_mul, integral_const_mul] at hmono
+  have hzero : c * N - c * L * D = 0 := by
+    rw [mul_assoc c L D, show L * D = N from div_mul_cancel₀ N hDp.ne', sub_self]
+  rw [le_div_iff₀ hD'p]
+  linarith
+
+/-- **The gap is nonnegative, and positive unless `X` is almost surely constant.** For a positive
+`X` with `X`, `X log X` and `log X` integrable under a probability measure,
+`E[log X] ≤ E[X log X] / E[X]`, strictly when `X` is not almost surely constant. The proof
+integrates `(X - exp L) (log X - L) ≥ 0` at `L = E[log X]`, which is zero only where
+`X = exp L`. -/
+theorem integral_log_le_tiltedLogMean_one [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω)
+    (hI1 : Integrable (fun ω ↦ X ω ^ (1 : ℝ)) ν)
+    (hI2 : Integrable (fun ω ↦ X ω ^ (1 : ℝ) * Real.log (X ω)) ν)
+    (hlog : Integrable (fun ω ↦ Real.log (X ω)) ν) :
+    0 ≤ shapeGap ν X ∧ ((¬ ∃ c, ∀ᵐ ω ∂ν, X ω = c) → 0 < shapeGap ν X) := by
+  have hDp := integral_rpow_pos hX hI1
+  simp only [Real.rpow_one] at hI1 hI2 hDp
+  obtain ⟨L, hL⟩ : ∃ L, L = ∫ ω, Real.log (X ω) ∂ν := ⟨_, rfl⟩
+  set f : Ω → ℝ := fun ω ↦ (X ω - Real.exp L) * (Real.log (X ω) - L) with hf
+  have hf0 : ∀ ω, 0 ≤ f ω := fun ω ↦ by
+    simp only [hf]
+    rcases le_total L (Real.log (X ω)) with h | h
+    · refine mul_nonneg (sub_nonneg.2 ?_) (sub_nonneg.2 h)
+      rw [← Real.exp_log (hX ω)]
+      exact Real.exp_le_exp.2 h
+    · refine mul_nonneg_of_nonpos_of_nonpos (sub_nonpos.2 ?_) (sub_nonpos.2 h)
+      rw [← Real.exp_log (hX ω)]
+      exact Real.exp_le_exp.2 h
+  have hfe : f = fun ω ↦ (X ω * Real.log (X ω) - L * X ω) -
+      (Real.exp L * Real.log (X ω) - Real.exp L * L) := by
+    funext ω
+    simp only [hf]
+    ring
+  have hA : Integrable (fun ω ↦ X ω * Real.log (X ω) - L * X ω) ν := hI2.sub (hI1.const_mul L)
+  have hB : Integrable (fun ω ↦ Real.exp L * Real.log (X ω) - Real.exp L * L) ν :=
+    (hlog.const_mul (Real.exp L)).sub (integrable_const (Real.exp L * L))
+  have hfi : Integrable f ν := by
+    rw [hfe]
+    exact hA.sub hB
+  have hint : ∫ ω, f ω ∂ν = (∫ ω, X ω * Real.log (X ω) ∂ν) - L * ∫ ω, X ω ∂ν := by
+    simp only [hfe]
+    rw [integral_sub hA hB, integral_sub hI2 (hI1.const_mul L),
+      integral_sub (hlog.const_mul _) (integrable_const _), integral_const_mul,
+      integral_const_mul, integral_const, probReal_univ, one_smul, ← hL]
+    ring
+  have key : ∀ t, 0 ≤ t → t = ∫ ω, f ω ∂ν → 0 ≤ shapeGap ν X ∧ (0 < t → 0 < shapeGap ν X) :=
+    fun t ht htf ↦ by
+      have e : shapeGap ν X = (∫ ω, X ω * Real.log (X ω) ∂ν) / (∫ ω, X ω ∂ν) - L := by
+        simp only [shapeGap, tiltedLogMean, Real.rpow_one, hL]
+      rw [e, sub_nonneg, sub_pos, le_div_iff₀ hDp, lt_div_iff₀ hDp]
+      rw [htf, hint] at ht
+      refine ⟨by linarith, fun htp ↦ ?_⟩
+      rw [htf, hint] at htp
+      linarith
+  refine ⟨(key _ (integral_nonneg hf0) rfl).1, fun hnc ↦ (key _ (integral_nonneg hf0) rfl).2 ?_⟩
+  rw [integral_pos_iff_support_of_nonneg (fun ω ↦ hf0 ω) hfi]
+  refine pos_iff_ne_zero.2 fun h0 ↦ hnc ⟨Real.exp L, ?_⟩
+  filter_upwards [measure_eq_zero_iff_ae_notMem.1 h0] with ω hω
+  have h' : f ω = 0 := by_contra fun hne ↦ hω hne
+  simp only [hf] at h'
+  rcases mul_eq_zero.1 h' with h | h
+  · linarith
+  · rw [← Real.exp_log (hX ω), show Real.log (X ω) = L by linarith]
+
+/-- For `0 < k ≤ 1` the shape score of an arm is at least `1/k - shapeGap`. -/
+theorem shapeScoreArm_ge [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω)
+    (hI : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ X ω ^ k) ν ∧
+      Integrable (fun ω ↦ X ω ^ k * Real.log (X ω)) ν) {k : ℝ} (hk : 0 < k) (hk1 : k ≤ 1) :
+    1 / k - shapeGap ν X ≤ shapeScoreArm ν X k := by
+  have := tiltedLogMean_le hX hk1 (hI k hk).1 (hI k hk).2 (hI 1 one_pos).1 (hI 1 one_pos).2
+  rw [shapeScoreArm_eq, shapeGap]
+  linarith
+
+/-- For `k ≥ 1` the shape score of an arm is at most `1/k - shapeGap`. -/
+theorem shapeScoreArm_le [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω)
+    (hI : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ X ω ^ k) ν ∧
+      Integrable (fun ω ↦ X ω ^ k * Real.log (X ω)) ν) {k : ℝ} (hk1 : 1 ≤ k) :
+    shapeScoreArm ν X k ≤ 1 / k - shapeGap ν X := by
+  have hk : 0 < k := one_pos.trans_le hk1
+  have := tiltedLogMean_le hX hk1 (hI 1 one_pos).1 (hI 1 one_pos).2 (hI k hk).1 (hI k hk).2
+  rw [shapeScoreArm_eq, shapeGap]
+  linarith
+
+/-- **The shape score of an arm is continuous** on `k > 0`, by dominated convergence with the
+bounds `x^k ≤ x^a + x^b` and `|x^k log x| ≤ |x^a log x| + |x^b log x|` for `a ≤ k ≤ b`. -/
+theorem continuousOn_shapeScoreArm [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω)
+    (hI : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ X ω ^ k) ν ∧
+      Integrable (fun ω ↦ X ω ^ k * Real.log (X ω)) ν) :
+    ContinuousOn (shapeScoreArm ν X) (Ioi 0) := by
+  have hcx : ∀ ω, Continuous fun k : ℝ ↦ X ω ^ k := fun ω ↦
+    continuous_iff_continuousAt.2 fun _ ↦ Real.continuousAt_const_rpow (hX ω).ne'
+  have key : ∀ a b : ℝ, 0 < a → 0 < b → ContinuousOn (shapeScoreArm ν X) (Icc a b) := by
+    intro a b ha hb
+    have hle : ∀ x : ℝ, 0 < x → ∀ k ∈ Icc a b, x ^ k ≤ x ^ a + x ^ b := fun x hx k hk ↦ by
+      have p1 := Real.rpow_pos_of_pos hx a
+      have p2 := Real.rpow_pos_of_pos hx b
+      rcases le_total 1 x with h | h
+      · have := Real.rpow_le_rpow_of_exponent_le h hk.2
+        linarith
+      · have := Real.rpow_le_rpow_of_exponent_ge hx h hk.1
+        linarith
+    have hD : ContinuousOn (fun k ↦ ∫ ω, X ω ^ k ∂ν) (Icc a b) :=
+      continuousOn_of_dominated (bound := fun ω ↦ X ω ^ a + X ω ^ b)
+        (fun k hk ↦ (hI k (ha.trans_le hk.1)).1.aestronglyMeasurable)
+        (fun k hk ↦ ae_of_all _ fun ω ↦ by
+          rw [Real.norm_eq_abs, abs_of_pos (Real.rpow_pos_of_pos (hX ω) k)]
+          exact hle _ (hX ω) k hk)
+        ((hI a ha).1.add (hI b hb).1) (ae_of_all _ fun ω ↦ (hcx ω).continuousOn)
+    have hN : ContinuousOn (fun k ↦ ∫ ω, X ω ^ k * Real.log (X ω) ∂ν) (Icc a b) :=
+      continuousOn_of_dominated
+        (bound := fun ω ↦ |X ω ^ a * Real.log (X ω)| + |X ω ^ b * Real.log (X ω)|)
+        (fun k hk ↦ (hI k (ha.trans_le hk.1)).2.aestronglyMeasurable)
+        (fun k hk ↦ ae_of_all _ fun ω ↦ by
+          rw [Real.norm_eq_abs, abs_mul, abs_mul, abs_mul,
+            abs_of_pos (Real.rpow_pos_of_pos (hX ω) k), abs_of_pos (Real.rpow_pos_of_pos (hX ω) a),
+            abs_of_pos (Real.rpow_pos_of_pos (hX ω) b), ← add_mul]
+          exact mul_le_mul_of_nonneg_right (hle _ (hX ω) k hk) (abs_nonneg _))
+        ((hI a ha).2.abs.add (hI b hb).2.abs)
+        (ae_of_all _ fun ω ↦ ((hcx ω).mul continuous_const).continuousOn)
+    have hinv : ContinuousOn (fun k : ℝ ↦ 1 / k) (Icc a b) :=
+      continuousOn_const.div continuousOn_id fun k hk ↦ (ha.trans_le hk.1).ne'
+    exact (hinv.add continuousOn_const).sub
+      (hN.div hD fun k hk ↦ (integral_rpow_pos hX (hI k (ha.trans_le hk.1)).1).ne')
+  intro k hk
+  have hk0 : (0 : ℝ) < k := hk
+  exact ((key (k / 2) (2 * k) (by linarith) (by linarith)).continuousAt
+    (Icc_mem_nhds (by linarith) (by linarith))).continuousWithinAt
+
+/-- **An almost surely constant arm.** If `X = c` almost surely under a probability measure and
+`X > 0`, the shape score of the arm is `1/k`. -/
+theorem shapeScoreArm_of_ae_const [IsProbabilityMeasure ν] (hX : ∀ ω, 0 < X ω) {c : ℝ}
+    (hc : ∀ᵐ ω ∂ν, X ω = c) (k : ℝ) : shapeScoreArm ν X k = 1 / k := by
+  obtain ⟨ω₀, hω₀⟩ := hc.exists
+  have hcpos : 0 < c := hω₀ ▸ hX ω₀
+  have e1 : ∫ ω, Real.log (X ω) ∂ν = Real.log c := by
+    rw [integral_congr_ae (g := fun _ ↦ Real.log c) (hc.mono fun ω h ↦ by simp only [h])]
+    simp
+  have e2 : ∫ ω, X ω ^ k * Real.log (X ω) ∂ν = c ^ k * Real.log c := by
+    rw [integral_congr_ae (g := fun _ ↦ c ^ k * Real.log c) (hc.mono fun ω h ↦ by simp only [h])]
+    simp
+  have e3 : ∫ ω, X ω ^ k ∂ν = c ^ k := by
+    rw [integral_congr_ae (g := fun _ ↦ c ^ k) (hc.mono fun ω h ↦ by simp only [h])]
+    simp
+  rw [shapeScoreArm, e1, e2, e3, mul_div_cancel_left₀ _ (Real.rpow_pos_of_pos hcpos k).ne']
+  ring
+
+end ShapeExistence
+
+namespace SwitchingTrial
+
+variable {Ω : Type*} [MeasurableSpace Ω] {M : SwitchingTrial Ω} {μ : Measure Ω}
+
+variable (M μ) in
+/-- **The pooled gap**: `P(R = 1) shapeGap_1 + P(R = 0) shapeGap_0`, with `X = T` in arm `1` and
+`X = U(ψ)` in arm `0`. -/
+noncomputable def pooledGap (ψ : ℝ) : ℝ :=
+  μ.real (M.arm true) * shapeGap (μ[|M.arm true]) M.T +
+    μ.real (M.arm false) * shapeGap (μ[|M.arm false]) (M.counterfactual ψ)
+
+/-- **Bounds on the pooled shape score.** With `P = P(R = 1) + P(R = 0)` and `Q = pooledGap ψ`,
+the pooled score is at least `P/k - Q` for `0 < k ≤ 1` and at most `P/k - Q` for `k ≥ 1`. -/
+theorem shapeScore_bounds [IsFiniteMeasure μ] (hwf : M.WellFormed) (hTpos : ∀ ω, 0 < M.T ω)
+    (h1 : μ (M.arm true) ≠ 0) (h0 : μ (M.arm false) ≠ 0) (ψ : ℝ)
+    (hI1 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.T ω ^ k) (μ[|M.arm true]) ∧
+      Integrable (fun ω ↦ M.T ω ^ k * Real.log (M.T ω)) (μ[|M.arm true]))
+    (hI0 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.counterfactual ψ ω ^ k) (μ[|M.arm false]) ∧
+      Integrable (fun ω ↦ M.counterfactual ψ ω ^ k * Real.log (M.counterfactual ψ ω))
+        (μ[|M.arm false])) :
+    (∀ k, 0 < k → k ≤ 1 →
+      (μ.real (M.arm true) + μ.real (M.arm false)) / k - M.pooledGap μ ψ ≤ M.shapeScore μ ψ k) ∧
+    (∀ k, 1 ≤ k →
+      M.shapeScore μ ψ k ≤ (μ.real (M.arm true) + μ.real (M.arm false)) / k - M.pooledGap μ ψ) := by
+  have := cond_isProbabilityMeasure (μ := μ) h1
+  have := cond_isProbabilityMeasure (μ := μ) h0
+  have hX0 := counterfactual_pos hwf hTpos ψ
+  have p1 : 0 ≤ μ.real (M.arm true) := measureReal_nonneg
+  have p0 : 0 ≤ μ.real (M.arm false) := measureReal_nonneg
+  refine ⟨fun k hk hk1 ↦ ?_, fun k hk1 ↦ ?_⟩
+  · calc (μ.real (M.arm true) + μ.real (M.arm false)) / k - M.pooledGap μ ψ
+        = μ.real (M.arm true) * (1 / k - shapeGap (μ[|M.arm true]) M.T) +
+          μ.real (M.arm false) * (1 / k - shapeGap (μ[|M.arm false]) (M.counterfactual ψ)) := by
+          rw [pooledGap]; ring
+      _ ≤ M.shapeScore μ ψ k := add_le_add
+          (mul_le_mul_of_nonneg_left (shapeScoreArm_ge hTpos hI1 hk hk1) p1)
+          (mul_le_mul_of_nonneg_left (shapeScoreArm_ge hX0 hI0 hk hk1) p0)
+  · calc M.shapeScore μ ψ k
+        ≤ μ.real (M.arm true) * (1 / k - shapeGap (μ[|M.arm true]) M.T) +
+          μ.real (M.arm false) * (1 / k - shapeGap (μ[|M.arm false]) (M.counterfactual ψ)) :=
+          add_le_add (mul_le_mul_of_nonneg_left (shapeScoreArm_le hTpos hI1 hk1) p1)
+            (mul_le_mul_of_nonneg_left (shapeScoreArm_le hX0 hI0 hk1) p0)
+      _ = (μ.real (M.arm true) + μ.real (M.arm false)) / k - M.pooledGap μ ψ := by
+          rw [pooledGap]; ring
+
+/-- **The pooled shape score tends to `+∞` as `k → 0+`**, under the hypotheses of
+`shapeScore_strictAntiOn`. -/
+theorem tendsto_shapeScore_zero [IsFiniteMeasure μ] (hwf : M.WellFormed)
+    (hTpos : ∀ ω, 0 < M.T ω) (h1 : μ (M.arm true) ≠ 0) (h0 : μ (M.arm false) ≠ 0) (ψ : ℝ)
+    (hI1 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.T ω ^ k) (μ[|M.arm true]) ∧
+      Integrable (fun ω ↦ M.T ω ^ k * Real.log (M.T ω)) (μ[|M.arm true]))
+    (hI0 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.counterfactual ψ ω ^ k) (μ[|M.arm false]) ∧
+      Integrable (fun ω ↦ M.counterfactual ψ ω ^ k * Real.log (M.counterfactual ψ ω))
+        (μ[|M.arm false])) :
+    Tendsto (M.shapeScore μ ψ) (𝓝[>] 0) atTop := by
+  have hP : 0 < μ.real (M.arm true) + μ.real (M.arm false) :=
+    add_pos_of_pos_of_nonneg (ENNReal.toReal_pos h1 (measure_ne_top _ _)) measureReal_nonneg
+  have hlim : Tendsto (fun k : ℝ ↦ (μ.real (M.arm true) + μ.real (M.arm false)) * k⁻¹ +
+      -M.pooledGap μ ψ) (𝓝[>] 0) atTop :=
+    (tendsto_inv_nhdsGT_zero.const_mul_atTop hP).atTop_add tendsto_const_nhds
+  refine tendsto_atTop_mono' _ ?_ hlim
+  filter_upwards [Ioo_mem_nhdsGT (by norm_num : (0 : ℝ) < 1)] with k hk
+  have := (shapeScore_bounds hwf hTpos h1 h0 ψ hI1 hI0).1 k hk.1 hk.2.le
+  rw [div_eq_mul_inv, ← sub_eq_add_neg] at *
+  exact this
+
+/-- **Existence of the fitted shape.** Under the hypotheses of `shapeScore_strictAntiOn`, with
+`log T` integrable in arm `1` and `log U(ψ)` integrable in arm `0`, if the time is not almost
+surely constant in at least one arm, the pooled shape score has a positive root. The score is
+continuous on `k > 0`, positive at `k₁ = min 1 (P / (2 Q))` and negative at
+`k₂ = max 1 (2 P / Q)` (`shapeScore_bounds`, with `Q = pooledGap ψ > 0`), and the intermediate
+value theorem applies. -/
+theorem exists_shapeScore_root [IsFiniteMeasure μ] (hwf : M.WellFormed)
+    (hTpos : ∀ ω, 0 < M.T ω) (h1 : μ (M.arm true) ≠ 0) (h0 : μ (M.arm false) ≠ 0) (ψ : ℝ)
+    (hI1 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.T ω ^ k) (μ[|M.arm true]) ∧
+      Integrable (fun ω ↦ M.T ω ^ k * Real.log (M.T ω)) (μ[|M.arm true]))
+    (hI0 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.counterfactual ψ ω ^ k) (μ[|M.arm false]) ∧
+      Integrable (fun ω ↦ M.counterfactual ψ ω ^ k * Real.log (M.counterfactual ψ ω))
+        (μ[|M.arm false]))
+    (hlog1 : Integrable (fun ω ↦ Real.log (M.T ω)) (μ[|M.arm true]))
+    (hlog0 : Integrable (fun ω ↦ Real.log (M.counterfactual ψ ω)) (μ[|M.arm false]))
+    (hnc : (¬ ∃ c, ∀ᵐ ω ∂μ[|M.arm true], M.T ω = c) ∨
+      ¬ ∃ c, ∀ᵐ ω ∂μ[|M.arm false], M.counterfactual ψ ω = c) :
+    ∃ k, 0 < k ∧ M.shapeScore μ ψ k = 0 := by
+  have := cond_isProbabilityMeasure (μ := μ) h1
+  have := cond_isProbabilityMeasure (μ := μ) h0
+  have hX0 := counterfactual_pos hwf hTpos ψ
+  obtain ⟨g1, g1p⟩ := integral_log_le_tiltedLogMean_one hTpos (hI1 1 one_pos).1
+    (hI1 1 one_pos).2 hlog1
+  obtain ⟨g0, g0p⟩ := integral_log_le_tiltedLogMean_one hX0 (hI0 1 one_pos).1
+    (hI0 1 one_pos).2 hlog0
+  have p1 : 0 < μ.real (M.arm true) := ENNReal.toReal_pos h1 (measure_ne_top _ _)
+  have p0 : 0 < μ.real (M.arm false) := ENNReal.toReal_pos h0 (measure_ne_top _ _)
+  obtain ⟨hlo, hhi⟩ := shapeScore_bounds hwf hTpos h1 h0 ψ hI1 hI0
+  set P := μ.real (M.arm true) + μ.real (M.arm false) with hPdef
+  set Q := M.pooledGap μ ψ with hQdef
+  have hP : 0 < P := by linarith
+  have hQ : 0 < Q := by
+    rw [hQdef, pooledGap]
+    rcases hnc with h | h
+    · nlinarith [g1p h, mul_pos p1 (g1p h), mul_nonneg p0.le g0]
+    · nlinarith [g0p h, mul_pos p0 (g0p h), mul_nonneg p1.le g1]
+  set k₁ := min 1 (P / (2 * Q))
+  set k₂ := max 1 (2 * P / Q)
+  have hk₁ : 0 < k₁ := lt_min one_pos (by positivity)
+  have hk₂ : 0 < k₂ := one_pos.trans_le (le_max_left _ _)
+  have hpos : 0 < M.shapeScore μ ψ k₁ := by
+    have hb := hlo k₁ hk₁ (min_le_left _ _)
+    have h2 : k₁ * (2 * Q) ≤ P := (le_div_iff₀ (by positivity)).1 (min_le_right _ _)
+    have h3 : Q < P / k₁ := by
+      rw [lt_div_iff₀ hk₁]
+      nlinarith [mul_pos hQ hk₁]
+    linarith
+  have hneg : M.shapeScore μ ψ k₂ < 0 := by
+    have hb := hhi k₂ (le_max_left _ _)
+    have h2 : 2 * P ≤ k₂ * Q := (div_le_iff₀ hQ).1 (le_max_right _ _)
+    have h3 : P / k₂ < Q := by
+      rw [div_lt_iff₀ hk₂, mul_comm]
+      linarith
+    linarith
+  have hcont : ContinuousOn (M.shapeScore μ ψ) (Ioi 0) :=
+    (continuousOn_const.mul (continuousOn_shapeScoreArm hTpos hI1)).add
+      (continuousOn_const.mul (continuousOn_shapeScoreArm hX0 hI0))
+  have hk12 : k₁ ≤ k₂ := (min_le_left _ _).trans (le_max_left _ _)
+  obtain ⟨c, hc, hc0⟩ := intermediate_value_Icc' hk12
+    (hcont.mono fun k hk ↦ hk₁.trans_le hk.1) ⟨hneg.le, hpos.le⟩
+  exact ⟨c, hk₁.trans_le hc.1, hc0⟩
+
+/-- **The fitted shape exists, is unique, and is the value of `fittedShape`.** Under the
+hypotheses of `exists_shapeScore_root`, there is exactly one positive root of the pooled shape
+score, and `fittedShape ψ` is that root: the fallback value `1` is not used. -/
+theorem fittedShape_eq_unique_root [IsFiniteMeasure μ] (hwf : M.WellFormed)
+    (hTpos : ∀ ω, 0 < M.T ω) (h1 : μ (M.arm true) ≠ 0) (h0 : μ (M.arm false) ≠ 0) (ψ : ℝ)
+    (hI1 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.T ω ^ k) (μ[|M.arm true]) ∧
+      Integrable (fun ω ↦ M.T ω ^ k * Real.log (M.T ω)) (μ[|M.arm true]))
+    (hI0 : ∀ k : ℝ, 0 < k → Integrable (fun ω ↦ M.counterfactual ψ ω ^ k) (μ[|M.arm false]) ∧
+      Integrable (fun ω ↦ M.counterfactual ψ ω ^ k * Real.log (M.counterfactual ψ ω))
+        (μ[|M.arm false]))
+    (hlog1 : Integrable (fun ω ↦ Real.log (M.T ω)) (μ[|M.arm true]))
+    (hlog0 : Integrable (fun ω ↦ Real.log (M.counterfactual ψ ω)) (μ[|M.arm false]))
+    (hnc : (¬ ∃ c, ∀ᵐ ω ∂μ[|M.arm true], M.T ω = c) ∨
+      ¬ ∃ c, ∀ᵐ ω ∂μ[|M.arm false], M.counterfactual ψ ω = c) :
+    0 < M.fittedShape μ ψ ∧ M.shapeScore μ ψ (M.fittedShape μ ψ) = 0 ∧
+      ∀ k, 0 < k → M.shapeScore μ ψ k = 0 → k = M.fittedShape μ ψ := by
+  have hex := exists_shapeScore_root hwf hTpos h1 h0 ψ hI1 hI0 hlog1 hlog0 hnc
+  exact ⟨fittedShape_pos ψ, shapeScore_fittedShape hex, fun k hk h ↦
+    shapeScore_root_unique hwf hTpos h1 h0 ψ hI1 hI0 hk (fittedShape_pos ψ) h
+      (shapeScore_fittedShape hex)⟩
+
+/-- **The degenerate case: no fitted shape.** If the time is almost surely constant in both arms,
+the pooled shape score is `P/k > 0` for every `k > 0` (the likelihood increases without bound
+in the shape), so it has no positive root and `fittedShape ψ` is the fallback value `1`. The
+non-constancy condition of `exists_shapeScore_root` is therefore needed. -/
+theorem shapeScore_of_ae_const [IsFiniteMeasure μ] (hwf : M.WellFormed)
+    (hTpos : ∀ ω, 0 < M.T ω) (h1 : μ (M.arm true) ≠ 0) (h0 : μ (M.arm false) ≠ 0) (ψ : ℝ)
+    (hc1 : ∃ c, ∀ᵐ ω ∂μ[|M.arm true], M.T ω = c)
+    (hc0 : ∃ c, ∀ᵐ ω ∂μ[|M.arm false], M.counterfactual ψ ω = c) :
+    (∀ k, M.shapeScore μ ψ k = (μ.real (M.arm true) + μ.real (M.arm false)) / k) ∧
+      (¬ ∃ k, 0 < k ∧ M.shapeScore μ ψ k = 0) ∧ M.fittedShape μ ψ = 1 := by
+  have := cond_isProbabilityMeasure (μ := μ) h1
+  have := cond_isProbabilityMeasure (μ := μ) h0
+  obtain ⟨c1, hc1⟩ := hc1
+  obtain ⟨c0, hc0⟩ := hc0
+  have hP : 0 < μ.real (M.arm true) + μ.real (M.arm false) :=
+    add_pos_of_pos_of_nonneg (ENNReal.toReal_pos h1 (measure_ne_top _ _)) measureReal_nonneg
+  have e : ∀ k, M.shapeScore μ ψ k = (μ.real (M.arm true) + μ.real (M.arm false)) / k := by
+    intro k
+    rw [shapeScore, shapeScoreArm_of_ae_const hTpos hc1,
+      shapeScoreArm_of_ae_const (counterfactual_pos hwf hTpos ψ) hc0]
+    ring
+  have hnot : ¬ ∃ k, 0 < k ∧ M.shapeScore μ ψ k = 0 := fun ⟨k, hk, h⟩ ↦ by
+    rw [e] at h
+    exact (div_pos hP hk).ne' h
+  refine ⟨e, hnot, ?_⟩
+  simp only [fittedShape, hnot, dite_false]
 
 end SwitchingTrial
 
