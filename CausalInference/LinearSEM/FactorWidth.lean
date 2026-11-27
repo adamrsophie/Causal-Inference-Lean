@@ -19,8 +19,10 @@ A path diagram (`LinearSEM.PathDiagram`) represents the error covariance as `Ω 
 with `D ≥ 0` and every latent factor loading on at most two variables: `Ω` has *factor width at
 most two*. This file characterizes these matrices: a symmetric matrix has such a representation
 if and only if it is *scaled diagonally dominant*, that is, there are positive weights `d` with
-`∑ b ≠ a, d b |Ω a b| ≤ d a Ω a a` for every `a` (Boman, Chen, Parekh and Toledo 2005,
-Theorem 9).
+`∑ b ≠ a, d b |Ω a b| ≤ d a Ω a a` for every `a`. The equivalence of factor width two with
+symmetric H-matrices having a nonnegative diagonal is due to Boman, Chen, Parekh and Toledo
+(2005); the statement with an added nonnegative diagonal term and weak scaled dominance is the
+form proved here.
 
 From scaled dominance to factors: the factor `(a, b)` loads `√((d b / d a) |Ω a b| / 2)` on `a`
 and `sign (Ω a b) √((d a / d b) |Ω a b| / 2)` on `b`, generalizing the construction for diagonal
@@ -585,9 +587,9 @@ theorem isScaledDiagDominant_of_diagDominant {Ω : Matrix V V ℝ}
     (hdd : ∀ a, ∑ b ∈ univ.erase a, |Ω a b| ≤ Ω a a) : IsScaledDiagDominant Ω :=
   ⟨fun _ => 1, fun _ => one_pos, fun a => by simpa using hdd a⟩
 
-/-- **Factor width two is scaled diagonal dominance** (Boman, Chen, Parekh and Toledo 2005,
-Theorem 9): `Ω = Λ Λᵀ + diag(D)` with `D ≥ 0` and every factor loading on at most two variables
-if and only if `Ω` is symmetric and scaled diagonally dominant. -/
+/-- **Factor width two is scaled diagonal dominance** (after Boman, Chen, Parekh and Toledo
+2005): `Ω = Λ Λᵀ + diag(D)` with `D ≥ 0` and every factor loading on at most two variables if
+and only if `Ω` is symmetric and scaled diagonally dominant. -/
 theorem hasFactorWidthTwo_iff {Ω : Matrix V V ℝ} :
     HasFactorWidthTwo Ω ↔ (∀ a b, Ω a b = Ω b a) ∧ IsScaledDiagDominant Ω := by
   constructor
