@@ -107,3 +107,5 @@ public import CausalInference.Graphical.Criteria.Instrument
 public import CausalInference.Graphical.Criteria.MarkovBlanket
 public import CausalInference.Graphical.Criteria.Moralization
 public import CausalInference.Graphical.Criteria.SequentialBackDoor
+public import CausalInference.SCM.DoCalculus
+public import CausalInference.SCM.DoCalculusExamples
