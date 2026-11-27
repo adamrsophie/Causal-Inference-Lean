@@ -35,7 +35,10 @@ Theorem 5.3.2) are proved in graphical form for uncorrelated errors.
   `Z` holds (the d-separation in `G_α` included), and the conclusion fails.
 
 Correlated errors are not covered: for them d-separation in the directed graph does not imply a
-vanishing partial covariance (see `LinearSEM.single_door_of_partialCov`).
+vanishing partial covariance (see `LinearSEM.single_door_of_partialCov`). Path diagrams with
+bidirected arcs, read as latent common causes, are treated in
+`CausalInference.LinearSEM.CorrelatedErrors`, and the measure-zero converse of the single-door
+criterion for three failure patterns is in `CausalInference.LinearSEM.SingleDoorConverse`.
 
 ## Proof outline
 

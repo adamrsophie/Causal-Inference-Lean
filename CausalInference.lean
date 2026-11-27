@@ -180,3 +180,5 @@ public import CausalInference.BiasAnalysis.EcologicalInteraction
 public import CausalInference.Survival.WeightedScore
 public import CausalInference.Survival.IPCWBridge
 public import CausalInference.StructuralNested.IPECensoring
+public import CausalInference.LinearSEM.CorrelatedErrors
+public import CausalInference.LinearSEM.SingleDoorConverse

@@ -18,7 +18,8 @@ The single-door criterion (Pearl 2009, Theorem 5.3.1) says that the path coeffic
 `Y` and `Z` d-separates `X` from `Y` in the graph with `X → Y` deleted. For uncorrelated errors
 the graphical theorem is `LinearSEM.single_door` in `CausalInference.LinearSEM.DSeparation`.
 For correlated errors it needs a bridge from d-separation in a path diagram with bidirected arcs
-to vanishing partial covariance, which this library does not have; that case is not proved.
+to vanishing partial covariance; it is proved in `CausalInference.LinearSEM.CorrelatedErrors`
+for correlated errors given by latent common causes, not for an arbitrary error covariance.
 What is proved here, for any error covariance, is its algebraic core: Pearl's decomposition
 `r_YX·S = α + I_YX·S` (`LinearSEM.isRegCoeff_decomposition`, `LinearSEM.regCoeff_eq_add`), where
 `I_YX·S` is computed in the model with the coefficient `α` deleted (`LinearSEM.deleteCoeff`), and
