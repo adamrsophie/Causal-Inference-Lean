@@ -11,6 +11,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Mathlib.Tactic.FieldSimp
 public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # Effect measures for a binary outcome
@@ -28,6 +29,7 @@ relations.
 * `EffectMeasure.odds p = p / (1 - p)` and `EffectMeasure.oddsRatio p₁ p₀ = odds p₁ / odds p₀`.
 * `EffectMeasure.standardizedRisk π r = ∑ v, π v * r v`: the marginal (standardized) risk as the
   average of the stratum risks `r v` with stratum weights `π v`.
+* `EffectMeasure.IsWeights w`: nonnegative weights summing to one.
 
 ## Main results
 
@@ -36,7 +38,14 @@ relations.
 * `one_lt_riskRatio_iff`, `one_lt_oddsRatio_iff`, `riskRatio_lt_one_iff`,
   `oddsRatio_lt_one_iff`: the three measures agree on the direction of the effect.
 * `riskRatio_lt_oddsRatio`, `oddsRatio_lt_riskRatio`: the odds ratio is further from the null
-  value `1` than the risk ratio.
+  value `1` than the risk ratio, for a nonnull effect with positive risks.
+  `abs_riskRatio_sub_one_le` is the weak form `|RR - 1| ≤ |OR - 1|` on the whole admissible
+  domain `0 ≤ p₁ < 1`, `0 < p₀ < 1`; `abs_riskRatio_sub_one_eq_iff` gives the equality cases
+  `p₁ = 0` or `p₁ = p₀`.
+* `oddsRatio_eq_cross`: the cross-product form `p₁ (1 - p₀) / (p₀ (1 - p₁))`.
+* `oddsRatio_one_sub`, `oddsRatio_swap`: recoding the outcome or swapping the arms inverts the
+  odds ratio; `riskRatio_one_sub_not_determined`: the risk ratio of the complementary outcome
+  is not a function of the risk ratio.
 * `standardizedRisk_mem_Icc`: a standardized risk lies between the smallest and the largest
   stratum risk; in particular it is a risk.
 
@@ -163,6 +172,100 @@ theorem oddsRatio_lt_riskRatio {p₁ p₀ : ℝ} (h₁0 : 0 < p₁) (h : p₁ < 
   have hRR0 : 0 < riskRatio p₁ p₀ := div_pos h₁0 h₀0
   nlinarith
 
+/-- The distance of the odds ratio from the null is that of the risk ratio divided by
+`1 - p₁`: `OR - 1 = (RR - 1) / (1 - p₁)`, for `0 < p₀ < 1` and `p₁ < 1`. -/
+theorem oddsRatio_sub_one {p₁ p₀ : ℝ} (h₁1 : p₁ < 1) (h₀0 : 0 < p₀) (h₀1 : p₀ < 1) :
+    oddsRatio p₁ p₀ - 1 = (riskRatio p₁ p₀ - 1) / (1 - p₁) := by
+  have : (1 - p₁) ≠ 0 := by linarith
+  have : (1 - p₀) ≠ 0 := by linarith
+  unfold oddsRatio odds riskRatio
+  field_simp
+  ring
+
+/-- **The odds ratio is at least as far from the null as the risk ratio**, on the whole
+admissible domain `0 ≤ p₁ < 1`, `0 < p₀ < 1`: `|RR - 1| ≤ |OR - 1|`. -/
+theorem abs_riskRatio_sub_one_le {p₁ p₀ : ℝ} (h₁0 : 0 ≤ p₁) (h₁1 : p₁ < 1) (h₀0 : 0 < p₀)
+    (h₀1 : p₀ < 1) : |riskRatio p₁ p₀ - 1| ≤ |oddsRatio p₁ p₀ - 1| := by
+  rw [oddsRatio_sub_one h₁1 h₀0 h₀1, abs_div, abs_of_pos (by linarith : (0 : ℝ) < 1 - p₁)]
+  exact le_div_self (abs_nonneg _) (by linarith) (by linarith)
+
+/-- **Equality cases.** For `p₁ < 1` and `0 < p₀ < 1` (in particular on the admissible domain
+`0 ≤ p₁ < 1`), the odds ratio and the risk ratio are equally far from the null exactly when the
+effect is null (`p₁ = p₀`) or the risk under treatment is zero (`p₁ = 0`, where both ratios
+are `0`). -/
+theorem abs_riskRatio_sub_one_eq_iff {p₁ p₀ : ℝ} (h₁1 : p₁ < 1) (h₀0 : 0 < p₀) (h₀1 : p₀ < 1) :
+    |riskRatio p₁ p₀ - 1| = |oddsRatio p₁ p₀ - 1| ↔ p₁ = 0 ∨ p₁ = p₀ := by
+  have hd : (0 : ℝ) < 1 - p₁ := by linarith
+  rw [oddsRatio_sub_one h₁1 h₀0 h₀1, abs_div, abs_of_pos hd, eq_div_iff hd.ne']
+  have hRR : riskRatio p₁ p₀ - 1 = 0 ↔ p₁ = p₀ := by
+    rw [sub_eq_zero]; exact riskRatio_eq_one_iff h₀0
+  constructor
+  · intro h
+    have : |riskRatio p₁ p₀ - 1| * p₁ = 0 := by linarith
+    rcases mul_eq_zero.1 this with h' | h'
+    · exact Or.inr (hRR.1 (abs_eq_zero.1 h'))
+    · exact Or.inl h'
+  · rintro (h | h)
+    · rw [h, sub_zero, mul_one]
+    · rw [hRR.2 h, abs_zero, zero_mul]
+
+/-- **Cross-product form of the odds ratio**: `OR = p₁ (1 - p₀) / (p₀ (1 - p₁))`, for
+`0 < p₀ < 1` and `p₁ < 1`. -/
+theorem oddsRatio_eq_cross {p₁ p₀ : ℝ} (h₁1 : p₁ < 1) (h₀0 : 0 < p₀) (h₀1 : p₀ < 1) :
+    oddsRatio p₁ p₀ = p₁ * (1 - p₀) / (p₀ * (1 - p₁)) := by
+  have : (1 - p₁) ≠ 0 := by linarith
+  have : (1 - p₀) ≠ 0 := by linarith
+  have := h₀0.ne'
+  unfold oddsRatio odds
+  field_simp
+
+/-- The odds of the complementary event are the reciprocal odds: `odds (1 - p) = (odds p)⁻¹`,
+for `0 < p < 1`. -/
+theorem odds_one_sub {p : ℝ} (h0 : 0 < p) (h1 : p < 1) : odds (1 - p) = (odds p)⁻¹ := by
+  have : (1 - p) ≠ 0 := by linarith
+  have := h0.ne'
+  unfold odds
+  rw [sub_sub_cancel, inv_div]
+
+/-- **Invariance of the odds ratio under recoding of the outcome.** Exchanging the roles of
+`Y = 1` and `Y = 0` replaces the odds ratio by its reciprocal, for risks in `(0, 1)`. -/
+theorem oddsRatio_one_sub {p₁ p₀ : ℝ} (h₁0 : 0 < p₁) (h₁1 : p₁ < 1) (h₀0 : 0 < p₀)
+    (h₀1 : p₀ < 1) : oddsRatio (1 - p₁) (1 - p₀) = (oddsRatio p₁ p₀)⁻¹ := by
+  unfold oddsRatio
+  rw [odds_one_sub h₁0 h₁1, odds_one_sub h₀0 h₀1, inv_div, inv_div_inv]
+
+/-- **Swapping the arms inverts the odds ratio**, for risks in `(0, 1)`. -/
+theorem oddsRatio_swap {p₁ p₀ : ℝ} (h₁0 : 0 < p₁) (h₁1 : p₁ < 1) (h₀0 : 0 < p₀)
+    (h₀1 : p₀ < 1) : oddsRatio p₀ p₁ = (oddsRatio p₁ p₀)⁻¹ := by
+  have := (odds_pos h₁0 h₁1).ne'
+  have := (odds_pos h₀0 h₀1).ne'
+  unfold oddsRatio
+  rw [inv_div]
+
+/-- **Swapping the arms inverts the risk ratio**, for positive risks. -/
+theorem riskRatio_swap {p₁ p₀ : ℝ} (h₁0 : 0 < p₁) (h₀0 : 0 < p₀) :
+    riskRatio p₀ p₁ = (riskRatio p₁ p₀)⁻¹ := by
+  have := h₁0.ne'
+  have := h₀0.ne'
+  unfold riskRatio
+  rw [inv_div]
+
+/-- **The risk ratio is not invariant under recoding of the outcome.** Unlike the odds ratio
+(`oddsRatio_one_sub`), the risk ratio of the complementary event is not determined by the risk
+ratio: the risk pairs `(1/2, 1/4)` and `(2/5, 1/5)` both have risk ratio `2`, but the risk ratios
+of the complements are `2/3` and `3/4`. -/
+theorem riskRatio_one_sub_not_determined :
+    ¬ ∃ f : ℝ → ℝ, ∀ p₁ p₀ : ℝ, 0 < p₁ → p₁ < 1 → 0 < p₀ → p₀ < 1 →
+      riskRatio (1 - p₁) (1 - p₀) = f (riskRatio p₁ p₀) := by
+  rintro ⟨f, hf⟩
+  have h₁ := hf (1 / 2) (1 / 4) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have h₂ := hf (2 / 5) (1 / 5) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have e₁ : riskRatio (1 / 2) (1 / 4) = 2 := by norm_num [riskRatio]
+  have e₂ : riskRatio (2 / 5) (1 / 5) = 2 := by norm_num [riskRatio]
+  rw [e₁] at h₁
+  rw [e₂, ← h₁] at h₂
+  norm_num [riskRatio] at h₂
+
 /-! ### Standardized risks -/
 
 /-- The standardized (marginal) risk `∑ v, π v * r v`: the average of the stratum risks `r v`
@@ -189,6 +292,9 @@ theorem standardizedRisk_mem_unitInterval {V : Type*} [Fintype V] {π r : V → 
     (hπ : ∀ v, 0 ≤ π v) (hsum : ∑ v, π v = 1) (hr : ∀ v, r v ∈ Set.Icc (0 : ℝ) 1) :
     standardizedRisk π r ∈ Set.Icc (0 : ℝ) 1 :=
   standardizedRisk_mem_Icc hπ hsum hr
+
+/-- Nonnegative weights summing to one: a probability vector on a finite type. -/
+def IsWeights {V : Type*} [Fintype V] (w : V → ℝ) : Prop := (∀ v, 0 ≤ w v) ∧ ∑ v, w v = 1
 
 end EffectMeasure
 

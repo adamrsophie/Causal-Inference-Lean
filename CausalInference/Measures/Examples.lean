@@ -10,6 +10,7 @@ public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.Positivity
+public import CausalInference.Measures.EffectMeasures
 
 /-!
 # Elementary probability examples
@@ -21,7 +22,8 @@ are shown to be positive in the same statement.
 
 ## Main definitions
 
-* `Paradoxes.IsDist m`: `m` is a probability mass function (nonnegative, sums to one).
+* `Paradoxes.IsDist m`: `m` is a probability mass function (nonnegative, sums to one); an
+  abbreviation of `EffectMeasure.IsWeights`.
 * `Paradoxes.probOf m P`, `Paradoxes.condProb m P Q`, `Paradoxes.expect m f`,
   `Paradoxes.cov m X Y`: probability, conditional probability, expectation, covariance.
 
@@ -58,8 +60,9 @@ open Finset
 
 variable {Ω : Type*} [Fintype Ω]
 
-/-- `m` is a probability mass function on the finite type `Ω`. -/
-def IsDist (m : Ω → ℝ) : Prop := (∀ ω, 0 ≤ m ω) ∧ ∑ ω, m ω = 1
+/-- `m` is a probability mass function on the finite type `Ω`: nonnegative values summing to
+one. This is `EffectMeasure.IsWeights` under the name used in this file. -/
+abbrev IsDist (m : Ω → ℝ) : Prop := EffectMeasure.IsWeights m
 
 /-- The probability `∑_{ω ∈ P} m ω` of the event `P`. -/
 def probOf (m : Ω → ℝ) (P : Ω → Prop) [DecidablePred P] : ℝ := ∑ ω ∈ univ.filter P, m ω

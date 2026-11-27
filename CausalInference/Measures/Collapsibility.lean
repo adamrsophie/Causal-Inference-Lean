@@ -22,14 +22,20 @@ as in a marginally randomized experiment) `π₁ = π₀`.
 
 ## Main definitions
 
-* `IsWeights w`: nonnegative weights summing to one.
-* `IsCollapsible g π₁ π₀ p₁ p₀`: the population effect measure `g` is a weighted average of the
-  stratum-specific measures (Hernán and Robins, Fine Point 4.3).
-* `IsCollapsibleOver g π π₁ π₀ p₁ p₀`: Pearl's Definition 6.5.1, `E_z g[P(x, y | z)] = g[P(x, y)]`,
-  where the expectation is taken with the marginal distribution `π` of the stratifier.
+* `IsCollapsible g dom π₁ π₀ p₁ p₀`: the population effect measure `g` is a weighted average of
+  the stratum-specific measures (Hernán and Robins, Fine Point 4.3), with weights supported on
+  strata of positive probability in both arms whose risks lie in the domain `dom` of `g`
+  (`riskRatioDom`, `oddsRatioDom`).
+* `stratumMargin t π₁ π₀`: the marginal distribution `t π₁ + (1 - t) π₀` of the stratifier
+  implied by the treatment prevalence `t` and the arm distributions.
+* `IsCollapsibleOver g t π₁ π₀ p₁ p₀`: Pearl's Definition 6.5.1,
+  `E_z g[P(x, y | z)] = g[P(x, y)]`, where the expectation is taken with the marginal
+  distribution `stratumMargin t π₁ π₀`, `0 < t < 1`.
 * `AdditiveModification`, `MultiplicativeModification`, `QualitativeModification`: effect
-  modification by `V` on the risk difference scale, on the risk ratio scale, and with stratum
-  effects in opposite directions (Hernán and Robins, Section 4.1).
+  modification by `V` on the risk difference scale, on the risk ratio scale (between strata of
+  positive baseline risk), and with stratum effects in opposite directions (Hernán and Robins,
+  Section 4.1).
+* `rand44`: a randomized-assignment law of `(V, A, Y^0, Y^1)` realizing Table 4.4.
 
 ## Main results
 
@@ -46,8 +52,14 @@ as in a marginally randomized experiment) `π₁ = π₀`.
   4.4, `V` is independent of `A`, both stratum odds ratios equal `6`, and the marginal odds ratio
   is `49/9`, outside the range of the stratum values; the stratum risk ratios are `2` and `3`
   and the marginal risk ratio is `7/3`.
-* `oddsRatio_isCollapsible_of_sharpNull`: under the null in every stratum the odds ratio is
-  collapsible (all odds ratios equal `1`).
+* `riskRatio_not_collapsibleOver_table44`: in Table 4.4 the risk ratio is not collapsible in
+  Pearl's sense (`5/2 ≠ 7/3`): the two notions differ.
+* `oddsRatio_emptyStratum_table44`: appending an empty stratum with arbitrary risks does not
+  make the odds ratio of Table 4.4 collapsible.
+* `table44_randomized`, `table44_causal_ratios`: Table 4.4 is the observed law of a randomized
+  experiment, so its risk ratios and odds ratios are causal.
+* `oddsRatio_isCollapsible_of_stratumNull`: under equal stratum risks in every stratum (the
+  stratum-level null) the odds ratio is collapsible (all odds ratios equal `1`).
 * `qualitative_imp_additive_and_multiplicative`: qualitative modification shows on both scales.
 * `null_or_const_of_no_modification` and `modification_of_baseline_varies`: Hernán and Robins,
   Section 4.3: if the baseline risk varies across strata and the effect is nonnull in some
@@ -72,27 +84,61 @@ open Finset
 
 variable {V : Type*} [Fintype V]
 
-/-- Nonnegative weights summing to one: a probability vector on the strata. -/
-def IsWeights (w : V → ℝ) : Prop := (∀ v, 0 ≤ w v) ∧ ∑ v, w v = 1
+/-- The domain of the risk ratio: a positive baseline risk `p₀`. -/
+def riskRatioDom (_p₁ p₀ : ℝ) : Prop := 0 < p₀
+
+/-- The domain of the odds ratio: `p₁ < 1` and `0 < p₀ < 1`. -/
+def oddsRatioDom (p₁ p₀ : ℝ) : Prop := p₁ < 1 ∧ 0 < p₀ ∧ p₀ < 1
 
 /-- **Collapsibility** (Hernán and Robins, Fine Point 4.3). The effect measure `g`, applied to
-the marginal risks `∑ π₁ p₁` and `∑ π₀ p₀`, is a weighted average, with some nonnegative
-weights summing to one, of the stratum measures `g (p₁ v) (p₀ v)`. -/
-def IsCollapsible (g : ℝ → ℝ → ℝ) (π₁ π₀ p₁ p₀ : V → ℝ) : Prop :=
-  ∃ w, IsWeights w ∧
+the marginal risks `∑ π₁ p₁` and `∑ π₀ p₀`, is a weighted average of the stratum measures
+`g (p₁ v) (p₀ v)`, with nonnegative weights summing to one that are supported on strata where
+the stratum measure is meaningful: every stratum `v` of positive weight has positive probability
+in both arms (so that both stratum risks are conditional probabilities) and its two risks lie
+in the domain `dom` of `g`. Without the support condition an empty stratum carrying arbitrary
+risks could be used as a witness (`oddsRatio_emptyStratum_table44`). -/
+def IsCollapsible (g : ℝ → ℝ → ℝ) (dom : ℝ → ℝ → Prop) (π₁ π₀ p₁ p₀ : V → ℝ) : Prop :=
+  ∃ w, IsWeights w ∧ (∀ v, 0 < w v → 0 < π₁ v ∧ 0 < π₀ v ∧ dom (p₁ v) (p₀ v)) ∧
     g (standardizedRisk π₁ p₁) (standardizedRisk π₀ p₀) = ∑ v, w v * g (p₁ v) (p₀ v)
 
-/-- **Collapsibility over `Z`** (Pearl 2009, Definition 6.5.1). The expectation of the stratum
-measures under the marginal distribution `π` of the stratifier equals the measure applied to the
-marginal risks: `E_z g[P(x, y | z)] = g[P(x, y)]`. -/
-def IsCollapsibleOver (g : ℝ → ℝ → ℝ) (π π₁ π₀ p₁ p₀ : V → ℝ) : Prop :=
-  g (standardizedRisk π₁ p₁) (standardizedRisk π₀ p₀) = ∑ v, π v * g (p₁ v) (p₀ v)
+/-- The marginal distribution of the stratifier implied by one joint law of `(A, V)`: with
+treatment prevalence `t = Pr[A = 1]` and arm distributions `π₁ = Pr[V | A = 1]`,
+`π₀ = Pr[V | A = 0]`, `Pr[V = v] = t π₁ v + (1 - t) π₀ v`. -/
+def stratumMargin (t : ℝ) (π₁ π₀ : V → ℝ) (v : V) : ℝ := t * π₁ v + (1 - t) * π₀ v
 
-/-- Pearl's collapsibility implies collapsibility in the weighted-average sense. -/
-theorem IsCollapsibleOver.isCollapsible {g : ℝ → ℝ → ℝ} {π π₁ π₀ p₁ p₀ : V → ℝ}
-    (h : IsCollapsibleOver g π π₁ π₀ p₁ p₀) (hπ : IsWeights π) :
-    IsCollapsible g π₁ π₀ p₁ p₀ :=
-  ⟨π, hπ, h⟩
+omit [Fintype V] in
+theorem stratumMargin_self (t : ℝ) (π : V → ℝ) : stratumMargin t π π = π :=
+  funext fun v => by simp only [stratumMargin]; ring
+
+theorem sum_stratumMargin {t : ℝ} {π₁ π₀ : V → ℝ} (h₁ : ∑ v, π₁ v = 1) (h₀ : ∑ v, π₀ v = 1) :
+    ∑ v, stratumMargin t π₁ π₀ v = 1 := by
+  simp only [stratumMargin, Finset.sum_add_distrib, ← Finset.mul_sum, h₁, h₀]
+  ring
+
+theorem isWeights_stratumMargin {t : ℝ} {π₁ π₀ : V → ℝ} (ht0 : 0 ≤ t) (ht1 : t ≤ 1)
+    (h₁ : IsWeights π₁) (h₀ : IsWeights π₀) : IsWeights (stratumMargin t π₁ π₀) :=
+  ⟨fun v => add_nonneg (mul_nonneg ht0 (h₁.1 v)) (mul_nonneg (by linarith) (h₀.1 v)),
+    sum_stratumMargin h₁.2 h₀.2⟩
+
+/-- **Collapsibility over `Z`** (Pearl 2009, Definition 6.5.1). The expectation of the stratum
+measures under the marginal distribution of the stratifier equals the measure applied to the
+marginal risks: `E_z g[P(x, y | z)] = g[P(x, y)]`. The marginal distribution is the one implied
+by the arm distributions `π₁`, `π₀` and the treatment prevalence `t`, `0 < t < 1`
+(`stratumMargin`), so that all three margins come from one joint law. -/
+def IsCollapsibleOver (g : ℝ → ℝ → ℝ) (t : ℝ) (π₁ π₀ p₁ p₀ : V → ℝ) : Prop :=
+  0 < t ∧ t < 1 ∧
+    g (standardizedRisk π₁ p₁) (standardizedRisk π₀ p₀) =
+      ∑ v, stratumMargin t π₁ π₀ v * g (p₁ v) (p₀ v)
+
+/-- Pearl's collapsibility implies collapsibility in the weighted-average sense, when the
+strata of positive marginal probability have positive probability in both arms and risks in the
+domain of `g`. -/
+theorem IsCollapsibleOver.isCollapsible {g : ℝ → ℝ → ℝ} {dom : ℝ → ℝ → Prop} {t : ℝ}
+    {π₁ π₀ p₁ p₀ : V → ℝ} (h : IsCollapsibleOver g t π₁ π₀ p₁ p₀) (h₁ : IsWeights π₁)
+    (h₀ : IsWeights π₀)
+    (hsupp : ∀ v, 0 < stratumMargin t π₁ π₀ v → 0 < π₁ v ∧ 0 < π₀ v ∧ dom (p₁ v) (p₀ v)) :
+    IsCollapsible g dom π₁ π₀ p₁ p₀ :=
+  ⟨_, isWeights_stratumMargin h.1.le h.2.1.le h₁ h₀, hsupp, h.2.2⟩
 
 /-- A weighted average of values all strictly above `m` is strictly above `m`. -/
 theorem lt_standardizedRisk {π r : V → ℝ} {m : ℝ} (hπ : IsWeights π) (hr : ∀ v, m < r v) :
@@ -122,29 +168,36 @@ theorem standardizedRisk_lt {π r : V → ℝ} {M : ℝ} (hπ : IsWeights π) (h
 /-! ### The risk difference -/
 
 /-- **The risk difference is collapsible under (U1).** If the stratifier has the same
-distribution `π` in both arms, the marginal risk difference is the `π`-average of the stratum
-risk differences (Pearl, Section 6.5.1). -/
-theorem riskDiff_isCollapsibleOver_of_indep (π p₁ p₀ : V → ℝ) :
-    IsCollapsibleOver riskDiff π π π p₁ p₀ := by
-  simp only [IsCollapsibleOver, riskDiff, standardizedRisk, mul_sub, Finset.sum_sub_distrib]
+distribution `π` in both arms (then `π` is also its marginal distribution, whatever the
+treatment prevalence `t`), the marginal risk difference is the `π`-average of the stratum risk
+differences (Pearl, Section 6.5.1). -/
+theorem riskDiff_isCollapsibleOver_of_indep {t : ℝ} (ht0 : 0 < t) (ht1 : t < 1)
+    (π p₁ p₀ : V → ℝ) : IsCollapsibleOver riskDiff t π π p₁ p₀ := by
+  refine ⟨ht0, ht1, ?_⟩
+  rw [stratumMargin_self]
+  simp only [riskDiff, standardizedRisk, mul_sub, Finset.sum_sub_distrib]
 
 /-- **The risk difference is collapsible under (U2).** If the stratum risks do not depend on the
 stratum (`V` is unassociated with `Y` given `A`), the marginal risk difference equals the
 average of the stratum risk differences, whatever the stratum distributions in the two arms
 (Pearl, Section 6.5.1). -/
-theorem riskDiff_isCollapsibleOver_of_const {π π₁ π₀ p₁ p₀ : V → ℝ} {c₁ c₀ : ℝ}
-    (hπ : ∑ v, π v = 1) (hπ₁ : ∑ v, π₁ v = 1) (hπ₀ : ∑ v, π₀ v = 1)
+theorem riskDiff_isCollapsibleOver_of_const {t : ℝ} {π₁ π₀ p₁ p₀ : V → ℝ} {c₁ c₀ : ℝ}
+    (ht0 : 0 < t) (ht1 : t < 1) (hπ₁ : ∑ v, π₁ v = 1) (hπ₀ : ∑ v, π₀ v = 1)
     (h₁ : ∀ v, p₁ v = c₁) (h₀ : ∀ v, p₀ v = c₀) :
-    IsCollapsibleOver riskDiff π π₁ π₀ p₁ p₀ := by
-  simp only [IsCollapsibleOver, riskDiff, standardizedRisk, h₁, h₀, ← Finset.sum_mul, hπ, hπ₁,
-    hπ₀, one_mul]
+    IsCollapsibleOver riskDiff t π₁ π₀ p₁ p₀ := by
+  refine ⟨ht0, ht1, ?_⟩
+  simp only [riskDiff, standardizedRisk, h₁, h₀, ← Finset.sum_mul, sum_stratumMargin hπ₁ hπ₀,
+    hπ₁, hπ₀, one_mul]
 
 /-- With `V` independent of `A`, the risk difference is collapsible, and the marginal risk
 difference lies between the smallest and the largest stratum risk difference. -/
 theorem riskDiff_mem_Icc {π p₁ p₀ : V → ℝ} {m M : ℝ} (hπ : IsWeights π)
     (h : ∀ v, riskDiff (p₁ v) (p₀ v) ∈ Set.Icc m M) :
     riskDiff (standardizedRisk π p₁) (standardizedRisk π p₀) ∈ Set.Icc m M := by
-  rw [riskDiff_isCollapsibleOver_of_indep π p₁ p₀]
+  have : riskDiff (standardizedRisk π p₁) (standardizedRisk π p₀) =
+      standardizedRisk π fun v => riskDiff (p₁ v) (p₀ v) := by
+    simp only [riskDiff, standardizedRisk, mul_sub, Finset.sum_sub_distrib]
+  rw [this]
   exact standardizedRisk_mem_Icc hπ.1 hπ.2 h
 
 /-! ### The risk ratio -/
@@ -181,8 +234,12 @@ theorem riskRatio_eq_sum_rrWeight {π p₁ p₀ : V → ℝ} (hπ : IsWeights π
 /-- **The risk ratio is collapsible** (Hernán and Robins, Fine Point 4.3), when `V` is
 independent of `A` and the baseline risks are positive. -/
 theorem riskRatio_isCollapsible {π p₁ p₀ : V → ℝ} (hπ : IsWeights π) (h₀ : ∀ v, 0 < p₀ v) :
-    IsCollapsible riskRatio π π p₁ p₀ :=
-  ⟨rrWeight π p₀, isWeights_rrWeight hπ h₀, riskRatio_eq_sum_rrWeight hπ h₀⟩
+    IsCollapsible riskRatio riskRatioDom π π p₁ p₀ := by
+  refine ⟨rrWeight π p₀, isWeights_rrWeight hπ h₀, fun v hv => ?_,
+    riskRatio_eq_sum_rrWeight hπ h₀⟩
+  have hπv : 0 < π v := lt_of_le_of_ne (hπ.1 v) fun h => by
+    simp [rrWeight, ← h] at hv
+  exact ⟨hπv, hπv, h₀ v⟩
 
 /-- The marginal risk ratio lies between the smallest and the largest stratum risk ratio
 (Hernán and Robins, Fine Point 4.3). -/
@@ -216,12 +273,18 @@ theorem marginal_riskRatio_lt_one_iff {π p₁ p₀ : Bool → ℝ} (hπ : IsWei
 
 /-! ### The odds ratio -/
 
-/-- **The odds ratio is collapsible under the sharp null** (Hernán and Robins, Fine Point 4.3).
-If treatment has no effect in any stratum and the baseline risks are in `(0, 1)`, the odds ratio
-is collapsible: every stratum odds ratio and the marginal odds ratio equal `1`. -/
-theorem oddsRatio_isCollapsible_of_sharpNull {π p₁ p₀ : V → ℝ} (hπ : IsWeights π)
+/-- **The odds ratio is collapsible under the null in every stratum** (Hernán and Robins, Fine
+Point 4.3, there stated under the sharp null). The hypothesis is the stratum-level null: the two
+stratum risks are equal in every stratum, `p₁ v = p₀ v`. This is weaker than the sharp null
+`Y^{a=1} = Y^{a=0}` for every individual, which implies it when `p₁`, `p₀` are causal stratum
+risks; this file has no individual potential outcomes, so the sharp-null form is not stated.
+With `V` independent of `A`, treatment prevalence `0 < t < 1`, and baseline risks in `(0, 1)`,
+the odds ratio is collapsible: every stratum odds ratio and the marginal odds ratio equal
+`1`. -/
+theorem oddsRatio_isCollapsible_of_stratumNull {t : ℝ} {π p₁ p₀ : V → ℝ} (ht0 : 0 < t)
+    (ht1 : t < 1) (hπ : IsWeights π)
     (hnull : ∀ v, p₁ v = p₀ v) (h0 : ∀ v, 0 < p₀ v) (h1 : ∀ v, p₀ v < 1) :
-    IsCollapsibleOver oddsRatio π π π p₁ p₀ ∧
+    IsCollapsibleOver oddsRatio t π π p₁ p₀ ∧
       oddsRatio (standardizedRisk π p₁) (standardizedRisk π p₀) = 1 := by
   have hp : p₁ = p₀ := funext hnull
   subst hp
@@ -229,9 +292,8 @@ theorem oddsRatio_isCollapsible_of_sharpNull {π p₁ p₀ : V → ℝ} (hπ : I
   have hS1 : standardizedRisk π p₁ < 1 := standardizedRisk_lt hπ h1
   have hm : oddsRatio (standardizedRisk π p₁) (standardizedRisk π p₁) = 1 :=
     (oddsRatio_eq_one_iff hS1 hS0 hS1).2 rfl
-  refine ⟨?_, hm⟩
-  unfold IsCollapsibleOver
-  rw [hm]
+  refine ⟨⟨ht0, ht1, ?_⟩, hm⟩
+  rw [hm, stratumMargin_self]
   have : ∀ v, oddsRatio (p₁ v) (p₁ v) = 1 := fun v =>
     (oddsRatio_eq_one_iff (h1 v) (h0 v) (h1 v)).2 rfl
   simp [this, hπ.2]
@@ -302,13 +364,29 @@ theorem table44_marginal_oddsRatio : oddsRatio (margRisk44 true) (margRisk44 fal
 theorem table44_marginal_riskRatio : riskRatio (margRisk44 true) (margRisk44 false) = 7 / 3 := by
   norm_num [riskRatio, margRisk44, table44, Fintype.sum_bool]
 
+/-- In Table 4.4 the marginal distribution of `V` is the one implied by the arm distributions
+and the treatment prevalence `10/20 = 1/2`. -/
+theorem margV44_eq : margV44 = stratumMargin (1 / 2) (condV44 true) (condV44 false) := by
+  funext v
+  cases v <;> norm_num [margV44, stratumMargin, condV44, table44, Fintype.sum_bool]
+
+/-- In Table 4.4, whatever the treatment prevalence, the implied marginal distribution of `V` is
+the common arm distribution. -/
+theorem stratumMargin44 (t : ℝ) :
+    stratumMargin t (condV44 true) (condV44 false) = condV44 true := by
+  have : condV44 false = condV44 true :=
+    funext fun v => by rw [table44_indep, table44_indep]
+  rw [this, stratumMargin_self]
+
 /-- **The odds ratio is not collapsible** (Hernán and Robins, Fine Point 4.3 and Table 4.4;
 Pearl, Section 6.5). In Table 4.4 the stratifier `V` is independent of treatment
 (`table44_indep`), both stratum odds ratios equal `6`, yet the marginal odds ratio `49/9` is not
-a weighted average of the stratum odds ratios. Hence neither collapsibility notion holds. -/
+a weighted average of the stratum odds ratios. Hence neither collapsibility notion holds, for
+any treatment prevalence. -/
 theorem oddsRatio_not_collapsible_table44 :
-    ¬ IsCollapsible oddsRatio (condV44 true) (condV44 false) (risk44 true) (risk44 false) ∧
-      ¬ IsCollapsibleOver oddsRatio margV44 (condV44 true) (condV44 false)
+    ¬ IsCollapsible oddsRatio oddsRatioDom (condV44 true) (condV44 false) (risk44 true)
+        (risk44 false) ∧
+      ∀ t, ¬ IsCollapsibleOver oddsRatio t (condV44 true) (condV44 false)
         (risk44 true) (risk44 false) := by
   have key : ∀ w : Bool → ℝ, IsWeights w →
       oddsRatio (standardizedRisk (condV44 true) (risk44 true))
@@ -318,10 +396,140 @@ theorem oddsRatio_not_collapsible_table44 :
     rw [← margRisk44_eq, ← margRisk44_eq, table44_marginal_oddsRatio]
     simp only [table44_stratum_oddsRatio, ← Finset.sum_mul, hw.2]
     norm_num
-  refine ⟨fun ⟨w, hw, h⟩ => key w hw h, fun h => key margV44 ?_ h⟩
-  refine ⟨fun v => by rw [← table44_indep true]; exact (isWeights_condV44 true).1 v, ?_⟩
-  simp only [← table44_indep true]
-  exact (isWeights_condV44 true).2
+  refine ⟨fun ⟨w, hw, _, h⟩ => key w hw h, fun t ⟨_, _, h⟩ => ?_⟩
+  rw [stratumMargin44] at h
+  exact key _ (isWeights_condV44 true) h
+
+/-- **The risk ratio is not collapsible in Pearl's sense** (Definition 6.5.1), even without
+confounding. In Table 4.4 (`V` independent of `A`) the average of the stratum risk ratios `2`
+and `3` under the marginal distribution of `V` is `5/2`, not the marginal risk ratio `7/3`.
+The two notions differ: Pearl's collapsibility over `V`, under (U1) or (U2), is a property of
+linear functionals such as the risk difference; the risk ratio is collapsible only in the
+weighted-average sense of Fine Point 4.3, with the weights `rrWeight`
+(`riskRatio_isCollapsible`). -/
+theorem riskRatio_not_collapsibleOver_table44 (t : ℝ) :
+    ¬ IsCollapsibleOver riskRatio t (condV44 true) (condV44 false)
+      (risk44 true) (risk44 false) := by
+  rintro ⟨-, -, h⟩
+  rw [stratumMargin44, ← margRisk44_eq, ← margRisk44_eq, table44_marginal_riskRatio] at h
+  have hRR := table44_stratum_riskRatio
+  simp only [Fintype.sum_bool, hRR.1, hRR.2] at h
+  norm_num [condV44, table44, Fintype.sum_bool] at h
+
+/-! #### The empty-stratum loophole is closed -/
+
+/-- The arm distributions of Table 4.4 with an empty stratum `none` appended. -/
+noncomputable def condV44e (a : Bool) : Option Bool → ℝ
+  | none => 0
+  | some v => condV44 a v
+
+/-- The stratum risks of Table 4.4, with the arbitrary risks `7/10` (treated) and `3/10`
+(untreated) assigned to the empty stratum `none`. -/
+noncomputable def risk44e (a : Bool) : Option Bool → ℝ
+  | none => if a then 7 / 10 else 3 / 10
+  | some v => risk44 a v
+
+theorem standardizedRisk44e (a : Bool) :
+    standardizedRisk (condV44e a) (risk44e a) = margRisk44 a := by
+  rw [margRisk44_eq]
+  simp [standardizedRisk, Fintype.sum_option, condV44e, risk44e]
+
+/-- **An empty stratum cannot fake collapsibility.** Append to Table 4.4 a stratum of
+probability zero in both arms whose (meaningless) risks `7/10` and `3/10` have odds ratio
+`49/9`. The observable law is unchanged. Weights putting all mass on the empty stratum express
+the marginal odds ratio as a weighted average of the stratum odds ratios, so a definition
+without a support condition would call the odds ratio collapsible; `IsCollapsible`, which
+requires the weights to live on strata of positive probability, still fails. -/
+theorem oddsRatio_emptyStratum_table44 :
+    (∃ w : Option Bool → ℝ, IsWeights w ∧
+      oddsRatio (standardizedRisk (condV44e true) (risk44e true))
+          (standardizedRisk (condV44e false) (risk44e false)) =
+        ∑ v, w v * oddsRatio (risk44e true v) (risk44e false v)) ∧
+      ¬ IsCollapsible oddsRatio oddsRatioDom (condV44e true) (condV44e false) (risk44e true)
+        (risk44e false) := by
+  rw [standardizedRisk44e, standardizedRisk44e, table44_marginal_oddsRatio]
+  refine ⟨⟨fun v => if v = none then 1 else 0, ⟨fun v => by positivity, ?_⟩, ?_⟩, ?_⟩
+  · simp
+  · simp only [Fintype.sum_option, ite_true, reduceCtorEq, ite_false, zero_mul,
+      Finset.sum_const_zero, add_zero, one_mul, risk44e]
+    norm_num [oddsRatio, odds]
+  · rintro ⟨w, hw, hsupp, h⟩
+    rw [standardizedRisk44e, standardizedRisk44e, table44_marginal_oddsRatio] at h
+    have hn : w none = 0 :=
+      le_antisymm (not_lt.1 fun hp => by simpa [condV44e] using (hsupp none hp).1) (hw.1 none)
+    have hs := hw.2
+    rw [Fintype.sum_option, hn, zero_add] at hs
+    rw [Fintype.sum_option, hn, zero_mul, zero_add] at h
+    simp only [risk44e, table44_stratum_oddsRatio, ← Finset.sum_mul, hs] at h
+    norm_num at h
+
+/-! #### A randomized-assignment model realizing Table 4.4 -/
+
+/-- The potential outcome `Y^a` of an individual whose potential outcomes are
+`(Y^{a=0}, Y^{a=1}) = (y₀, y₁)`. The observed outcome is `Y = Y^A` (consistency). -/
+def poutcome (a y₀ y₁ : Bool) : Bool := if a then y₁ else y₀
+
+/-- The Bernoulli mass function: `p` at `true`, `1 - p` at `false`. -/
+noncomputable def bernMass (p : ℝ) (y : Bool) : ℝ := if y then p else 1 - p
+
+/-- A joint law of `(V, A, Y^{a=0}, Y^{a=1})` for Table 4.4. `A` is a fair coin independent of
+`(V, Y^{a=0}, Y^{a=1})` (randomized assignment); `V` is a fair coin; given `V = v` the two
+potential outcomes are independent with `Pr[Y^{a=0} = 1 | V = v] = risk44 false v` and
+`Pr[Y^{a=1} = 1 | V = v] = risk44 true v`. -/
+noncomputable def rand44 (v a y₀ y₁ : Bool) : ℝ :=
+  bernMass (1 / 2) a * ((1 / 2) * bernMass (risk44 false v) y₀ * bernMass (risk44 true v) y₁)
+
+/-- The causal risk `Pr[Y^a = 1]` in the model `rand44`. -/
+noncomputable def causalRisk44 (a : Bool) : ℝ :=
+  ∑ v, ∑ a', ∑ y₀, ∑ y₁, if poutcome a y₀ y₁ = true then rand44 v a' y₀ y₁ else 0
+
+/-- The causal stratum risk `Pr[Y^a = 1 | V = v]` in the model `rand44`. -/
+noncomputable def causalStratumRisk44 (a v : Bool) : ℝ :=
+  (∑ a', ∑ y₀, ∑ y₁, if poutcome a y₀ y₁ = true then rand44 v a' y₀ y₁ else 0) /
+    ∑ a', ∑ y₀, ∑ y₁, rand44 v a' y₀ y₁
+
+/-- **Table 4.4 comes from a randomized experiment** (Hernán and Robins, Fine Point 4.3: "the
+decision to move was random"). The law `rand44` is a probability law on `(V, A, Y^0, Y^1)` in
+which assignment `A` is independent of `(V, Y^0, Y^1)`, each stratum `V = v` has probability
+`1/2`, and the observed law of `(V, A, Y = Y^A)` is exactly the table (counts over `20`).
+Its causal stratum risks are the observed stratum risks and its causal risks are the observed
+marginal risks; so the causal risk ratios and odds ratios are the associational ones computed
+from the table (`table44_causal_ratios`). -/
+theorem table44_randomized :
+    (∀ v a y₀ y₁, 0 ≤ rand44 v a y₀ y₁) ∧ (∑ v, ∑ a, ∑ y₀, ∑ y₁, rand44 v a y₀ y₁) = 1 ∧
+      (∀ v a y₀ y₁, rand44 v a y₀ y₁ =
+        (∑ v', ∑ y₀', ∑ y₁', rand44 v' a y₀' y₁') * ∑ a', rand44 v a' y₀ y₁) ∧
+      (∀ v, (∑ a, ∑ y₀, ∑ y₁, rand44 v a y₀ y₁) = 1 / 2) ∧
+      (∀ v a y, (∑ y₀, ∑ y₁, if poutcome a y₀ y₁ = y then rand44 v a y₀ y₁ else 0) =
+        (table44 v a y : ℝ) / 20) ∧
+      (∀ a v, causalStratumRisk44 a v = risk44 a v) ∧
+      (∀ a, causalRisk44 a = margRisk44 a) := by
+  refine ⟨fun v a y₀ y₁ => ?_, ?_, fun v a y₀ y₁ => ?_, fun v => ?_, fun v a y => ?_,
+    fun a v => ?_, fun a => ?_⟩
+  · cases v <;> cases a <;> cases y₀ <;> cases y₁ <;>
+      norm_num [rand44, bernMass, risk44, table44]
+  · norm_num [rand44, bernMass, risk44, table44, Fintype.sum_bool]
+  · cases v <;> cases a <;> cases y₀ <;> cases y₁ <;>
+      norm_num [rand44, bernMass, risk44, table44, Fintype.sum_bool]
+  · cases v <;> norm_num [rand44, bernMass, risk44, table44, Fintype.sum_bool]
+  · cases v <;> cases a <;> cases y <;>
+      norm_num [rand44, bernMass, risk44, table44, poutcome, Fintype.sum_bool]
+  · cases a <;> cases v <;>
+      norm_num [causalStratumRisk44, rand44, bernMass, risk44, table44, poutcome,
+        Fintype.sum_bool]
+  · cases a <;>
+      norm_num [causalRisk44, margRisk44, rand44, bernMass, risk44, table44, poutcome,
+        Fintype.sum_bool]
+
+/-- In the randomized model of Table 4.4 the causal risk ratio is `7/3`, the causal odds ratio
+is `49/9`, and the conditional causal odds ratios are `6` in both strata. -/
+theorem table44_causal_ratios :
+    riskRatio (causalRisk44 true) (causalRisk44 false) = 7 / 3 ∧
+      oddsRatio (causalRisk44 true) (causalRisk44 false) = 49 / 9 ∧
+      ∀ v, oddsRatio (causalStratumRisk44 true v) (causalStratumRisk44 false v) = 6 := by
+  obtain ⟨-, -, -, -, -, hs, hm⟩ := table44_randomized
+  simp only [hs, hm]
+  exact ⟨table44_marginal_riskRatio, table44_marginal_oddsRatio, table44_stratum_oddsRatio⟩
 
 /-! ### Effect-measure modification -/
 
@@ -330,10 +538,10 @@ strata. -/
 def AdditiveModification (p₁ p₀ : V → ℝ) : Prop :=
   ∃ v w, riskDiff (p₁ v) (p₀ v) ≠ riskDiff (p₁ w) (p₀ w)
 
-/-- **Multiplicative effect modification** by `V`: the stratum risk ratio varies across
-strata. -/
+/-- **Multiplicative effect modification** by `V`: the stratum risk ratio varies across strata
+of positive baseline risk (only there is the risk ratio defined). -/
 def MultiplicativeModification (p₁ p₀ : V → ℝ) : Prop :=
-  ∃ v w, riskRatio (p₁ v) (p₀ v) ≠ riskRatio (p₁ w) (p₀ w)
+  ∃ v w, 0 < p₀ v ∧ 0 < p₀ w ∧ riskRatio (p₁ v) (p₀ v) ≠ riskRatio (p₁ w) (p₀ w)
 
 /-- **Qualitative effect modification** by `V`: the effect is harmful in some stratum and
 beneficial in another. -/
@@ -348,7 +556,7 @@ theorem qualitative_imp_additive_and_multiplicative {p₁ p₀ : V → ℝ} (h�
     (hq : QualitativeModification p₁ p₀) :
     AdditiveModification p₁ p₀ ∧ MultiplicativeModification p₁ p₀ := by
   obtain ⟨v, w, hv, hw⟩ := hq
-  refine ⟨⟨v, w, by linarith⟩, ⟨v, w, ?_⟩⟩
+  refine ⟨⟨v, w, by linarith⟩, ⟨v, w, h₀ v, h₀ w, ?_⟩⟩
   have := (one_lt_riskRatio_iff (h₀ v)).2 hv
   have := (riskRatio_lt_one_iff (h₀ w)).2 hw
   linarith
@@ -360,7 +568,8 @@ stratum or the baseline risk is the same in every stratum. -/
 theorem null_or_const_of_no_modification {p₁ p₀ : V → ℝ} (h₀ : ∀ v, 0 < p₀ v)
     (hA : ¬ AdditiveModification p₁ p₀) (hM : ¬ MultiplicativeModification p₁ p₀) :
     (∀ v, p₁ v = p₀ v) ∨ ∀ v w, p₀ v = p₀ w := by
-  simp only [AdditiveModification, MultiplicativeModification, not_exists, not_not] at hA hM
+  simp only [AdditiveModification, MultiplicativeModification, not_exists, not_and,
+    not_not] at hA hM
   by_cases hnull : ∀ v, p₁ v = p₀ v
   · exact Or.inl hnull
   right
@@ -370,7 +579,7 @@ theorem null_or_const_of_no_modification {p₁ p₀ : V → ℝ} (h₀ : ∀ v, 
   -- in every stratum `p₁ = r p₀` and `p₁ = p₀ + d` with common `r`, `d`
   have key : ∀ x, (riskRatio (p₁ u) (p₀ u) - 1) * p₀ x = riskDiff (p₁ u) (p₀ u) := by
     intro x
-    have hr := hM u x
+    have hr := hM u x (h₀ u) (h₀ x)
     have hd := hA u x
     unfold riskRatio at hr ⊢
     unfold riskDiff at hd ⊢
@@ -409,7 +618,7 @@ theorem scaleDependence_example :
     let p₁ : Bool → ℝ := fun v => if v then 9 / 10 else 2 / 10
     ¬ AdditiveModification p₁ p₀ ∧ MultiplicativeModification p₁ p₀ := by
   intro p₀ p₁
-  refine ⟨?_, ⟨true, false, ?_⟩⟩
+  refine ⟨?_, ⟨true, false, by norm_num [p₀], by norm_num [p₀], ?_⟩⟩
   · rintro ⟨v, w, h⟩
     cases v <;> cases w <;> norm_num [p₀, p₁, riskDiff] at h
   · norm_num [p₀, p₁, riskRatio]
