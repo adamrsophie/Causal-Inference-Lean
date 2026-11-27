@@ -85,3 +85,7 @@ public import CausalInference.Attribution.Definitions
 public import CausalInference.Attribution.Examples
 public import CausalInference.Attribution.Identification
 public import CausalInference.Estimation.DeltaMethod
+public import CausalInference.Survival.Basic
+public import CausalInference.Survival.Censoring
+public import CausalInference.Survival.Comparison
+public import CausalInference.Survival.KaplanMeier
