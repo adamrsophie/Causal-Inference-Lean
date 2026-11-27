@@ -79,3 +79,4 @@ public import CausalInference.Bias.Misclassification
 public import CausalInference.Bias.Selection
 public import CausalInference.Graphical.GlobalMarkov
 public import CausalInference.Graphical.GlobalMarkovCompleteness
+public import CausalInference.Sensitivity.Probability
