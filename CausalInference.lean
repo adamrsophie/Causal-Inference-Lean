@@ -116,3 +116,4 @@ public import CausalInference.Longitudinal.Bridge
 public import CausalInference.Longitudinal.WeightingGeneral
 public import CausalInference.Longitudinal.Dynamic
 public import CausalInference.Longitudinal.GNull
+public import CausalInference.BiasAnalysis.VarianceFormulas
