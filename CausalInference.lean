@@ -280,3 +280,13 @@ public import CausalInference.PointTreatment.Weighting
 public import CausalInference.SCM.SWIGTwinCorrespondence
 public import CausalInference.SCM.SWIGTwinSeparation
 public import CausalInference.Identification.IDCompletenessRouting
+public import CausalInference.Estimation.ConvergenceInProbability
+public import CausalInference.Estimation.LawOfLargeNumbers
+public import CausalInference.Estimation.ZEstimator
+public import CausalInference.Estimation.MEstimator
+public import CausalInference.Estimation.ZEstimatorNormality
+public import CausalInference.Estimation.ZEstimatorExamples
+public import CausalInference.Estimation.Sandwich
+public import CausalInference.Estimation.SandwichExamples
+public import CausalInference.Estimation.ContinuousMapping
+public import CausalInference.Estimation.LimitLaws
