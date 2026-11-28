@@ -441,3 +441,4 @@ public import CausalInference.Survival.PopulationHazardExamples
 public import CausalInference.PopulationAdjustment.IdentificationFollowUpCollapsible
 public import CausalInference.PopulationAdjustment.IdentificationFollowUpWitnesses
 public import CausalInference.PopulationAdjustment.IdentificationFollowUpDesign
+public import CausalInference.Survival.PopulationHazardInitial
