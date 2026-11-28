@@ -533,3 +533,5 @@ public import CausalInference.Estimation.PosteriorLimitQuantile
 public import CausalInference.Estimation.PosteriorLimitTotalVariation
 public import CausalInference.Estimation.EmpiricalLawMonteCarlo
 public import CausalInference.PopulationAdjustment.BayesStandardization
+public import CausalInference.NetworkMetaAnalysis.NodeSplittingLimit
+public import CausalInference.NetworkMetaAnalysis.ProbitAggregationGap
