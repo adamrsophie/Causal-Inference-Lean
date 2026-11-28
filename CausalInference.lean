@@ -395,3 +395,9 @@ public import CausalInference.PopulationAdjustment.MembershipBalancing
 public import CausalInference.PopulationAdjustment.Examples
 public import CausalInference.Efficiency.CrossFittingRate
 public import CausalInference.Efficiency.CrossFittingFittedScore
+public import CausalInference.Efficiency.TiltInformation
+public import CausalInference.Efficiency.GradientOfRegularLimit
+public import CausalInference.Efficiency.GradientOfRegular
+public import CausalInference.Efficiency.RegularEstimatorBound
+public import CausalInference.Efficiency.AverageEffectBound
+public import CausalInference.Efficiency.RegularEstimatorExamples
