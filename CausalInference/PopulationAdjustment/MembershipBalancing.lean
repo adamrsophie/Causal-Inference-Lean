@@ -25,7 +25,8 @@ is an instance (`isBalancingScore_inverseOdds_example`).
 
 ## Main results
 
-* `measurable_inverseOdds`, `inverseOdds_comp_eq`, `isBalancingScore_inverseOdds`.
+* `isBalancingScore_inverseOdds` (the inverse odds `inverseOdds` and its basic lemmas are in
+  `CausalInference.PopulationAdjustment.DensityRatio`).
 * `tiltWeight_logistic_eq_inverseOdds`, `isBalancingScore_tiltWeight_logistic`.
 * `isBalancingScore_inverseOdds_example`.
 
@@ -47,22 +48,6 @@ namespace PopulationAdjustment
 open MeasureTheory ProbabilityTheory PointTreatment
 
 variable {Ω 𝒳 : Type*} {mΩ : MeasurableSpace Ω} [MeasurableSpace 𝒳]
-
-/-- The **inverse odds** `k (1 - π(x)) / π(x)` of membership. -/
-noncomputable def inverseOdds (k : ℝ) (π : 𝒳 → ℝ) (x : 𝒳) : ℝ := k * ((1 - π x) / π x)
-
-theorem measurable_inverseOdds {π : 𝒳 → ℝ} (hπ : Measurable π) (k : ℝ) :
-    Measurable (inverseOdds k π) :=
-  measurable_const.mul ((measurable_const.sub hπ).div hπ)
-
-omit [MeasurableSpace 𝒳] in
-/-- The membership probability is a function of the inverse odds: `π = k / (r + k)`. -/
-theorem inverseOdds_comp_eq {π : 𝒳 → ℝ} (hπ : ∀ x, π x ≠ 0) {k : ℝ} (hk : k ≠ 0) (x : 𝒳) :
-    k / (inverseOdds k π x + k) = π x := by
-  have := hπ x
-  rw [inverseOdds]
-  field_simp
-  ring
 
 /-- **The inverse odds is a balancing score for membership**: if `π` is the propensity score of
 membership `S` given `X`, nowhere zero, and `k ≠ 0`, then `S` is conditionally independent of

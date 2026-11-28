@@ -41,13 +41,18 @@ in the features.
   has density `k exp(-α̃ - β̃ᵀx)` with respect to that of the trial, `k = P(S = 1) / P(S = 0)`:
   the log density ratio is affine with `β = -β̃` (`map_cond_eq_withDensity_tiltWeight`). This is
   the instance of the log linear hypothesis.
-* **Inverse odds weights.** The inverse odds `c exp(-α̃ - β̃ᵀx)` of trial membership is a positive
-  multiple of the tilting weight with `β = -β̃` (`inverse_odds_eq_mul_tiltWeight`); conversely a
-  positive multiple relation forces `β = -β̃`, everywhere (`inverse_odds_proportional_iff`) and
-  almost everywhere under a law not carried by a hyperplane (`inverse_odds_proportional_ae_iff`),
-  but not under a point mass (`inverse_odds_proportional_ae_counterexample`). The weighted arm
-  means with inverse odds weights and with tilting weights coincide
-  (`weightedArmMean_inverse_odds`).
+* **Inverse odds weights.** The inverse odds `k (1 - π(x)) / π(x)` of trial membership
+  (`inverseOdds`) is, under logistic membership, `k exp(-α̃ - β̃ᵀx)` (`inverseOdds_sigmoid`), a
+  positive multiple of the tilting weight with `β = -β̃` (`inverseOdds_eq_mul_tiltWeight`);
+  conversely a positive multiple relation forces `β = -β̃`, everywhere
+  (`inverseOdds_proportional_iff`) and almost everywhere under a law not carried by a hyperplane
+  (`inverseOdds_proportional_ae_iff`), but not under a point mass
+  (`inverseOdds_proportional_ae_counterexample`). The weighted arm means with inverse odds
+  weights and with tilting weights coincide (`weightedArmMean_inverseOdds`).
+
+## Main definitions
+
+* `inverseOdds`.
 
 ## Main results
 
@@ -56,9 +61,10 @@ in the features.
 * `lawWeightedArmMean_sourceLaw_eq_targetMean`, `lawWeightedArmMean_tiltWeight_eq_targetMean`,
   `lawWeightedContrast_eq_targetMean_sub`, `lawWeightedContrast_sub_eq_anchoredEstimand`.
 * `map_restrict_eq_withDensity_armProb`, `map_cond_eq_withDensity_tiltWeight`.
-* `inverse_odds_eq_mul_tiltWeight`, `inverse_odds_proportional_iff`,
-  `inverse_odds_proportional_ae_iff`, `inverse_odds_proportional_ae_counterexample`,
-  `weightedArmMean_inverse_odds`.
+* `measurable_inverseOdds`, `inverseOdds_comp_eq`, `inverseOdds_sigmoid`.
+* `inverseOdds_eq_mul_tiltWeight`, `inverseOdds_proportional_iff`,
+  `inverseOdds_proportional_ae_iff`, `inverseOdds_proportional_ae_counterexample`,
+  `weightedArmMean_inverseOdds`.
 
 ## References
 
@@ -441,28 +447,55 @@ end Logistic
 
 section InverseOdds
 
+variable {𝒳 : Type*}
+
+/-- The **inverse odds** `k (1 - π(x)) / π(x)` of membership. For `k = P(S = 1) / P(S = 0)` and
+the membership propensity `π` it is the density ratio of the target covariate law with respect
+to the trial covariate law (`map_restrict_eq_withDensity_armProb`). -/
+noncomputable def inverseOdds (k : ℝ) (π : 𝒳 → ℝ) (x : 𝒳) : ℝ := k * ((1 - π x) / π x)
+
+theorem measurable_inverseOdds [MeasurableSpace 𝒳] {π : 𝒳 → ℝ} (hπ : Measurable π) (k : ℝ) :
+    Measurable (inverseOdds k π) :=
+  measurable_const.mul ((measurable_const.sub hπ).div hπ)
+
+/-- The membership probability is a function of the inverse odds: `π = k / (r + k)`. -/
+theorem inverseOdds_comp_eq {π : 𝒳 → ℝ} (hπ : ∀ x, π x ≠ 0) {k : ℝ} (hk : k ≠ 0) (x : 𝒳) :
+    k / (inverseOdds k π x + k) = π x := by
+  have := hπ x
+  rw [inverseOdds]
+  field_simp
+  ring
+
 variable {p : ℕ}
 
-/-- **The inverse odds weight is a positive multiple of the tilting weight**: for every intercept
-`α` and centering `c`, `k exp(-α̃ - β̃ᵀx) = C exp(α + (-β̃)ᵀ(x - c))` with
-`C = k exp(-α̃ - α - β̃ᵀc)`, which is positive when `k > 0`. -/
-theorem inverse_odds_eq_mul_tiltWeight (k α' α : ℝ) (β' c : Fin p → ℝ) :
-    (∀ x : Fin p → ℝ, k * Real.exp (-α' - β' ⬝ᵥ x) =
+/-- **The inverse odds of logistic membership** is an exponential: for
+`π(x) = σ(α̃ + β̃ᵀx)`, `k (1 - π(x)) / π(x) = k exp(-α̃ - β̃ᵀx)`. -/
+theorem inverseOdds_sigmoid (k α' : ℝ) (β' x : Fin p → ℝ) :
+    inverseOdds k (fun x => Real.sigmoid (α' + β' ⬝ᵥ x)) x = k * Real.exp (-α' - β' ⬝ᵥ x) := by
+  rw [inverseOdds, one_sub_sigmoid_div_sigmoid, neg_add']
+
+/-- **The inverse odds weight is a positive multiple of the tilting weight**: under logistic
+membership `π(x) = σ(α̃ + β̃ᵀx)`, for every intercept `α` and centering `c`, the inverse odds
+`k exp(-α̃ - β̃ᵀx)` is `C exp(α + (-β̃)ᵀ(x - c))` with `C = k exp(-α̃ - α - β̃ᵀc)`, which is
+positive when `k > 0`. -/
+theorem inverseOdds_eq_mul_tiltWeight (k α' α : ℝ) (β' c : Fin p → ℝ) :
+    (∀ x : Fin p → ℝ, inverseOdds k (fun x => Real.sigmoid (α' + β' ⬝ᵥ x)) x =
       k * Real.exp (-α' - α - β' ⬝ᵥ c) * tiltWeight id c α (-β') x) ∧
       (0 < k → 0 < k * Real.exp (-α' - α - β' ⬝ᵥ c)) := by
   refine ⟨fun x => ?_, fun hk => by positivity⟩
-  rw [tiltWeight, mul_assoc, ← Real.exp_add]
+  rw [inverseOdds_sigmoid, tiltWeight, mul_assoc, ← Real.exp_add]
   congr 2
   simp only [id, dotProduct_sub, neg_dotProduct]
   ring
 
 /-- **Proportionality to the tilting weight exactly when `β = -β̃`**: for `k > 0`, the inverse
-odds `k exp(-α̃ - β̃ᵀx)` is a positive constant times `exp(α + βᵀ(x - c))` for every `x ∈ ℝ^p`
-if and only if `β = -β̃`. Taking logarithms, two affine functions differ by a constant, so their
-slopes agree. -/
-theorem inverse_odds_proportional_iff (k α' α : ℝ) (β' β c : Fin p → ℝ) (hk : 0 < k) :
-    (∃ C : ℝ, 0 < C ∧ ∀ x : Fin p → ℝ, k * Real.exp (-α' - β' ⬝ᵥ x) =
+odds of logistic membership `π(x) = σ(α̃ + β̃ᵀx)`, which is `k exp(-α̃ - β̃ᵀx)`, is a positive
+constant times `exp(α + βᵀ(x - c))` for every `x ∈ ℝ^p` if and only if `β = -β̃`. Taking
+logarithms, two affine functions differ by a constant, so their slopes agree. -/
+theorem inverseOdds_proportional_iff (k α' α : ℝ) (β' β c : Fin p → ℝ) (hk : 0 < k) :
+    (∃ C : ℝ, 0 < C ∧ ∀ x : Fin p → ℝ, inverseOdds k (fun x => Real.sigmoid (α' + β' ⬝ᵥ x)) x =
       C * tiltWeight id c α β x) ↔ β = -β' := by
+  simp_rw [inverseOdds_sigmoid]
   constructor
   · rintro ⟨C, hC, h⟩
     have hlog : ∀ x : Fin p → ℝ, Real.log k + (-α' - β' ⬝ᵥ x) =
@@ -479,17 +512,20 @@ theorem inverse_odds_proportional_iff (k α' α : ℝ) (β' β c : Fin p → ℝ
     simp only [Pi.neg_apply]
     linarith
   · rintro rfl
-    obtain ⟨h, hpos⟩ := inverse_odds_eq_mul_tiltWeight k α' α β' c
+    obtain ⟨h, hpos⟩ := inverseOdds_eq_mul_tiltWeight k α' α β' c
+    simp_rw [inverseOdds_sigmoid] at h
     exact ⟨_, hpos hk, h⟩
 
 /-- **The almost everywhere form**: if the covariate law `ν` is not carried by any affine
-hyperplane `{vᵀx = r}` with `v ≠ 0`, then `k exp(-α̃ - β̃ᵀx) = C exp(α + βᵀ(x - c))` for
-`ν`-almost every `x` and some `C > 0` if and only if `β = -β̃`. -/
-theorem inverse_odds_proportional_ae_iff {ν : MeasureTheory.Measure (Fin p → ℝ)}
+hyperplane `{vᵀx = r}` with `v ≠ 0`, then the inverse odds of logistic membership
+`π(x) = σ(α̃ + β̃ᵀx)` is `C exp(α + βᵀ(x - c))` for `ν`-almost every `x` and some `C > 0` if and
+only if `β = -β̃`. -/
+theorem inverseOdds_proportional_ae_iff {ν : MeasureTheory.Measure (Fin p → ℝ)}
     (hnd : ∀ v : Fin p → ℝ, v ≠ 0 → ∀ r : ℝ, ¬ ∀ᵐ x ∂ν, v ⬝ᵥ x = r)
     (k α' α : ℝ) (β' β c : Fin p → ℝ) (hk : 0 < k) :
-    (∃ C : ℝ, 0 < C ∧ ∀ᵐ x ∂ν, k * Real.exp (-α' - β' ⬝ᵥ x) =
+    (∃ C : ℝ, 0 < C ∧ ∀ᵐ x ∂ν, inverseOdds k (fun x => Real.sigmoid (α' + β' ⬝ᵥ x)) x =
       C * tiltWeight id c α β x) ↔ β = -β' := by
+  simp_rw [inverseOdds_sigmoid]
   constructor
   · rintro ⟨C, hC, h⟩
     by_contra hne
@@ -504,29 +540,33 @@ theorem inverse_odds_proportional_ae_iff {ν : MeasureTheory.Measure (Fin p → 
       simp only [id, add_dotProduct, dotProduct_sub] at this ⊢
       linarith
   · rintro rfl
-    obtain ⟨h, hpos⟩ := inverse_odds_eq_mul_tiltWeight k α' α β' c
+    obtain ⟨h, hpos⟩ := inverseOdds_eq_mul_tiltWeight k α' α β' c
+    simp_rw [inverseOdds_sigmoid] at h
     exact ⟨_, hpos hk, Filter.Eventually.of_forall h⟩
 
 /-- **The nondegeneracy condition cannot be dropped**: for covariates concentrated at `0 ∈ ℝ¹`,
-the inverse odds `1 · exp(0)` (`α̃ = 0`, `β̃ = 0`) is almost everywhere `1` times the tilting
-weight `exp(x)` (`α = 0`, `β = 1`, `c = 0`), although `β ≠ -β̃`. -/
-theorem inverse_odds_proportional_ae_counterexample :
+the inverse odds of the constant membership `σ(0)` (`k = 1`, `α̃ = 0`, `β̃ = 0`), which is `1`,
+is almost everywhere `1` times the tilting weight `exp(x)` (`α = 0`, `β = 1`, `c = 0`), although
+`β ≠ -β̃`. -/
+theorem inverseOdds_proportional_ae_counterexample :
     (∃ C : ℝ, 0 < C ∧ ∀ᵐ x ∂(MeasureTheory.Measure.dirac (0 : Fin 1 → ℝ)),
-      1 * Real.exp (-0 - (0 : Fin 1 → ℝ) ⬝ᵥ x) = C * tiltWeight id 0 0 (fun _ => 1) x) ∧
+      inverseOdds 1 (fun x => Real.sigmoid (0 + (0 : Fin 1 → ℝ) ⬝ᵥ x)) x =
+        C * tiltWeight id 0 0 (fun _ => 1) x) ∧
       (fun _ => (1 : ℝ)) ≠ -(0 : Fin 1 → ℝ) := by
   refine ⟨⟨1, one_pos, ?_⟩, fun h => by simpa using congrFun h 0⟩
-  rw [MeasureTheory.ae_dirac_eq, Filter.eventually_pure]
+  rw [MeasureTheory.ae_dirac_eq, Filter.eventually_pure, inverseOdds_sigmoid]
   simp [tiltWeight]
 
 /-- **Inverse odds weights and tilting weights give the same weighted arm means**: for `k > 0`
-and any sample, the weighted arm mean with the inverse odds weights `k exp(-α̃ - β̃ᵀxᵢ)` equals
-the weighted arm mean with the tilting weights `exp(α + (-β̃)ᵀ(xᵢ - c))`. -/
-theorem weightedArmMean_inverse_odds {n : ℕ} {ι' : Type*} [DecidableEq ι']
+and any sample, the weighted arm mean with the inverse odds weights of logistic membership,
+`k exp(-α̃ - β̃ᵀxᵢ)`, equals the weighted arm mean with the tilting weights
+`exp(α + (-β̃)ᵀ(xᵢ - c))`. -/
+theorem weightedArmMean_inverseOdds {n : ℕ} {ι' : Type*} [DecidableEq ι']
     (x : Fin n → Fin p → ℝ) (a : Fin n → ι') (y : Fin n → ℝ) (t : ι') (k α' α : ℝ)
     (β' c : Fin p → ℝ) (hk : 0 < k) :
-    weightedArmMean (fun i => k * Real.exp (-α' - β' ⬝ᵥ x i)) a y t =
+    weightedArmMean (fun i => inverseOdds k (fun x => Real.sigmoid (α' + β' ⬝ᵥ x)) (x i)) a y t =
       weightedArmMean (fun i => tiltWeight id c α (-β') (x i)) a y t := by
-  obtain ⟨h, hpos⟩ := inverse_odds_eq_mul_tiltWeight k α' α β' c
+  obtain ⟨h, hpos⟩ := inverseOdds_eq_mul_tiltWeight k α' α β' c
   simp_rw [h]
   exact weightedArmMean_smul (hpos hk).ne' _ a y t
 

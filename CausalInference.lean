@@ -406,3 +406,7 @@ public import CausalInference.IndirectComparison.ConstancyTwoOfThree
 public import CausalInference.IndirectComparison.IncrementAffine
 public import CausalInference.IndirectComparison.SurvivalTransport
 public import CausalInference.IndirectComparison.Examples
+public import CausalInference.PopulationAdjustment.EntropyUniqueness
+public import CausalInference.PopulationAdjustment.SupportComplete
+public import CausalInference.PopulationAdjustment.WeightsInstancesTransport
+public import CausalInference.PopulationAdjustment.WeightsInstances

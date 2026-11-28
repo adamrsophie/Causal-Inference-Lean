@@ -45,7 +45,8 @@ aggregate data trial: `indirectEstimate d̂_ac d̂_bc` (`anchoredWeightedEstimat
 
 * `weightedArmMean_smul`, `lawWeightedArmMean_ipdEmpirical`, `lawWeightedContrast_ipdEmpirical`.
 * `weightedArmMean_eq_div_sampleMean`, `sampleHajekArmMean_eq_weightedArmMean`.
-* `weightedMean_affine`, `weightedArmMean_predictor`, `weightedContrast_eq_predictor_sub`.
+* `weightedMean_affine`, `IndirectComparison.AnchoredModel.predictor_eq`,
+  `weightedArmMean_predictor`, `weightedContrast_eq_predictor_sub`.
 * `anchoredWeightedEstimate_eq`.
 
 ## References
@@ -217,7 +218,8 @@ variable {n : ℕ} {ι' : Type*} [DecidableEq ι']
 
 omit [DecidableEq ι'] in
 /-- The anchored linear predictor is affine: `η_t(x) = (α + γ_t) + xᵀ(β₁ + β₂,t)`. -/
-theorem anchoredModel_predictor_eq (M : AnchoredModel ι' p) (t : ι') (x : Fin p → ℝ) :
+theorem _root_.CausalInference.IndirectComparison.AnchoredModel.predictor_eq
+    (M : AnchoredModel ι' p) (t : ι') (x : Fin p → ℝ) :
     M.predictor t x = (M.α + M.γ t) + x ⬝ᵥ (M.β₁ + M.β₂ t) := by
   simp only [AnchoredModel.predictor, anchoredPredictor, dotProduct, Pi.add_apply, mul_add,
     Finset.sum_add_distrib]
@@ -239,10 +241,10 @@ theorem weightedArmMean_predictor (M : AnchoredModel ι' p) {w y e : Fin n → �
     refine Finset.sum_congr rfl fun i _ => ?_
     simp only [armWeights]
     split_ifs with h
-    · rw [hy i, h, anchoredModel_predictor_eq]
+    · rw [hy i, h, M.predictor_eq]
     · simp
   rw [weightedArmMean, hw', weightedMean_affine (fun i => rfl) hbal hw,
-    anchoredModel_predictor_eq M]
+    M.predictor_eq]
   rfl
 
 /-- **Weighted contrast and outcome model contrast agree under a linear model.** If the outcomes
@@ -265,7 +267,7 @@ theorem weightedContrast_eq_predictor_sub (M : AnchoredModel ι' p) {w y e : Fin
   have ha := weightedArmMean_predictor M ta hy hbala hwa
   have hc := weightedArmMean_predictor M tc hy hbalc hwc
   refine ⟨by rw [weightedContrast, id, id, ha, hc]; ring, ?_, fun he => ?_⟩
-  · rw [anchoredModel_predictor_eq M, anchoredModel_predictor_eq M, dotProduct_add,
+  · rw [M.predictor_eq, M.predictor_eq, dotProduct_add,
       dotProduct_add, dotProduct_sub]
     ring
   · have h0 : ∀ t, weightedArmMean w a e t = 0 := fun t => by
