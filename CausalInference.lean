@@ -419,3 +419,10 @@ public import CausalInference.PopulationAdjustment.AnchoredWitnesses
 public import CausalInference.PopulationAdjustment.UnanchoredIdentification
 public import CausalInference.PopulationAdjustment.UnanchoredWitnesses
 public import CausalInference.PopulationAdjustment.IdentificationRandomizedTrial
+public import CausalInference.Transport.Distance.Basic
+public import CausalInference.Transport.Distance.Mahalanobis
+public import CausalInference.Transport.Distance.Metric
+public import CausalInference.Transport.Distance.Scale
+public import CausalInference.Transport.Distance.BiasLinear
+public import CausalInference.Transport.Distance.Wasserstein
+public import CausalInference.Transport.Distance.Counterexamples
