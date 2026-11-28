@@ -426,3 +426,9 @@ public import CausalInference.Transport.Distance.Scale
 public import CausalInference.Transport.Distance.BiasLinear
 public import CausalInference.Transport.Distance.Wasserstein
 public import CausalInference.Transport.Distance.Counterexamples
+public import CausalInference.MetaAnalysis.CommonEffect
+public import CausalInference.MetaAnalysis.CochranQ
+public import CausalInference.MetaAnalysis.CochranQLaw
+public import CausalInference.MetaAnalysis.GaussianLikelihood
+public import CausalInference.MetaAnalysis.ISquared
+public import CausalInference.MetaAnalysis.Examples
