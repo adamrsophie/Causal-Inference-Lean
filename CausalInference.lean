@@ -436,3 +436,5 @@ public import CausalInference.Estimation.LineSubmodel
 public import CausalInference.Estimation.HajekConvolutionVector
 public import CausalInference.Estimation.HajekRegularLinearVector
 public import CausalInference.Estimation.HajekConvolutionVectorExamples
+public import CausalInference.Survival.PopulationHazard
+public import CausalInference.Survival.PopulationHazardExamples
