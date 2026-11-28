@@ -359,3 +359,10 @@ public import CausalInference.IndirectComparison.Constancy
 public import CausalInference.IndirectComparison.LogOddsLimit
 public import CausalInference.IndirectComparison.SmallestNetwork
 public import CausalInference.IndirectComparison.Unanchored
+public import CausalInference.Estimation.ChiSquared
+public import CausalInference.Estimation.MaximumLikelihoodNormalityVector
+public import CausalInference.Estimation.LikelihoodTestsVector
+public import CausalInference.Estimation.BernoulliPairLikelihoodTests
+public import CausalInference.Estimation.MeanSquaredError
+public import CausalInference.Estimation.LikelihoodInvariance
+public import CausalInference.Estimation.VectorDeltaMethodExamples
