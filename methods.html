@@ -35,7 +35,7 @@
 <h2 id="assumptions">Every assumption is a hypothesis</h2>
 <p><b>The rule.</b> A modeling assumption, such as the exclusion restriction, parallel trends or cross-world independence, is a named proposition, and a theorem that uses it takes it as an explicit hypothesis. Nothing is assumed globally, there is no axiom about the world, and the structures that describe a model carry its variables and their measurability, while the modeling assumptions are separate propositions. So the list of hypotheses of a theorem is the complete list of what it assumes, and a reader can check that each one is used for what it says.</p>
 <p><b>Instance.</b> In the instrumental variable model the exclusion restriction, instrument independence, relevance and monotonicity are four separate definitions. Monotonicity, for example:</p>
-<pre class="lean"><code><code><span class="k">def</span> <span class="n">Monotonicity</span> (μ : Measure Ω) : <span class="k"><span class="k">Prop</span></span> := <span class="k"><span class="k">∀</span></span>ᵐ ω ∂μ, M.D false ω ≤ M.D true ω</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/c2e3b0f98c66f35bc52298e345b579ea519ca3a1/CausalInference/InstrumentalVariables/Basic.lean">CausalInference/InstrumentalVariables/Basic.lean</a></p>
+<pre class="lean"><code><code><span class="k">def</span> <span class="n">Monotonicity</span> (μ : Measure Ω) : <span class="k"><span class="k">Prop</span></span> := <span class="k"><span class="k">∀</span></span>ᵐ ω ∂μ, M.D false ω ≤ M.D true ω</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/552482574e33c9eb2fcd06ef4fb2ef6c767e6d80/CausalInference/InstrumentalVariables/Basic.lean">CausalInference/InstrumentalVariables/Basic.lean</a></p>
 <p>The local average treatment effect theorem then lists them as hypotheses <code>hE</code>, <code>hI</code>, <code>hM</code>, <code>hR</code>, next to the positivity and integrability conditions:</p>
 <pre class="lean"><code><code><span class="k">theorem</span> <span class="n">wald_eq_complierEffect</span> [IsProbabilityMeasure μ] (hE : M.Exclusion μ)
   (hI : M.InstrumentIndependence μ) (hM : M.Monotonicity μ) (hR : M.Relevance μ)
@@ -45,7 +45,7 @@
 <h2 id="observed">Observed data are defined, not assumed</h2>
 <p><b>The rule.</b> Where possible, the observed variables are defined from the potential outcomes and the realized treatment, so consistency holds by construction and cannot be forgotten. Where the link between observed and potential outcomes is itself an assumption, it is a separate hypothesis.</p>
 <p><b>Instance.</b> In the instrumental variable model the observed outcome is the potential outcome at the realized instrument and treatment:</p>
-<pre class="lean"><code><code><span class="k">def</span> <span class="n">Yobs</span> (ω : Ω) : <span class="t"><span class="t">ℝ</span></span> := M.Y (M.Z ω) (M.Dobs ω) ω</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/c2e3b0f98c66f35bc52298e345b579ea519ca3a1/CausalInference/InstrumentalVariables/Basic.lean">CausalInference/InstrumentalVariables/Basic.lean</a></p>
+<pre class="lean"><code><code><span class="k">def</span> <span class="n">Yobs</span> (ω : Ω) : <span class="t"><span class="t">ℝ</span></span> := M.Y (M.Z ω) (M.Dobs ω) ω</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/552482574e33c9eb2fcd06ef4fb2ef6c767e6d80/CausalInference/InstrumentalVariables/Basic.lean">CausalInference/InstrumentalVariables/Basic.lean</a></p>
 <p>In the two-period difference in differences design, by contrast, observed outcomes are separate functions linked to potential outcomes by <a href="reference.html#CausalInference.TwoPeriod.Consistency"><code>TwoPeriod.Consistency</code></a>, so that no anticipation is a genuine assumption about the pre period.</p>
 
 <h2 id="finite">Finite and measurable settings are kept apart</h2>
@@ -57,7 +57,7 @@
   /-- The probability of each assignment in `support`; meaningless outside `support`. -/
   weight : (ι → Bool) → <span class="t"><span class="t">ℝ</span></span>
   weight_nonneg : <span class="k"><span class="k">∀</span></span> a ∈ support, 0 ≤ weight a
-  sum_weight : <span class="k"><span class="k">∑</span></span> a ∈ support, weight a = 1</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/c2e3b0f98c66f35bc52298e345b579ea519ca3a1/CausalInference/Designs/Randomized/FinitePopulation.lean">CausalInference/Designs/Randomized/FinitePopulation.lean</a></p>
+  sum_weight : <span class="k"><span class="k">∑</span></span> a ∈ support, weight a = 1</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/552482574e33c9eb2fcd06ef4fb2ef6c767e6d80/CausalInference/Designs/Randomized/FinitePopulation.lean">CausalInference/Designs/Randomized/FinitePopulation.lean</a></p>
 <p>The instrumental variable model, the difference in differences designs and the Manski bounds live on a measurable space with a probability or finite measure instead, and the mediation formula is proved for a finite mediator on a general probability space. The <a href="obstacles.html#finite">Limits</a> page lists which results are finite only.</p>
 
 <h2 id="counterexamples">Positive results are paired with counterexamples</h2>
@@ -96,14 +96,14 @@
 <h2 id="decide">Finite facts are checked by computation</h2>
 <p><b>The rule.</b> Facts about explicit finite graphs (acyclicity, ancestors, districts, d-separation) are decided by procedures proved correct in the library and evaluated by <code>decide</code>, so worked examples are checked rather than claimed.</p>
 <p><b>Instance.</b> The front-door graph X → M → Y with X ↔ Y:</p>
-<pre class="lean"><code><code><span class="k">abbrev</span> <span class="n">frontDoor</span> : ADMG (Fin 3) := ofLists [(0, 1), (1, 2)] [(0, 2)]</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/c2e3b0f98c66f35bc52298e345b579ea519ca3a1/CausalInference/Graphical/ADMGExamples.lean">CausalInference/Graphical/ADMGExamples.lean</a></p>
+<pre class="lean"><code><code><span class="k">abbrev</span> <span class="n">frontDoor</span> : ADMG (Fin 3) := ofLists [(0, 1), (1, 2)] [(0, 2)]</code></code></pre><p class="src-link">From <a href="https://github.com/adamrsophie/Causal-Inference-Lean/blob/552482574e33c9eb2fcd06ef4fb2ef6c767e6d80/CausalInference/Graphical/ADMGExamples.lean">CausalInference/Graphical/ADMGExamples.lean</a></p>
 <p>Its acyclicity, the ancestor relation from X to Y, and its districts {X, Y} and {M} are each closed by <code>decide</code> in <a href="reference.html#mod-Graphical.ADMGExamples"><code>Graphical.ADMGExamples</code></a>; d-separation on concrete graphs is checked the same way in the d-separation modules.</p>
 
 </main>
 </div>
 <footer class="site-footer"><div class="wrap">
 <p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
-<p>Last updated 28 November 2026, from commit <code>c2e3b0f</code> on the main branch.</p>
+<p>Last updated 28 November 2026, from commit <code>5524825</code> on the main branch.</p>
 </div></footer>
 </body>
 </html>
