@@ -366,3 +366,6 @@ public import CausalInference.Estimation.BernoulliPairLikelihoodTests
 public import CausalInference.Estimation.MeanSquaredError
 public import CausalInference.Estimation.LikelihoodInvariance
 public import CausalInference.Estimation.VectorDeltaMethodExamples
+public import CausalInference.Estimation.HajekRegularLinear
+public import CausalInference.Estimation.ProductFamilyRegular
+public import CausalInference.Estimation.HajekRegularLinearExamples
