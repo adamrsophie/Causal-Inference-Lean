@@ -279,3 +279,4 @@ public import CausalInference.PointTreatment.OutcomeRegression
 public import CausalInference.PointTreatment.Weighting
 public import CausalInference.SCM.SWIGTwinCorrespondence
 public import CausalInference.SCM.SWIGTwinSeparation
+public import CausalInference.Identification.IDCompletenessRouting
