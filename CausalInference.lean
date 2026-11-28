@@ -295,3 +295,5 @@ public import CausalInference.Basic.CondIndepIntersection
 public import CausalInference.Basic.CondIndepKernel
 public import CausalInference.PointTreatment.BalancingScore
 public import CausalInference.PointTreatment.PropensityScoreTheorems
+public import CausalInference.Identification.IDCompletenessTransport
+public import CausalInference.Identification.IDCompletenessGeneral
