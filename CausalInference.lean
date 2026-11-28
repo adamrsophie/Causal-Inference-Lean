@@ -393,3 +393,5 @@ public import CausalInference.PopulationAdjustment.DensityRatio
 public import CausalInference.PopulationAdjustment.Support
 public import CausalInference.PopulationAdjustment.MembershipBalancing
 public import CausalInference.PopulationAdjustment.Examples
+public import CausalInference.Efficiency.CrossFittingRate
+public import CausalInference.Efficiency.CrossFittingFittedScore
