@@ -410,3 +410,7 @@ public import CausalInference.PopulationAdjustment.EntropyUniqueness
 public import CausalInference.PopulationAdjustment.SupportComplete
 public import CausalInference.PopulationAdjustment.WeightsInstancesTransport
 public import CausalInference.PopulationAdjustment.WeightsInstances
+public import CausalInference.Survival.ContinuousTime
+public import CausalInference.Survival.RestrictedMeanCollapsible
+public import CausalInference.Survival.HazardMixtureGeneral
+public import CausalInference.IndirectComparison.SurvivalTransportContinuous
