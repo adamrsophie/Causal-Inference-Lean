@@ -461,3 +461,11 @@ public import CausalInference.PopulationAdjustment.StandardizationConsistencyCon
 public import CausalInference.PopulationAdjustment.OutcomeModelFitLikelihood
 public import CausalInference.PopulationAdjustment.StandardizationConsistencyLogistic
 public import CausalInference.PopulationAdjustment.StandardizationConsistencyExamples
+public import CausalInference.MetaAnalysis.RandomEffects
+public import CausalInference.MetaAnalysis.DerSimonianLaird
+public import CausalInference.MetaAnalysis.HartungKnapp
+public import CausalInference.MetaAnalysis.Conjugacy
+public import CausalInference.MetaAnalysis.RestrictedLikelihood
+public import CausalInference.MetaAnalysis.Egger
+public import CausalInference.MetaAnalysis.RandomEffectsExamples
+public import CausalInference.MetaAnalysis.EfficiencyExample
