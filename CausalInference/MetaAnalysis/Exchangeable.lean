@@ -23,8 +23,8 @@ exchangeable** if every initial segment is exchangeable (`InfExchangeable`).
 * `infExchangeable_of_binary_mixture`: a binary sequence whose finite dimensional laws are
   `P(X₁ = x₁, …, Xₙ = xₙ) = ∫ θ^s (1 - θ)^{n - s} dΠ(θ)`, `s = ∑ xᵢ`, is infinitely exchangeable.
   This is the easy direction of de Finetti's theorem for binary sequences (de Finetti 1937). The
-  converse, that every infinitely exchangeable binary sequence has this form, is **not** proved
-  here.
+  converse, that every infinitely exchangeable binary sequence has this form, is
+  `InfExchangeable.exists_binaryMixture` in `ExchangeableBinaryMixing`.
 * **Finite exchangeability does not give a mixture** (`urnLaw_exchangeable`,
   `urnLaw_not_iidMixture`): two draws without replacement from an urn with one ball of each
   color are exchangeable, but their law is no mixture of i.i.d. laws of any kind: the draws
@@ -133,8 +133,8 @@ theorem boolCount_perm {n : ℕ} (x : Fin n → Bool) (σ : Equiv.Perm (Fin n)) 
 /-- **Binary mixtures are infinitely exchangeable** (the easy direction of de Finetti's theorem,
 de Finetti 1937). If a sequence of measurable `Bool` valued variables has, for every `n` and every
 pattern `x` with `s = ∑ xᵢ` successes, `P(X₀ = x₀, …, X_{n-1} = x_{n-1}) =
-∫ θ^s (1 - θ)^{n - s} dΠ(θ)`, then it is infinitely exchangeable. The converse direction is not
-proved here. Proof: on `Bool^n` a law is determined by its atoms, and permuting a pattern does
+∫ θ^s (1 - θ)^{n - s} dΠ(θ)`, then it is infinitely exchangeable. The converse direction is
+`InfExchangeable.exists_binaryMixture`. Proof: on `Bool^n` a law is determined by its atoms, and permuting a pattern does
 not change its number of successes. -/
 theorem infExchangeable_of_binary_mixture {X : ℕ → Ω → Bool} (hX : ∀ i, Measurable (X i))
     {P : Measure Ω} {Pr : Measure ℝ}
