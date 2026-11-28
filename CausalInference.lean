@@ -525,3 +525,4 @@ public import CausalInference.NetworkMetaAnalysis.Deviance
 public import CausalInference.NetworkMetaAnalysis.InformationCriterion
 public import CausalInference.NetworkMetaAnalysis.MetaRegressionIdentification
 public import CausalInference.NetworkMetaAnalysis.ExamplesTwo
+public import CausalInference.PopulationAdjustment.CommonLimitFollowUpAnchored
