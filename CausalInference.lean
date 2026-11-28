@@ -472,3 +472,10 @@ public import CausalInference.MetaAnalysis.EfficiencyExample
 public import CausalInference.MetaAnalysis.RestrictedLikelihoodMaximizer
 public import CausalInference.MetaAnalysis.ConjugacyKernel
 public import CausalInference.MetaAnalysis.DerSimonianLairdConsistency
+public import CausalInference.NetworkMetaAnalysis.Incidence
+public import CausalInference.NetworkMetaAnalysis.Gram
+public import CausalInference.NetworkMetaAnalysis.Consistency
+public import CausalInference.NetworkMetaAnalysis.GaussMarkov
+public import CausalInference.NetworkMetaAnalysis.NetworkModel
+public import CausalInference.NetworkMetaAnalysis.Pooling
+public import CausalInference.NetworkMetaAnalysis.Examples
