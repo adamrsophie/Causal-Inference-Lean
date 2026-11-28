@@ -343,3 +343,4 @@ public import CausalInference.Estimation.LeCamThirdLemma
 public import CausalInference.Estimation.LocalAsymptoticNormality
 public import CausalInference.Estimation.HajekConvolution
 public import CausalInference.Estimation.HajekConvolutionExamples
+public import CausalInference.Estimation.HajekConvolutionInefficient
