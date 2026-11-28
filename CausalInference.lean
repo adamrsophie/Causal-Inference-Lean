@@ -297,3 +297,13 @@ public import CausalInference.PointTreatment.BalancingScore
 public import CausalInference.PointTreatment.PropensityScoreTheorems
 public import CausalInference.Identification.IDCompletenessTransport
 public import CausalInference.Identification.IDCompletenessGeneral
+public import CausalInference.Estimation.ParametricFamily
+public import CausalInference.Estimation.Score
+public import CausalInference.Estimation.FisherInformation
+public import CausalInference.Estimation.CramerRao
+public import CausalInference.Estimation.BernoulliFamily
+public import CausalInference.Estimation.InformationInequality
+public import CausalInference.Estimation.MaximumLikelihood
+public import CausalInference.Estimation.FisherInformationVector
+public import CausalInference.Estimation.CramerRaoVector
+public import CausalInference.Estimation.BernoulliPair
