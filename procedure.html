@@ -43,7 +43,7 @@
 <li><b>Build with no warning.</b><code>lake build</code> must succeed, and its output must contain no warning from a file of this project, which keeps the linters of Mathlib's standard set clean.</li>
 <li><b>Axiom check.</b><code>lake env lean scripts/AxiomCheck.lean</code> walks every constant whose module lies under <code>CausalInference</code>, private ones included, computes the axioms it depends on with the mechanism behind <code>#print axioms</code>, and fails listing every constant that depends on an axiom outside <code>propext</code>, <code>Classical.choice</code>, <code>Quot.sound</code>. It is skipped, and counted as failed, when the build fails, so it never reads stale compiled files.</li>
 </ol>
-<p class="sub">For commit <code>30f3200</code> the site generator runs the scanner of step 1, read from <code>scripts/check.sh</code> at the same commit, over 704 files and finds 0 hits. Steps 3 and 4 need a Lean installation and are not run by the site generator.</p>
+<p class="sub">For commit <code>a042f39</code> the site generator runs the scanner of step 1, read from <code>scripts/check.sh</code> at the same commit, over 724 files and finds 0 hits. Steps 3 and 4 need a Lean installation and are not run by the site generator.</p>
 
 <h3 id="ci">Continuous integration</h3>
 <p>The main branch contains a continuous integration workflow (<code>.github/workflows/ci.yml</code>), which installs the pinned toolchain, fetches the prebuilt Mathlib files and runs <code>scripts/check.sh</code>.</p>
@@ -96,7 +96,7 @@ scripts/check.sh</code></pre>
 </div>
 <footer class="site-footer"><div class="wrap">
 <p>Maintained by Adam R Sophie. Source: <a href="https://github.com/adamrsophie/Causal-Inference-Lean">github.com/adamrsophie/Causal-Inference-Lean</a>. Built on Lean 4 and Mathlib. Free software under the GNU General Public License, version 3.</p>
-<p>Last updated 28 November 2026, from commit <code>30f3200</code> on the main branch.</p>
+<p>Last updated 28 November 2026, from commit <code>a042f39</code> on the main branch.</p>
 </div></footer>
 </body>
 </html>
