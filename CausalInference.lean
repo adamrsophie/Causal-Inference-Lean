@@ -574,3 +574,6 @@ public import CausalInference.MetaAnalysis.ConjugateNormalSample
 public import CausalInference.MetaAnalysis.Exchangeable
 public import CausalInference.MetaAnalysis.RestrictedContrast
 public import CausalInference.MetaAnalysis.RestrictedLikelihoodUnimodal
+public import CausalInference.Estimation.EmpiricalLawQuantileRate
+public import CausalInference.Estimation.EmpiricalLawGeneral
+public import CausalInference.Estimation.PosteriorLimitNormalLocationExact
