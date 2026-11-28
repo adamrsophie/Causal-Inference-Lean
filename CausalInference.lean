@@ -257,3 +257,8 @@ public import CausalInference.SCM.SWIGTwinGeneral
 public import CausalInference.StructuralNested.TwoStageClockCounterexample
 public import CausalInference.StructuralNested.TwoStageWeibullProgression
 public import CausalInference.PartialIdentification.JointEffect
+public import CausalInference.Measures.LinkScale
+public import CausalInference.Measures.EffectModifier
+public import CausalInference.Measures.OddsRatioLink
+public import CausalInference.Measures.LinkScaleExamples
+public import CausalInference.Measures.LinkJensen
