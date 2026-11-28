@@ -615,3 +615,12 @@ public import CausalInference.NetworkMetaRegression.ReductionLikelihood
 public import CausalInference.NetworkMetaRegression.BridgeStandardization
 public import CausalInference.NetworkMetaRegression.BridgeLikelihoodIdentification
 public import CausalInference.NetworkMetaRegression.BridgeExamples
+public import CausalInference.Estimation.TriangularArrayLimit
+public import CausalInference.Estimation.TriangularArrayLimitVector
+public import CausalInference.Estimation.BootstrapEmpirical
+public import CausalInference.Estimation.BootstrapSample
+public import CausalInference.Estimation.BootstrapMeanLimit
+public import CausalInference.Estimation.BootstrapMeanLimitVector
+public import CausalInference.Estimation.BootstrapQuantile
+public import CausalInference.Estimation.BootstrapCoverage
+public import CausalInference.Estimation.BootstrapExamples
