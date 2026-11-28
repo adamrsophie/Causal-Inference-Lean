@@ -41,7 +41,8 @@ translations reproduces the SWIG:
   `X ← L ← W ← U_W → W* → Y*` is open).
 * In both examples, conditioning on both copies of the covariate separates in the twin graph.
 
-No general theorem comparing the two families of d-separations is proved here.
+The general comparison of the two families of d-separations, with the conditioning set it
+needs, is `Digraph.swigSep_iff_twinSep` in `CausalInference.SCM.SWIGTwinSeparation`.
 -/
 
 @[expose] public section

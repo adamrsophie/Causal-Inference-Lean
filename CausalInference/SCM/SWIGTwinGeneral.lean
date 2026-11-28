@@ -34,13 +34,13 @@ given both copies of every vertex of `C`" fails for two reasons.
 The corrected conditioning set `Digraph.twinCond G i C` is the set of twin vertices of `C`,
 the counterfactual copy `i*` of the fixed half, and the factual copies of the vertices of `C`
 that are not descendants of `i` (both copies of a nondescendant, one copy of a descendant).
-`Digraph.TwinSep G i S T C` is twin separation given that set. The conjecture
-`Digraph.SWIGSep {i} S T C ↔ Digraph.TwinSep G i S T C` holds in every instance checked here
-by the kernel: on the two graphs above it repairs both failures
+`Digraph.TwinSep G i S T C` is twin separation given that set. The equivalence
+`Digraph.SWIGSep {i} S T C ↔ Digraph.TwinSep G i S T C` holds for every acyclic graph
+(`Digraph.swigSep_iff_twinSep` in `CausalInference.SCM.SWIGTwinSeparation`). This file has the
+instances checked by the kernel: on the two graphs above it repairs both failures
 (`SWIGTwinGeneral.fixedHalf_corrected`, `SWIGTwinGeneral.factualDescendant_corrected`), and it
 gives the right answer on the graphs of `SWIGTwinExamples` (`SWIGTwinGeneral.forkChain_corrected`,
-`SWIGTwinGeneral.confounded_corrected`). No general proof in either direction is given here;
-both directions need surgery on active trails across the two layers of the twin graph.
+`SWIGTwinGeneral.confounded_corrected`).
 
 ## One copy of a nondescendant
 

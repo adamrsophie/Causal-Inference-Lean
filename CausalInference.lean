@@ -277,3 +277,5 @@ public import CausalInference.PointTreatment.CondIndep
 public import CausalInference.PointTreatment.Identification
 public import CausalInference.PointTreatment.OutcomeRegression
 public import CausalInference.PointTreatment.Weighting
+public import CausalInference.SCM.SWIGTwinCorrespondence
+public import CausalInference.SCM.SWIGTwinSeparation
