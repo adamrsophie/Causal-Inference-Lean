@@ -290,3 +290,8 @@ public import CausalInference.Estimation.Sandwich
 public import CausalInference.Estimation.SandwichExamples
 public import CausalInference.Estimation.ContinuousMapping
 public import CausalInference.Estimation.LimitLaws
+public import CausalInference.Basic.CondIndepGraphoid
+public import CausalInference.Basic.CondIndepIntersection
+public import CausalInference.Basic.CondIndepKernel
+public import CausalInference.PointTreatment.BalancingScore
+public import CausalInference.PointTreatment.PropensityScoreTheorems
