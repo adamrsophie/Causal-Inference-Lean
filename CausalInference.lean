@@ -401,3 +401,8 @@ public import CausalInference.Efficiency.GradientOfRegular
 public import CausalInference.Efficiency.RegularEstimatorBound
 public import CausalInference.Efficiency.AverageEffectBound
 public import CausalInference.Efficiency.RegularEstimatorExamples
+public import CausalInference.IndirectComparison.TrialSummary
+public import CausalInference.IndirectComparison.ConstancyTwoOfThree
+public import CausalInference.IndirectComparison.IncrementAffine
+public import CausalInference.IndirectComparison.SurvivalTransport
+public import CausalInference.IndirectComparison.Examples
