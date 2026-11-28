@@ -344,3 +344,9 @@ public import CausalInference.Estimation.LocalAsymptoticNormality
 public import CausalInference.Estimation.HajekConvolution
 public import CausalInference.Estimation.HajekConvolutionExamples
 public import CausalInference.Estimation.HajekConvolutionInefficient
+public import CausalInference.Efficiency.InfluenceFunction
+public import CausalInference.Efficiency.OracleNormality
+public import CausalInference.Efficiency.ProductBias
+public import CausalInference.Efficiency.ScoreSubmodel
+public import CausalInference.Efficiency.PathwiseDerivative
+public import CausalInference.Efficiency.EfficiencyBound
