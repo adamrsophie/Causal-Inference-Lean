@@ -339,3 +339,7 @@ public import CausalInference.PointTreatment.HajekTrial
 public import CausalInference.PointTreatment.CellProportionScore
 public import CausalInference.PointTreatment.RandomizedDesignBridge
 public import CausalInference.Transport.ScaleAlignment
+public import CausalInference.Estimation.LeCamThirdLemma
+public import CausalInference.Estimation.LocalAsymptoticNormality
+public import CausalInference.Estimation.HajekConvolution
+public import CausalInference.Estimation.HajekConvolutionExamples
