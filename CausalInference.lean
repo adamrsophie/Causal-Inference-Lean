@@ -316,3 +316,9 @@ public import CausalInference.PointTreatment.SampleEstimators
 public import CausalInference.PointTreatment.WeightingConsistency
 public import CausalInference.PointTreatment.RegressionConsistency
 public import CausalInference.PointTreatment.AugmentedConsistency
+public import CausalInference.Estimation.GaussianLinearImage
+public import CausalInference.Estimation.VectorCLT
+public import CausalInference.Estimation.VectorDeltaMethod
+public import CausalInference.Estimation.VectorZEstimator
+public import CausalInference.Estimation.SandwichMatrix
+public import CausalInference.Estimation.VectorExamples
