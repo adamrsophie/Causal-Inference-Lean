@@ -311,3 +311,8 @@ public import CausalInference.Estimation.KullbackLeibler
 public import CausalInference.Estimation.MaximumLikelihoodNormality
 public import CausalInference.Estimation.LikelihoodTests
 public import CausalInference.Estimation.BernoulliLikelihoodTests
+public import CausalInference.PointTreatment.Randomized
+public import CausalInference.PointTreatment.SampleEstimators
+public import CausalInference.PointTreatment.WeightingConsistency
+public import CausalInference.PointTreatment.RegressionConsistency
+public import CausalInference.PointTreatment.AugmentedConsistency
