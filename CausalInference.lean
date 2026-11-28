@@ -307,3 +307,7 @@ public import CausalInference.Estimation.MaximumLikelihood
 public import CausalInference.Estimation.FisherInformationVector
 public import CausalInference.Estimation.CramerRaoVector
 public import CausalInference.Estimation.BernoulliPair
+public import CausalInference.Estimation.KullbackLeibler
+public import CausalInference.Estimation.MaximumLikelihoodNormality
+public import CausalInference.Estimation.LikelihoodTests
+public import CausalInference.Estimation.BernoulliLikelihoodTests
