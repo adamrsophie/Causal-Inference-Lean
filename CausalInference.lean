@@ -322,3 +322,16 @@ public import CausalInference.Estimation.VectorDeltaMethod
 public import CausalInference.Estimation.VectorZEstimator
 public import CausalInference.Estimation.SandwichMatrix
 public import CausalInference.Estimation.VectorExamples
+public import CausalInference.PointTreatment.Versions
+public import CausalInference.PointTreatment.OutcomeSwap
+public import CausalInference.PointTreatment.MarginalIndependence
+public import CausalInference.PointTreatment.StabilizedWeights
+public import CausalInference.PointTreatment.NonIdentification
+public import CausalInference.PointTreatment.OverlapVariance
+public import CausalInference.PointTreatment.OverlapVarianceExample
+public import CausalInference.Transport.Basic
+public import CausalInference.Transport.Direct
+public import CausalInference.Transport.Formula
+public import CausalInference.Transport.Generalizability
+public import CausalInference.Transport.Identification
+public import CausalInference.Transport.Survival
