@@ -381,3 +381,5 @@ public import CausalInference.PopulationAdjustment.StandardizationExamples
 public import CausalInference.PopulationAdjustment.OutcomeModelLinear
 public import CausalInference.PopulationAdjustment.OutcomeModelPlugInBias
 public import CausalInference.PopulationAdjustment.OutcomeModelExamples
+public import CausalInference.Estimation.NormalLocationFamily
+public import CausalInference.Estimation.ProductFamilyRegularSmooth
