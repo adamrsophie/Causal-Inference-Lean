@@ -469,3 +469,6 @@ public import CausalInference.MetaAnalysis.RestrictedLikelihood
 public import CausalInference.MetaAnalysis.Egger
 public import CausalInference.MetaAnalysis.RandomEffectsExamples
 public import CausalInference.MetaAnalysis.EfficiencyExample
+public import CausalInference.MetaAnalysis.RestrictedLikelihoodMaximizer
+public import CausalInference.MetaAnalysis.ConjugacyKernel
+public import CausalInference.MetaAnalysis.DerSimonianLairdConsistency
