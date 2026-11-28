@@ -369,3 +369,9 @@ public import CausalInference.Estimation.VectorDeltaMethodExamples
 public import CausalInference.Estimation.HajekRegularLinear
 public import CausalInference.Estimation.ProductFamilyRegular
 public import CausalInference.Estimation.HajekRegularLinearExamples
+public import CausalInference.Efficiency.BoundExamples
+public import CausalInference.Efficiency.CrossFitting
+public import CausalInference.Efficiency.CrossFittingRemainder
+public import CausalInference.Efficiency.CrossFittingNormality
+public import CausalInference.Efficiency.CrossFittingAverageEffect
+public import CausalInference.Efficiency.CrossFittingExamples
