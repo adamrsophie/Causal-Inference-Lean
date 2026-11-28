@@ -268,3 +268,12 @@ public import CausalInference.Identification.IDCompletenessModels
 public import CausalInference.Identification.IDCompletenessCFactor
 public import CausalInference.Identification.IDCompletenessLift
 public import CausalInference.Identification.IDCompletenessMain
+public import CausalInference.PointTreatment.Assumptions
+public import CausalInference.PointTreatment.AugmentedWeighting
+public import CausalInference.PointTreatment.BackDoor
+public import CausalInference.PointTreatment.Basic
+public import CausalInference.PointTreatment.Bridges
+public import CausalInference.PointTreatment.CondIndep
+public import CausalInference.PointTreatment.Identification
+public import CausalInference.PointTreatment.OutcomeRegression
+public import CausalInference.PointTreatment.Weighting
