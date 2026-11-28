@@ -21,10 +21,13 @@ anchored predictor (`anchoredPredictor`) with common prognostic effects `β₁`.
   full column rank designs (`designMatrix`) in the two arms of the individual data trial and one
   interaction vector `β₂` for `a` and `b`, any two parameter values that reproduce the data have
   the same `β₂`, `γ_a`, `γ_b` and `γ_b - γ_a`, and `γ_b = d - x̄ᵀβ₂`.
-* **The assumption cannot be tested from these data** (`sharedEffectModifiers_untestable`): the
-  aggregate trial constrains `(γ_b, β₂,b)` only through `γ_b + x̄ᵀβ₂,b = d`, and the individual data
-  do not involve them; so when `x̄ ≠ 0` two parameter points, one with shared effect modifiers and
-  one without, reproduce all the data and give different values of `γ_b - γ_a`.
+* **One aggregate trial leaves the interactions of `b` free**
+  (`sharedEffectModifiers_untestable`): the aggregate trial constrains `(γ_b, β₂,b)` only through
+  `γ_b + x̄ᵀβ₂,b = d`; so when `x̄ ≠ 0` two parameter points, one with the interactions `β₂` and
+  one with `β₂ + x̄`, reproduce the reported effect and differ in the coefficient `γ_b - γ_a`,
+  the conditional effect at the covariate value `0`. This is a statement about coefficients: the
+  effects of the two points in a target population with covariate means `x̄_Q` differ by
+  `x̄ᵀ(x̄_Q - x̄)`, which is zero when the target is the aggregate trial population.
 * **A second aggregate trial tests it** (`sharedEffectModifiers_overidentifying`): with two
   aggregate trials of `b` against `c` with covariate means `x̄ ≠ x̄'`, the assumption implies
   `d - d' = β₂ᵀ(x̄ - x̄')`, and a model with different interactions violates it.
@@ -150,12 +153,14 @@ theorem dotProduct_self_pos_of_ne {v : Fin p → ℝ} (hv : v ≠ 0) : 0 < v ⬝
   lt_of_le_of_ne (Finset.sum_nonneg fun i _ => mul_self_nonneg (v i))
     (Ne.symm (mt dotProduct_self_eq_zero.1 hv))
 
-/-- **Shared effect modifiers cannot be tested from one aggregate trial.** Under the anchored
-predictor for the aggregate trial of `b` against `c`, a parameter `(γ_b, β₂,b)` reproduces the
-reported effect `d` exactly when `γ_b + x̄ᵀβ₂,b = d`; the individual data do not involve
-`(γ_b, β₂,b)`. Hence for any `β₂` the point `(d - x̄ᵀβ₂, β₂)`, with the effect modifiers
-shared, and the point `(d - x̄ᵀ(β₂ + x̄), β₂ + x̄)`, without, both reproduce `d`, and when
-`x̄ ≠ 0` they give different values of `γ_b - γ_a`. -/
+/-- **One aggregate trial leaves the interactions of `b` free.** Under the anchored predictor
+for the aggregate trial of `b` against `c`, a parameter `(γ_b, β₂,b)` reproduces the reported
+effect `d` exactly when `γ_b + x̄ᵀβ₂,b = d`. Hence for any `β₂` the point `(d - x̄ᵀβ₂, β₂)` and
+the point `(d - x̄ᵀ(β₂ + x̄), β₂ + x̄)` both reproduce `d`, and when `x̄ ≠ 0` they give different
+values of the coefficient `γ_b - γ_a`, which is the conditional effect at the covariate value
+`0`. The statement is about coefficients only: in a target population with covariate means
+`x̄_Q` the effects of the two points differ by `x̄ᵀ(x̄_Q - x̄)`, which is zero when the target is
+the aggregate trial population. -/
 theorem sharedEffectModifiers_untestable {g : ℝ → ℝ} {f : Measure (Fin p → ℝ)}
     [IsProbabilityMeasure f] (hf : ∀ k, Integrable (fun x => x k) f) {α : ℝ} {β₁ : Fin p → ℝ}
     {mc : (Fin p → ℝ) → ℝ} (hc : ∀ x, g (mc x) = anchoredPredictor α β₁ 0 0 x) (d γa : ℝ)
