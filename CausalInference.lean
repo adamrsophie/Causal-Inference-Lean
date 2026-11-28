@@ -262,3 +262,9 @@ public import CausalInference.Measures.EffectModifier
 public import CausalInference.Measures.OddsRatioLink
 public import CausalInference.Measures.LinkScaleExamples
 public import CausalInference.Measures.LinkJensen
+public import CausalInference.Identification.IDCompletenessTools
+public import CausalInference.Identification.IDCompletenessBoundary
+public import CausalInference.Identification.IDCompletenessModels
+public import CausalInference.Identification.IDCompletenessCFactor
+public import CausalInference.Identification.IDCompletenessLift
+public import CausalInference.Identification.IDCompletenessMain
