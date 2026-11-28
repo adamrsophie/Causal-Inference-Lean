@@ -335,3 +335,6 @@ public import CausalInference.Transport.Formula
 public import CausalInference.Transport.Generalizability
 public import CausalInference.Transport.Identification
 public import CausalInference.Transport.Survival
+public import CausalInference.PointTreatment.HajekTrial
+public import CausalInference.PointTreatment.CellProportionScore
+public import CausalInference.PointTreatment.RandomizedDesignBridge
