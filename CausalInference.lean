@@ -350,3 +350,12 @@ public import CausalInference.Efficiency.ProductBias
 public import CausalInference.Efficiency.ScoreSubmodel
 public import CausalInference.Efficiency.PathwiseDerivative
 public import CausalInference.Efficiency.EfficiencyBound
+public import CausalInference.IndirectComparison.AnchoredBias
+public import CausalInference.IndirectComparison.AnchoredPredictor
+public import CausalInference.IndirectComparison.Balance
+public import CausalInference.IndirectComparison.Basic
+public import CausalInference.IndirectComparison.CommonComparator
+public import CausalInference.IndirectComparison.Constancy
+public import CausalInference.IndirectComparison.LogOddsLimit
+public import CausalInference.IndirectComparison.SmallestNetwork
+public import CausalInference.IndirectComparison.Unanchored
