@@ -7,6 +7,7 @@ module
 
 public import CausalInference.NetworkMetaRegression.IdentifiabilityTwoStudy
 public import CausalInference.NetworkMetaRegression.Estimands
+public import CausalInference.NetworkMetaRegression.AggregationIdentity
 
 /-!
 # Without shared effect modifiers the target effect is not identified
@@ -27,7 +28,8 @@ aggregate study itself stays identified without the assumption
 
 ## Main definitions
 
-* `binaryLaw q`: the law of a binary covariate on `{0, 1}` with `P(X = 1) = q`.
+* `binaryLaw q`: the law of a binary covariate on `{0, 1}` with `P(X = 1) = q`, the two atom
+  law `twoAtomLaw` of `AggregationIdentity.lean` with atoms `0` and `1`.
 
 ## Main results
 
@@ -60,31 +62,22 @@ open MeasureTheory ProbabilityTheory EffectMeasure IndirectComparison NetworkMet
 
 /-! ### A binary covariate -/
 
-/-- The law of a binary covariate on `{0, 1} ⊆ ℝ¹` with `P(X = 1) = q`. -/
-noncomputable def binaryLaw (q : ℝ) : Measure (Fin 1 → ℝ) :=
-  ENNReal.ofReal (1 - q) • Measure.dirac (fun _ => 0) +
-    ENNReal.ofReal q • Measure.dirac (fun _ => 1)
+/-- The law of a binary covariate on `{0, 1} ⊆ ℝ¹` with `P(X = 1) = q`: the two atom law
+`twoAtomLaw` with atoms `0` and `1`. -/
+noncomputable abbrev binaryLaw (q : ℝ) : Measure (Fin 1 → ℝ) :=
+  twoAtomLaw (fun _ => 0) (fun _ => 1) q
 
 theorem isProbabilityMeasure_binaryLaw {q : ℝ} (hq : q ∈ Set.Icc (0 : ℝ) 1) :
-    IsProbabilityMeasure (binaryLaw q) := by
-  constructor
-  simp only [binaryLaw, FunLike.coe_add, Pi.add_apply, FunLike.coe_smul, Pi.smul_apply,
-    measure_univ, smul_eq_mul, mul_one]
-  rw [← ENNReal.ofReal_add (by linarith [hq.2]) hq.1]
-  simp
+    IsProbabilityMeasure (binaryLaw q) :=
+  isProbabilityMeasure_twoAtomLaw hq.1 hq.2
 
 /-- Every function is integrable under `binaryLaw q`. -/
 theorem integrable_binaryLaw (q : ℝ) (f : (Fin 1 → ℝ) → ℝ) : Integrable f (binaryLaw q) :=
-  ((integrable_dirac (by simp)).smul_measure ENNReal.ofReal_ne_top).add_measure
-    ((integrable_dirac (by simp)).smul_measure ENNReal.ofReal_ne_top)
+  integrable_twoAtomLaw f
 
 theorem integral_binaryLaw {q : ℝ} (hq : q ∈ Set.Icc (0 : ℝ) 1) (f : (Fin 1 → ℝ) → ℝ) :
-    ∫ x, f x ∂binaryLaw q = (1 - q) * f (fun _ => 0) + q * f (fun _ => 1) := by
-  rw [binaryLaw, integral_add_measure, integral_smul_measure, integral_smul_measure,
-    integral_dirac, integral_dirac, ENNReal.toReal_ofReal (by linarith [hq.2]),
-    ENNReal.toReal_ofReal hq.1, smul_eq_mul, smul_eq_mul]
-  · exact (integrable_dirac (by simp)).smul_measure ENNReal.ofReal_ne_top
-  · exact (integrable_dirac (by simp)).smul_measure ENNReal.ofReal_ne_top
+    ∫ x, f x ∂binaryLaw q = (1 - q) * f (fun _ => 0) + q * f (fun _ => 1) :=
+  integral_twoAtomLaw hq.1 hq.2 f
 
 /-! ### The family -/
 

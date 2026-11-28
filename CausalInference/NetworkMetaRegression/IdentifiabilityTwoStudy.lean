@@ -167,11 +167,17 @@ theorem twoStudy_surface_eq (hmono : StrictMono ginv) [IsProbabilityMeasure Fbc]
 `twoStudy_steps` and an equal aggregate mean of `b` in `jbc`, the marginal effect of `b` against
 `a` on any scale `g` in the population of the aggregate study (covariate law `F_bc`, baseline
 `μ_jbc`) is the same for the two models: the mean of `b` is observed and the surface of `a` uses
-only identified parameters. -/
+only identified parameters. The surfaces of `a` (of `M`) and of `b` (of both models) are
+integrable under `F_bc`, so that the arm means compared are genuine means; the surface of `a`
+of `M'` is then the same function as that of `M`. The equality itself does not use these
+integrability hypotheses. -/
 theorem twoStudy_comparator_identified (hmono : StrictMono ginv) [IsProbabilityMeasure Fbc]
     (hra : AffineRank Fa) (hrc : AffineRank Fc) (hM : M.IsAnchoredAt c)
     (hM' : M'.IsAnchoredAt c)
     (hintc : ∀ s, Integrable (fun x => ginv (s + x ⬝ᵥ (M.β₁ + M.β₂ c))) Fbc)
+    (_hia : Integrable (M.surface ginv (M.μ jbc) a) Fbc)
+    (_hib : Integrable (M.surface ginv (M.μ jbc) b) Fbc)
+    (_hib' : Integrable (M'.surface ginv (M'.μ jbc) b) Fbc)
     (ipda : M.surface ginv (M.μ jac) a =ᵐ[Fa] M'.surface ginv (M'.μ jac) a)
     (ipdc : M.surface ginv (M.μ jac) c =ᵐ[Fc] M'.surface ginv (M'.μ jac) c)
     (agdb : M.armMean ginv (M.μ jbc) Fbc b = M'.armMean ginv (M'.μ jbc) Fbc b)

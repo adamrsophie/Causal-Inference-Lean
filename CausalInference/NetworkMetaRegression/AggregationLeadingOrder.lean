@@ -21,12 +21,11 @@ mean is the heat flow `u(m, τ) = E ψ(N(m, τ))` of `ψ` at time `τ = v`, and
 
 ## Main definitions
 
-* `gaussHeat ψ m τ = ∫ ψ dN(m, τ)`, used for `τ ≥ 0` only: every result below assumes `0 ≤ τ`
-  or `0 < τ`.
+* `gaussHeat ψ m τ = ∫ ψ dN(m, τ)` for a variance `τ : ℝ≥0`.
 
 ## Main results
 
-* `abs_integral_sub_taylor_two_le`: `|E ψ(W) - ψ(m) - ½ψ''(m) v| ≤ M E|W - m|³` when
+* `abs_integral_sub_taylor_two_le`: `|E ψ(W) - ψ(m) - ½ψ''(m) v| ≤ (M / 6) E|W - m|³` when
   `|ψ'''| ≤ M` on a convex set carrying `W`; `MultilevelModel.abs_aggBias_sub_le` states it for
   an arm of the multilevel model, with `v = (β₁ + β₂,k)ᵀ Σ (β₁ + β₂,k)`.
 * `isLittleO_integral_sub_taylor_two`: the remainder is `o(v)` along any family of predictor
@@ -59,61 +58,87 @@ section Taylor
 
 variable {Ω : Type*} [MeasurableSpace Ω] {μ : Measure Ω} [IsProbabilityMeasure μ]
 
-/-- **Second order Taylor bound on a convex set.** If `ψ` has derivatives `ψ₁, ψ₂, ψ₃` within a
-convex set `I` and `|ψ₃| ≤ M` on `I`, then for `m, w ∈ I`,
-`|ψ(w) - ψ(m) - ψ₁(m)(w - m) - ½ψ₂(m)(w - m)²| ≤ M |w - m|³`. -/
+/-- **Second order Taylor bound on a convex set, with the Lagrange constant.** If `ψ` has
+derivatives `ψ₁, ψ₂, ψ₃` within a convex set `I` and `|ψ₃| ≤ M` on `I`, then for `m, w ∈ I`,
+`|ψ(w) - ψ(m) - ψ₁(m)(w - m) - ½ψ₂(m)(w - m)²| ≤ (M / 6) |w - m|³`. The proof integrates the
+bound three times along `t ↦ m + t (w - m)`, `t ∈ [0, 1]`. -/
 theorem abs_taylor_two_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I : Set ℝ} (hI : Convex ℝ I)
     (h₁ : ∀ x ∈ I, HasDerivWithinAt ψ (ψ₁ x) I x) (h₂ : ∀ x ∈ I, HasDerivWithinAt ψ₁ (ψ₂ x) I x)
     (h₃ : ∀ x ∈ I, HasDerivWithinAt ψ₂ (ψ₃ x) I x) {M : ℝ} (hM : ∀ x ∈ I, |ψ₃ x| ≤ M)
     {m w : ℝ} (hm : m ∈ I) (hw : w ∈ I) :
-    |ψ w - ψ m - ψ₁ m * (w - m) - ψ₂ m / 2 * (w - m) ^ 2| ≤ M * |w - m| ^ 3 := by
-  set s := segment ℝ m w with hs
-  have hsI : s ⊆ I := hI.segment_subset hm hw
-  have hsc : Convex ℝ s := convex_segment m w
-  have hms : m ∈ s := left_mem_segment ℝ m w
-  have hws : w ∈ s := right_mem_segment ℝ m w
-  have hdist : ∀ x ∈ s, |x - m| ≤ |w - m| := fun x hx => by
-    rw [hs, segment_eq_uIcc] at hx; exact Set.abs_sub_left_of_mem_uIcc hx
-  have hM0 : 0 ≤ M := le_trans (abs_nonneg _) (hM m hm)
-  have hA : ∀ x ∈ s, |ψ₂ x - ψ₂ m| ≤ M * |w - m| := fun x hx => by
-    have := hsc.norm_image_sub_le_of_norm_hasDerivWithin_le
-      (fun y hy => (h₃ y (hsI hy)).mono hsI) (fun y hy => hM y (hsI hy)) hms hx
-    simp only [Real.norm_eq_abs] at this
-    exact this.trans (mul_le_mul_of_nonneg_left (hdist x hx) hM0)
-  have hB : ∀ x ∈ s, |ψ₁ x - ψ₁ m - ψ₂ m * (x - m)| ≤ M * |w - m| ^ 2 := fun x hx => by
-    have hd : ∀ y ∈ s, HasDerivWithinAt (fun t => ψ₁ t - ψ₁ m - ψ₂ m * (t - m))
-        (ψ₂ y - ψ₂ m) s y := fun y hy => by
-      have := (((h₂ y (hsI hy)).mono hsI).sub_const (ψ₁ m)).sub
-        (((hasDerivWithinAt_id y s).sub_const m).const_mul (ψ₂ m))
-      convert this using 1
-      · funext t; simp only [Pi.sub_apply, id]
-      · simp
-    have := hsc.norm_image_sub_le_of_norm_hasDerivWithin_le hd
-      (fun y hy => by rw [Real.norm_eq_abs]; exact hA y hy) hms hx
-    simp only [Real.norm_eq_abs, sub_self, mul_zero, sub_zero] at this
-    calc _ ≤ M * |w - m| * |x - m| := this
-      _ ≤ M * |w - m| * |w - m| :=
-          mul_le_mul_of_nonneg_left (hdist x hx) (mul_nonneg hM0 (abs_nonneg _))
-      _ = M * |w - m| ^ 2 := by ring
-  have hd : ∀ y ∈ s, HasDerivWithinAt
-      (fun t => ψ t - ψ m - ψ₁ m * (t - m) - ψ₂ m / 2 * (t - m) ^ 2)
-      (ψ₁ y - ψ₁ m - ψ₂ m * (y - m)) s y := fun y hy => by
-    have h1 := ((h₁ y (hsI hy)).mono hsI).sub_const (ψ m)
-    have h2 := ((hasDerivWithinAt_id y s).sub_const m).const_mul (ψ₁ m)
-    have h3 := (((hasDerivWithinAt_id y s).sub_const m).pow 2).const_mul (ψ₂ m / 2)
-    convert (h1.sub h2).sub h3 using 1
-    · funext t; simp only [Pi.sub_apply, Pi.pow_apply, id]
-    · simp only [id]; push_cast; ring
-  have := hsc.norm_image_sub_le_of_norm_hasDerivWithin_le hd
-    (fun y hy => by rw [Real.norm_eq_abs]; exact hB y hy) hms hws
-  simp only [Real.norm_eq_abs, sub_self, mul_zero, sub_zero, ne_eq, OfNat.ofNat_ne_zero,
-    not_false_eq_true, zero_pow] at this
-  calc _ ≤ M * |w - m| ^ 2 * |w - m| := this
-    _ = M * |w - m| ^ 3 := by ring
+    |ψ w - ψ m - ψ₁ m * (w - m) - ψ₂ m / 2 * (w - m) ^ 2| ≤ M / 6 * |w - m| ^ 3 := by
+  set d := w - m with hd
+  set U : Set ℝ := Set.Icc 0 1
+  have hmem : ∀ t ∈ U, m + t * d ∈ I := fun t ht => by
+    simpa [smul_eq_mul] using hI.add_smul_sub_mem hm hw ht
+  have hM0 : 0 ≤ M := (abs_nonneg _).trans (hM m hm)
+  have hD : 0 ≤ |d| := abs_nonneg d
+  have hcomp : ∀ {g g' : ℝ → ℝ}, (∀ x ∈ I, HasDerivWithinAt g (g' x) I x) → ∀ t ∈ U,
+      HasDerivWithinAt (fun t => g (m + t * d)) (g' (m + t * d) * d) U t := by
+    intro g g' hg t ht
+    have ha : HasDerivWithinAt (fun t : ℝ => m + t * d) d U t := by
+      simpa using ((hasDerivWithinAt_id t U).mul_const d).const_add m
+    exact (hg _ (hmem t ht)).comp t ha (fun s hs => hmem s hs)
+  have right : ∀ {f f' : ℝ → ℝ}, (∀ t ∈ U, HasDerivWithinAt f (f' t) U t) →
+      ∀ t ∈ Set.Ico (0 : ℝ) 1, HasDerivWithinAt f (f' t) (Set.Ici t) t := fun hf t ht =>
+    (hf t (Set.Ico_subset_Icc_self ht)).mono_of_mem_nhdsWithin (Icc_mem_nhdsGE_of_mem ht)
+  have cont : ∀ {f f' : ℝ → ℝ}, (∀ t ∈ U, HasDerivWithinAt f (f' t) U t) → ContinuousOn f U :=
+    fun hf t ht => (hf t ht).continuousWithinAt
+  have hU : ∀ t ∈ Set.Ico (0 : ℝ) 1, t ∈ U := fun t ht => Set.Ico_subset_Icc_self ht
+  -- first integration
+  set fA : ℝ → ℝ := fun t => ψ₂ (m + t * d) - ψ₂ m
+  have hA' : ∀ t ∈ U, HasDerivWithinAt fA (ψ₃ (m + t * d) * d) U t := fun t ht =>
+    (hcomp h₃ t ht).sub_const _
+  have hA : ∀ t ∈ U, ‖fA t‖ ≤ M * |d| * t := by
+    refine image_norm_le_of_norm_deriv_right_le_deriv_boundary (B' := fun _ => M * |d|)
+      (cont hA') (right hA')
+      (by simp [fA]) (fun t => by simpa using (hasDerivAt_id t).const_mul (M * |d|))
+      (fun t ht => ?_)
+    rw [Real.norm_eq_abs, abs_mul]
+    exact mul_le_mul_of_nonneg_right (hM _ (hmem t (hU t ht))) hD
+  -- second integration
+  set fB : ℝ → ℝ := fun t => ψ₁ (m + t * d) - ψ₁ m - ψ₂ m * (t * d)
+  have hB' : ∀ t ∈ U, HasDerivWithinAt fB (fA t * d) U t := fun t ht => by
+    have := ((hcomp h₂ t ht).sub_const (ψ₁ m)).sub
+      (((hasDerivWithinAt_id t U).mul_const d).const_mul (ψ₂ m))
+    exact this.congr_deriv (by simp only [fA]; ring)
+  have hB : ∀ t ∈ U, ‖fB t‖ ≤ M * |d| ^ 2 * t ^ 2 / 2 := by
+    refine image_norm_le_of_norm_deriv_right_le_deriv_boundary (B' := fun t => M * |d| ^ 2 * t)
+      (cont hB') (right hB')
+      (by simp [fB]) (fun t => ?_) (fun t ht => ?_)
+    · have := ((hasDerivAt_id t).pow 2).const_mul (M * |d| ^ 2) |>.div_const 2
+      exact this.congr_deriv (by simp only [id]; push_cast; ring)
+    · rw [norm_mul, Real.norm_eq_abs d]
+      calc ‖fA t‖ * |d| ≤ M * |d| * t * |d| := mul_le_mul_of_nonneg_right (hA t (hU t ht)) hD
+        _ = M * |d| ^ 2 * t := by ring
+  -- third integration
+  set fC : ℝ → ℝ := fun t =>
+    ψ (m + t * d) - ψ m - ψ₁ m * (t * d) - ψ₂ m / 2 * (t * d) ^ 2
+  have hC' : ∀ t ∈ U, HasDerivWithinAt fC (fB t * d) U t := fun t ht => by
+    have := (((hcomp h₁ t ht).sub_const (ψ m)).sub
+      (((hasDerivWithinAt_id t U).mul_const d).const_mul (ψ₁ m))).sub
+      ((((hasDerivWithinAt_id t U).mul_const d).pow 2).const_mul (ψ₂ m / 2))
+    exact this.congr_deriv (by simp only [fB, id]; push_cast; ring)
+  have hC : ∀ t ∈ U, ‖fC t‖ ≤ M * |d| ^ 3 * t ^ 3 / 6 := by
+    refine image_norm_le_of_norm_deriv_right_le_deriv_boundary
+      (B' := fun t => M * |d| ^ 3 * t ^ 2 / 2) (cont hC') (right hC')
+      (by simp [fC]) (fun t => ?_) (fun t ht => ?_)
+    · have := ((hasDerivAt_id t).pow 3).const_mul (M * |d| ^ 3) |>.div_const 6
+      exact this.congr_deriv (by simp only [id]; push_cast; ring)
+    · rw [norm_mul, Real.norm_eq_abs d]
+      calc ‖fB t‖ * |d| ≤ M * |d| ^ 2 * t ^ 2 / 2 * |d| :=
+            mul_le_mul_of_nonneg_right (hB t (hU t ht)) hD
+        _ = M * |d| ^ 3 * t ^ 2 / 2 := by ring
+  have h1 := hC 1 ⟨zero_le_one, le_rfl⟩
+  simp only [fC, one_mul, one_pow, mul_one, Real.norm_eq_abs] at h1
+  have hw' : m + d = w := by rw [hd]; ring
+  rw [hw'] at h1
+  calc _ ≤ M * |d| ^ 3 / 6 := h1
+    _ = M / 6 * |w - m| ^ 3 := by rw [hd]; ring
 
 /-- **Leading order aggregation bias, quantitative form.** If `ψ = g⁻¹` has derivatives
 `ψ₁, ψ₂, ψ₃` within a convex set `I` containing `W` almost surely, with `|ψ₃| ≤ M` on `I`, then
-with `m = E W` and `v = Var W`, `|E ψ(W) - ψ(m) - ½ ψ₂(m) v| ≤ M · E|W - m|³`. -/
+with `m = E W` and `v = Var W`, `|E ψ(W) - ψ(m) - ½ ψ₂(m) v| ≤ (M / 6) · E|W - m|³`. -/
 theorem abs_integral_sub_taylor_two_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I : Set ℝ} (hI : Convex ℝ I)
     (h₁ : ∀ x ∈ I, HasDerivWithinAt ψ (ψ₁ x) I x) (h₂ : ∀ x ∈ I, HasDerivWithinAt ψ₁ (ψ₂ x) I x)
     (h₃ : ∀ x ∈ I, HasDerivWithinAt ψ₂ (ψ₃ x) I x) {M : ℝ} (hM : ∀ x ∈ I, |ψ₃ x| ≤ M)
@@ -121,7 +146,7 @@ theorem abs_integral_sub_taylor_two_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I :
     (hψ : Integrable (fun ω => ψ (W ω)) μ)
     (h3 : Integrable (fun ω => |W ω - ∫ x, W x ∂μ| ^ 3) μ) :
     |∫ ω, ψ (W ω) ∂μ - ψ (∫ ω, W ω ∂μ) - ψ₂ (∫ ω, W ω ∂μ) / 2 * variance W μ| ≤
-      M * ∫ ω, |W ω - ∫ x, W x ∂μ| ^ 3 ∂μ := by
+      M / 6 * ∫ ω, |W ω - ∫ x, W x ∂μ| ^ 3 ∂μ := by
   set m := ∫ ω, W ω ∂μ with hm_def
   have hW1 : Integrable W μ := hW.integrable one_le_two
   have hmI : m ∈ I := by
@@ -148,11 +173,11 @@ theorem abs_integral_sub_taylor_two_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I :
   rw [← hint]
   calc _ ≤ ∫ ω, |ψ (W ω) - ψ m - ψ₁ m * (W ω - m) - ψ₂ m / 2 * (W ω - m) ^ 2| ∂μ :=
         abs_integral_le_integral_abs
-    _ ≤ ∫ ω, M * |W ω - m| ^ 3 ∂μ := by
-        refine integral_mono_ae hR.abs (h3.const_mul M) ?_
+    _ ≤ ∫ ω, M / 6 * |W ω - m| ^ 3 ∂μ := by
+        refine integral_mono_ae hR.abs (h3.const_mul (M / 6)) ?_
         filter_upwards [hWI] with ω hω
         exact abs_taylor_two_le hI h₁ h₂ h₃ hM hmI hω
-    _ = M * ∫ ω, |W ω - m| ^ 3 ∂μ := integral_const_mul _ _
+    _ = M / 6 * ∫ ω, |W ω - m| ^ 3 ∂μ := integral_const_mul _ _
 
 /-- **Leading order aggregation bias.** Along a filter on which the variance `v` of the predictor
 laws `ν i` tends to `0`, with `E|W - m|³ ≤ K v √v` and `|ψ₃| ≤ M` on a convex set `I` carrying
@@ -184,8 +209,9 @@ theorem isLittleO_integral_sub_taylor_two {ι : Type*} {l : Filter ι} {ψ ψ₁
     (hν2 i) (hψ i) (h3 i)
   have hE0 : 0 ≤ ∫ x, |x - ∫ y, y ∂ν i| ^ 3 ∂ν i := integral_nonneg fun _ => by positivity
   rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_nonneg hv0]
-  calc _ ≤ M * ∫ x, |x - ∫ y, y ∂ν i| ^ 3 ∂ν i := hb
-    _ ≤ |M| * ∫ x, |x - ∫ y, y ∂ν i| ^ 3 ∂ν i := mul_le_mul_of_nonneg_right (le_abs_self M) hE0
+  calc _ ≤ M / 6 * ∫ x, |x - ∫ y, y ∂ν i| ^ 3 ∂ν i := hb
+    _ ≤ |M| * ∫ x, |x - ∫ y, y ∂ν i| ^ 3 ∂ν i :=
+        mul_le_mul_of_nonneg_right (by linarith [le_abs_self M, abs_nonneg M]) hE0
     _ ≤ |M| * (max K 0 * v * √v) := by
         refine mul_le_mul_of_nonneg_left ((hK i).trans ?_) (abs_nonneg M)
         gcongr
@@ -203,8 +229,9 @@ end Taylor
 
 section HeatFlow
 
-/-- The **Gaussian heat flow** `u(m, τ) = E ψ(N(m, τ))` of a function `ψ`, for `τ ≥ 0`. -/
-noncomputable def gaussHeat (ψ : ℝ → ℝ) (m τ : ℝ) : ℝ := ∫ z, ψ z ∂gaussianReal m τ.toNNReal
+/-- The **Gaussian heat flow** `u(m, τ) = E ψ(N(m, τ))` of a function `ψ`, for a variance
+`τ ≥ 0`. -/
+noncomputable def gaussHeat (ψ : ℝ → ℝ) (m : ℝ) (τ : ℝ≥0) : ℝ := ∫ z, ψ z ∂gaussianReal m τ
 
 /-- `exp(b |s|)` is integrable for the standard normal law. -/
 theorem integrable_exp_mul_abs_stdGaussian (b : ℝ) :
@@ -244,16 +271,16 @@ theorem abs_comp_affine_le_exp {f : ℝ → ℝ} {C a : ℝ} (hf : ∀ z, |f z| 
     _ ≤ |a| * (R + c * |s|) := mul_le_mul_of_nonneg_left h1 (abs_nonneg a)
     _ = _ := by ring
 
-/-- The standard form `u(m, τ) = E ψ(m + √τ Z)` for `τ ≥ 0`. -/
-theorem gaussHeat_eq_integral_std {ψ : ℝ → ℝ} (hψ : Continuous ψ) (m : ℝ) {τ : ℝ} (hτ : 0 ≤ τ) :
-    gaussHeat ψ m τ = ∫ s, ψ (m + √τ * s) ∂gaussianReal 0 1 := by
-  have hmap : (gaussianReal 0 1).map (fun s => m + √τ * s) = gaussianReal m τ.toNNReal := by
-    have h1 := gaussianReal_map_const_mul (μ := 0) (v := 1) (√τ)
-    rw [show (fun s => m + √τ * s) = (fun x => m + x) ∘ (fun s => √τ * s) from rfl,
+/-- The standard form `u(m, τ) = E ψ(m + √τ Z)`. -/
+theorem gaussHeat_eq_integral_std {ψ : ℝ → ℝ} (hψ : Continuous ψ) (m : ℝ) (τ : ℝ≥0) :
+    gaussHeat ψ m τ = ∫ s, ψ (m + √(τ : ℝ) * s) ∂gaussianReal 0 1 := by
+  have hmap : (gaussianReal 0 1).map (fun s => m + √(τ : ℝ) * s) = gaussianReal m τ := by
+    have h1 := gaussianReal_map_const_mul (μ := 0) (v := 1) (√(τ : ℝ))
+    rw [show (fun s => m + √(τ : ℝ) * s) = (fun x => m + x) ∘ (fun s => √(τ : ℝ) * s) from rfl,
       ← Measure.map_map (by fun_prop) (by fun_prop), h1, gaussianReal_map_const_add]
     congr 1
     · simp
-    · ext; simp [Real.sq_sqrt hτ, Real.coe_toNNReal _ hτ]
+    · ext; simp [Real.sq_sqrt τ.coe_nonneg]
   rw [gaussHeat, ← hmap, integral_map (by fun_prop) hψ.aestronglyMeasurable]
 
 /-- Differentiation in the location under the standard normal integral. -/
@@ -393,13 +420,17 @@ theorem integral_mul_eq_integral_deriv_stdGaussian {g g' : ℝ → ℝ}
 /-- **The heat flow of the inverse link.** For `ψ` of class `C²` with `ψ`, `ψ'` and `ψ''` bounded
 by `C e^{a |z|}`, the function `u(m, τ) = E ψ(N(m, τ))` satisfies, for `τ > 0`,
 `∂_m u = E ψ'`, `∂²_m u = E ψ''` and `∂_τ u = ½ ∂²_m u`: the derivative of the aggregate mean
-in the predictor variance is half the average second derivative of the inverse link. -/
+in the predictor variance is half the average second derivative of the inverse link. The time
+derivative is taken within the positive variances `t > 0`, where `u(m, t)` is
+`gaussHeat ψ m t.toNNReal`. -/
 theorem gaussHeat_hasDerivAt {ψ : ℝ → ℝ} (hψ : ContDiff ℝ 2 ψ) {C a : ℝ}
     (h0 : ∀ z, |ψ z| ≤ C * Real.exp (a * |z|)) (h1 : ∀ z, |deriv ψ z| ≤ C * Real.exp (a * |z|))
-    (h2 : ∀ z, |deriv (deriv ψ) z| ≤ C * Real.exp (a * |z|)) (m : ℝ) {τ : ℝ} (hτ : 0 < τ) :
+    (h2 : ∀ z, |deriv (deriv ψ) z| ≤ C * Real.exp (a * |z|)) (m : ℝ) {τ : ℝ≥0} (hτ : 0 < τ) :
     HasDerivAt (fun m => gaussHeat ψ m τ) (gaussHeat (deriv ψ) m τ) m ∧
       HasDerivAt (fun m => gaussHeat (deriv ψ) m τ) (gaussHeat (deriv (deriv ψ)) m τ) m ∧
-      HasDerivAt (fun t => gaussHeat ψ m t) (gaussHeat (deriv (deriv ψ)) m τ / 2) τ := by
+      HasDerivWithinAt (fun t : ℝ => gaussHeat ψ m t.toNNReal)
+        (gaussHeat (deriv (deriv ψ)) m τ / 2) (Set.Ioi 0) τ := by
+  have hτr : (0 : ℝ) < τ := hτ
   obtain ⟨hdiff, -, hψ1⟩ := contDiff_succ_iff_deriv.mp (show ContDiff ℝ (1 + 1) ψ from hψ)
   obtain ⟨hdiff1, hc2⟩ := contDiff_one_iff_deriv.mp hψ1
   have hd0 : ∀ z, HasDerivAt ψ (deriv ψ z) z := fun z => (hdiff z).hasDerivAt
@@ -407,15 +438,15 @@ theorem gaussHeat_hasDerivAt {ψ : ℝ → ℝ} (hψ : ContDiff ℝ 2 ψ) {C a :
   have hc0 : Continuous ψ := hdiff.continuous
   have hc1 : Continuous (deriv ψ) := hdiff1.continuous
   have hstd : ∀ f : ℝ → ℝ, Continuous f →
-      (fun m' => gaussHeat f m' τ) = fun m' => ∫ s, f (m' + √τ * s) ∂gaussianReal 0 1 :=
-    fun f hf => funext fun m' => gaussHeat_eq_integral_std hf m' hτ.le
-  have hst := Real.sqrt_nonneg τ
+      (fun m' => gaussHeat f m' τ) = fun m' => ∫ s, f (m' + √(τ : ℝ) * s) ∂gaussianReal 0 1 :=
+    fun f hf => funext fun m' => gaussHeat_eq_integral_std hf m' τ
+  have hst := Real.sqrt_nonneg (τ : ℝ)
   refine ⟨?_, ?_, ?_⟩
-  · rw [hstd ψ hc0, gaussHeat_eq_integral_std hc1 m hτ.le]
+  · rw [hstd ψ hc0, gaussHeat_eq_integral_std hc1 m τ]
     exact hasDerivAt_integral_stdGaussian_shift hd0 hc1 h0 h1 hst m
-  · rw [hstd _ hc1, gaussHeat_eq_integral_std hc2 m hτ.le]
+  · rw [hstd _ hc1, gaussHeat_eq_integral_std hc2 m τ]
     exact hasDerivAt_integral_stdGaussian_shift hd1 hc2 h1 h2 hst m
-  · have hG := hasDerivAt_integral_stdGaussian_scale hd0 hc1 h0 h1 m hτ
+  · have hG := hasDerivAt_integral_stdGaussian_scale hd0 hc1 h0 h1 m hτr
     have hstein := integral_mul_eq_integral_deriv_stdGaussian (g := fun s => deriv ψ (m + √τ * s))
       (g' := fun s => √τ * deriv (deriv ψ) (m + √τ * s))
       (fun s => by
@@ -430,7 +461,7 @@ theorem gaussHeat_hasDerivAt {ψ : ℝ → ℝ} (hψ : ContDiff ℝ 2 ψ) {C a :
       (fun s => by
         rw [abs_mul, abs_of_nonneg hst, mul_assoc]
         exact mul_le_mul_of_nonneg_left (abs_comp_affine_le_exp h2 le_rfl hst s) hst)
-    have hτ' : √τ ≠ 0 := (Real.sqrt_pos.mpr hτ).ne'
+    have hτ' : √(τ : ℝ) ≠ 0 := (Real.sqrt_pos.mpr hτr).ne'
     have e : ∫ s, deriv ψ (m + √τ * s) * (s / (2 * √τ)) ∂gaussianReal 0 1 =
         gaussHeat (deriv (deriv ψ)) m τ / 2 := by
       calc ∫ s, deriv ψ (m + √τ * s) * (s / (2 * √τ)) ∂gaussianReal 0 1
@@ -438,26 +469,26 @@ theorem gaussHeat_hasDerivAt {ψ : ℝ → ℝ} (hψ : ContDiff ℝ 2 ψ) {C a :
             rw [← integral_const_mul]; congr 1; funext s; ring
         _ = (1 / (2 * √τ)) * (√τ * ∫ s, deriv (deriv ψ) (m + √τ * s) ∂gaussianReal 0 1) := by
             rw [hstein, integral_const_mul]
-        _ = _ := by rw [gaussHeat_eq_integral_std hc2 m hτ.le]; field_simp
+        _ = _ := by rw [gaussHeat_eq_integral_std hc2 m τ]; field_simp
     rw [e] at hG
-    refine hG.congr_of_eventuallyEq ?_
-    filter_upwards [lt_mem_nhds hτ] with t ht
-    exact gaussHeat_eq_integral_std hc0 m ht.le
+    refine hG.hasDerivWithinAt.congr (fun t ht => ?_) ?_
+    · rw [gaussHeat_eq_integral_std hc0 m, Real.coe_toNNReal _ (le_of_lt ht)]
+    · rw [gaussHeat_eq_integral_std hc0 m, Real.toNNReal_coe]
 
-/-- **The initial condition**: `u(m, 0) = ψ(m)` and `u(m, τ) → ψ(m)` as `τ ↓ 0`, for continuous
-`ψ` of exponential growth. -/
+/-- **The initial condition**: `u(m, 0) = ψ(m)` and `u(m, τ) → ψ(m)` as `τ → 0` in `ℝ≥0`, for
+continuous `ψ` of exponential growth. -/
 theorem gaussHeat_zero_tendsto {ψ : ℝ → ℝ} (hc : Continuous ψ) {C a : ℝ}
     (h0 : ∀ z, |ψ z| ≤ C * Real.exp (a * |z|)) (m : ℝ) :
-    gaussHeat ψ m 0 = ψ m ∧ Tendsto (fun t => gaussHeat ψ m t) (𝓝[>] 0) (𝓝 (ψ m)) := by
+    gaussHeat ψ m 0 = ψ m ∧ Tendsto (fun t => gaussHeat ψ m t) (𝓝 0) (𝓝 (ψ m)) := by
   refine ⟨by simp [gaussHeat, gaussianReal_zero_var], ?_⟩
   have hC : 0 ≤ C := nonneg_of_mul_nonneg_left ((abs_nonneg _).trans (h0 0)) (Real.exp_pos _)
-  have key : Tendsto (fun t => ∫ s, ψ (m + √t * s) ∂gaussianReal 0 1) (𝓝[>] 0)
+  have key : Tendsto (fun t => ∫ s, ψ (m + √t * s) ∂gaussianReal 0 1) (𝓝[≥] 0)
       (𝓝 (∫ s, ψ (m + √0 * s) ∂gaussianReal 0 1)) := by
     refine tendsto_integral_filter_of_dominated_convergence
       (fun s => C * Real.exp (|a| * |m|) * Real.exp (|a| * 1 * |s|))
       (Eventually.of_forall fun t => (hc.comp (by fun_prop)).aestronglyMeasurable) ?_
       ((integrable_exp_mul_abs_stdGaussian _).const_mul _) (ae_of_all _ fun s => ?_)
-    · filter_upwards [Ioo_mem_nhdsGT one_pos] with t ht
+    · filter_upwards [Ico_mem_nhdsGE one_pos] with t ht
       refine ae_of_all _ fun s => ?_
       rw [Real.norm_eq_abs]
       refine (abs_comp_affine_le_exp h0 le_rfl (Real.sqrt_nonneg t) s).trans ?_
@@ -469,9 +500,11 @@ theorem gaussHeat_zero_tendsto {ψ : ℝ → ℝ} (hc : Continuous ψ) {C a : �
         nhdsWithin_le_nhds
   simp only [Real.sqrt_zero, zero_mul, add_zero, integral_const, probReal_univ, smul_eq_mul,
     one_mul] at key
-  refine key.congr' ?_
-  filter_upwards [self_mem_nhdsWithin] with t ht
-  exact (gaussHeat_eq_integral_std hc m (le_of_lt ht)).symm
+  have hcoe : Tendsto (fun t : ℝ≥0 => (t : ℝ)) (𝓝 0) (𝓝[≥] 0) :=
+    tendsto_nhdsWithin_iff.2 ⟨by simpa using NNReal.continuous_coe.tendsto 0,
+      Eventually.of_forall fun t => t.2⟩
+  refine (key.comp hcoe).congr fun t => ?_
+  exact (gaussHeat_eq_integral_std hc m t).symm
 
 end HeatFlow
 
@@ -484,7 +517,7 @@ variable {J K : Type*} {p : ℕ}
 /-- **The leading order bias of an arm.** If `ψ = g⁻¹` has derivatives `ψ₁, ψ₂, ψ₃` within a
 convex set `I` that carries `η_k(X)` almost surely under `F`, with `|ψ₃| ≤ M₃` on `I`, the
 coordinates have second moments and the integrands below are integrable, then
-`|bias_k - ½ ψ₂(η_k(x̄)) v_k| ≤ M₃ E|η_k(X) - η_k(x̄)|³`. -/
+`|bias_k - ½ ψ₂(η_k(x̄)) v_k| ≤ (M₃ / 6) E|η_k(X) - η_k(x̄)|³`. -/
 theorem abs_aggBias_sub_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I : Set ℝ} (hI : Convex ℝ I)
     (h₁ : ∀ x ∈ I, HasDerivWithinAt ψ (ψ₁ x) I x) (h₂ : ∀ x ∈ I, HasDerivWithinAt ψ₁ (ψ₂ x) I x)
     (h₃ : ∀ x ∈ I, HasDerivWithinAt ψ₂ (ψ₃ x) I x) {M₃ : ℝ} (hM : ∀ x ∈ I, |ψ₃ x| ≤ M₃)
@@ -493,7 +526,7 @@ theorem abs_aggBias_sub_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I : Set ℝ} (h
     (hI' : ∀ᵐ x ∂F, M.eta α k x ∈ I) (hψ : Integrable (M.surface ψ α k) F)
     (h3 : Integrable (fun x => |M.eta α k x - M.eta α k (covMean F)| ^ 3) F) :
     |M.aggBias ψ α F k - ψ₂ (M.eta α k (covMean F)) / 2 * slopeVar F (M.β₁ + M.β₂ k)| ≤
-      M₃ * ∫ x, |M.eta α k x - M.eta α k (covMean F)| ^ 3 ∂F := by
+      M₃ / 6 * ∫ x, |M.eta α k x - M.eta α k (covMean F)| ^ 3 ∂F := by
   have h1 : ∀ i, Integrable (fun x : Fin p → ℝ => x i) F := fun i => (hF i).integrable one_le_two
   have hm := M.integral_eta α h1 k
   have e : M.eta α k = fun x => (α + M.γ k) + x ⬝ᵥ (M.β₁ + M.β₂ k) :=
@@ -517,7 +550,8 @@ theorem abs_aggBias_sub_le {ψ ψ₁ ψ₂ ψ₃ : ℝ → ℝ} {I : Set ℝ} (h
 plug in predictor and time `v_k`: `armMean = u(η_k(x̄), v_k)`. -/
 theorem armMean_eq_gaussHeat {ψ : ℝ → ℝ} (hψ : Measurable ψ) (M : MultilevelModel J K p)
     (α : ℝ) (F : Measure (Fin p → ℝ)) [IsGaussian F] (k : K) :
-    M.armMean ψ α F k = gaussHeat ψ (M.eta α k (covMean F)) (slopeVar F (M.β₁ + M.β₂ k)) := by
+    M.armMean ψ α F k =
+      gaussHeat ψ (M.eta α k (covMean F)) (slopeVar F (M.β₁ + M.β₂ k)).toNNReal := by
   have hL := M.hasLaw_eta_gaussian α F k
   rw [armMean, gaussHeat, ← hL.map_eq, integral_map hL.aemeasurable hψ.aestronglyMeasurable]
   rfl
