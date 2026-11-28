@@ -432,3 +432,7 @@ public import CausalInference.MetaAnalysis.CochranQLaw
 public import CausalInference.MetaAnalysis.GaussianLikelihood
 public import CausalInference.MetaAnalysis.ISquared
 public import CausalInference.MetaAnalysis.Examples
+public import CausalInference.Estimation.LineSubmodel
+public import CausalInference.Estimation.HajekConvolutionVector
+public import CausalInference.Estimation.HajekRegularLinearVector
+public import CausalInference.Estimation.HajekConvolutionVectorExamples
