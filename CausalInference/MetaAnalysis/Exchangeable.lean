@@ -134,8 +134,8 @@ theorem boolCount_perm {n : ℕ} (x : Fin n → Bool) (σ : Equiv.Perm (Fin n)) 
 de Finetti 1937). If a sequence of measurable `Bool` valued variables has, for every `n` and every
 pattern `x` with `s = ∑ xᵢ` successes, `P(X₀ = x₀, …, X_{n-1} = x_{n-1}) =
 ∫ θ^s (1 - θ)^{n - s} dΠ(θ)`, then it is infinitely exchangeable. The converse direction is
-`InfExchangeable.exists_binaryMixture`. Proof: on `Bool^n` a law is determined by its atoms, and permuting a pattern does
-not change its number of successes. -/
+`InfExchangeable.exists_binaryMixture`. Proof: on `Bool^n` a law is determined by its atoms,
+and permuting a pattern does not change its number of successes. -/
 theorem infExchangeable_of_binary_mixture {X : ℕ → Ω → Bool} (hX : ∀ i, Measurable (X i))
     {P : Measure Ω} {Pr : Measure ℝ}
     (h : ∀ (n : ℕ) (x : Fin n → Bool), P {ω | ∀ i : Fin n, X i ω = x i} =
